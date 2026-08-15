@@ -14,19 +14,21 @@ An evidence-backed Codex plugin for generating, reviewing, and enforcing stable 
 
 ## Skill
 
-Invoke the bundled skill as:
+Invoke the bundled skills as:
 
 ```text
 $generate-agents-md
+$multi-model-review-loop
 ```
 
-The public plugin name is `agents-flow-creater-by-flamegun`; the internal skill identifier remains `generate-agents-md` for compatibility with existing workflows.
+The first Skill builds and audits stable project rules. The second runs an isolated Kimi → official DeepSeek V4 external sub-Agent → Codex GPT review loop. Internal Skill identifiers remain unchanged for compatibility with existing workflows.
 
 ## Repository layout
 
 ```text
 .codex-plugin/plugin.json
 skills/generate-agents-md/
+skills/multi-model-review-loop/
 ```
 
 ## Validation
@@ -39,6 +41,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_skill.py --json
 ```
 
 The gate checks the Skill package, code structure, public CLIs, regression tests, mutation tests, and swimlane JavaScript syntax.
+
+Validate the isolated multi-model loop separately:
+
+```bash
+cd skills/multi-model-review-loop
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_*.py' -q
+python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
+```
 
 ## Security boundary
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kimi DeepSeek V4 GPT 闭环审查"
+  short_description: "Kimi 修订、DeepSeek V4 子 Agent 黑盒审查、GPT 复核"
+  default_prompt: "Use $multi-model-review-loop so Kimi owns complete designs and revisions, the isolated official DeepSeek V4 sub-Agent authors black-box cases and reviews defects, and Codex GPT independently verifies the exact same hash-bound candidate before acceptance."

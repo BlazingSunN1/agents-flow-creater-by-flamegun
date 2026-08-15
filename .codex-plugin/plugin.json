@@ -1,18 +1,18 @@
 {
   "name": "agents-flow-creater-by-flamegun",
-  "version": "0.1.0",
-  "description": "Generate, review, and enforce stable AGENTS.md delivery workflows.",
+  "version": "0.2.0+codex.20260815025711",
+  "description": "Generate stable AGENTS.md workflows with an isolated Kimi, DeepSeek V4, and Codex GPT review loop.",
   "author": {
     "name": "FlameGun"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Agents Flow Creater by FlameGun",
-    "shortDescription": "Build stable, evidence-backed AGENTS.md workflows.",
-    "longDescription": "Generate and review scoped AGENTS.md rules with traceability, risk gates, independent acceptance, frontend browser verification, swimlane synchronization, and token-aware evidence routing.",
+    "shortDescription": "Build stable workflows with hash-bound multi-model review.",
+    "longDescription": "Generate and review scoped AGENTS.md rules with traceability, risk gates, independent acceptance, frontend browser verification, swimlane synchronization, and an isolated Kimi, official DeepSeek V4 external sub-Agent, and Codex GPT review loop.",
     "developerName": "FlameGun",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": "Use $generate-agents-md to inspect this project and build or review its stable AGENTS.md workflow."
+    "defaultPrompt": "Use $generate-agents-md to build or review this project's stable AGENTS.md workflow, and use $multi-model-review-loop when Kimi, the official DeepSeek V4 external sub-Agent, and Codex GPT should review the same candidate."
   }
 }

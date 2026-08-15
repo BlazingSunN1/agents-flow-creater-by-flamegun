@@ -103,7 +103,7 @@
       <p><strong>本轮审查修复：</strong>Machine-Enforced Policy 现在解析完整 YAML 标量并拒绝未知覆盖键；前端与泳道 CSS 的 <code>:not()</code> 支持多个排除参数、状态伪类且只按顶层逗号拆分，未知状态按失败关闭处理，隐藏控件不能伪造点击闭环。通用清单只路由复用与浏览器契约，不再复制底层 schema。</p>
       <p><strong>稳定性优化：</strong>完整 argv 必须匹配来源声明；共享记录通过固定目录描述符、文件锁、期望哈希与原子替换防 symlink 竞态；前端证据拒绝空文件、伪报告和越界链接。</p>
       <p><strong>多 Agent：</strong>实现 Agent 是代码和共享记录的唯一写者；实现阶段不提前要求黑盒；小型、标准、高风险严格启用最少必要角色；每个独立输入只覆盖当前需求的角色所需工件并逐文件绑定 SHA-256，独立输出再绑定输入清单 SHA-256，额外/缺失/漂移输入、证据复用或开放分歧都阻断。</p>
-      <p><strong>外部模型并列通道：</strong>显式启用时由隔离的 <code>spawn_external_agent.py</code> 让 Kimi 负责完整设计与修订、DeepSeek 编写黑盒用例并审查，Codex GPT 独立裁决；同候选门禁绑定脱敏上下文、固定提示词、外部原始响应/模型/usage、规范化合同及原生 GPT 输入/检查/输出证据。最多 6 轮，耗尽仍未双审通过则机器标记 <code>incomplete</code>。DeepSeek 用例仍须由独立黑盒通道真实执行，外部顾问不改变 Codex 模型与环境、不写工作区，也不替代原生子 Agent、唯一写者和运行时门禁。</p>
+      <p><strong>外部模型并列通道：</strong>显式启用时由隔离的 <code>spawn_external_agent.py</code> 让 Kimi 负责完整设计与修订、DeepSeek V4 外部子 Agent 通过官方 Chat Completions 编写黑盒用例并审查，Codex GPT 独立裁决；同候选门禁绑定脱敏上下文、固定提示词、Thinking Max + JSON Output 请求配置、请求/返回模型、<code>finish_reason=stop</code>、外部原始响应/usage、规范化合同及原生 GPT 输入/检查/输出证据。最多 6 轮，耗尽仍未双审通过则机器标记 <code>incomplete</code>。DeepSeek 用例仍须由独立黑盒通道真实执行，外部顾问不改变 Codex 模型与环境、不写工作区，也不替代原生子 Agent、唯一写者和运行时门禁。</p>
       <p><strong>失败关闭：</strong>根级 AGENTS 使用权威机器策略枚举；交付包总门禁绑定 AGENTS、追踪矩阵、工作集、真实命令、计划进度、自动审查、当前模块 run、完成态 latest/index、多 Agent 与适用前端证据；追踪表坏行不再静默丢弃。</p>
       <p><strong>本轮修复：</strong>计划绑定需求基线，进度绑定实现 run/code 和模块记录链接；自动审查用结构化 JSON 绑定真实命令、argv、时间、退出码和 rerun，模块 run/latest 绑定实际审查、独立评审、泳道与前端证据，严格拒绝 symlink 父链、hardlink 别名、隐藏字段和开放工作。</p>
       <p><strong>结构优化：</strong>AGENTS 策略、追踪解析和原生 E2E 报告已拆分为独立校验模块，入口文件与函数均受大小边界约束。</p>
@@ -180,16 +180,16 @@
 
   <details id="module-m02" class="module-detail" aria-labelledby="module-m02-title">
     <summary><span id="module-m02-title" role="heading" aria-level="2">M02 设计与测试资产</span></summary>
-    <p>上游输入：批准的需求基线、脱敏上下文与风险等级；显式启用外部评审时由 Kimi 形成并修订完整方案、DeepSeek 编写黑盒用例并审查、GPT 以原生证据独立裁决；原始响应与同候选哈希门禁限制最多 6 轮，耗尽则输出 machine-validated incomplete；对外输出：同版双审通过的方案、泳道、功能点、适用原型、测试点和完整验收用例；下游依赖：实现与真实黑盒执行。</p>
+    <p>上游输入：批准的需求基线、脱敏上下文与风险等级；显式启用外部评审时由 Kimi 形成并修订完整方案、DeepSeek V4 外部子 Agent 通过官方 Thinking Max + JSON Output 请求编写黑盒用例并审查、GPT 以原生证据独立裁决；请求配置、完整响应与同候选哈希门禁限制最多 6 轮，耗尽则输出 machine-validated incomplete；对外输出：同版双审通过的方案、泳道、功能点、适用原型、测试点和完整验收用例；下游依赖：实现与真实黑盒执行。</p>
     <div class="diagram"><svg viewBox="0 0 960 880" role="img" aria-labelledby="m02-svg-title m02-svg-desc" style="--module-arrow: url(#module-arrow-m02)">
-      <title id="m02-svg-title">M02 设计与测试资产模块细化图</title><desc id="m02-svg-desc">显式启用时 Kimi 生成并修订完整方案、DeepSeek 编写黑盒用例和审查、GPT 用原生输入检查输出证据独立复核；原始响应与同候选哈希绑定，最多六轮，耗尽后 incomplete，双审通过后才继续，DeepSeek 用例仍由独立黑盒通道执行。</desc>
+      <title id="m02-svg-title">M02 设计与测试资产模块细化图</title><desc id="m02-svg-desc">显式启用时 Kimi 生成并修订完整方案、DeepSeek V4 外部子 Agent 通过官方请求配置编写黑盒用例和审查、GPT 用原生输入检查输出证据独立复核；请求配置、完整响应与同候选哈希绑定，最多六轮，耗尽后 incomplete，双审通过后才继续，DeepSeek 用例仍由独立黑盒通道执行。</desc>
       <defs><marker id="module-arrow-m02" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"></path></marker></defs>
       <rect class="lane" x="0" y="0" width="240" height="880"></rect><rect class="lane alt" x="240" y="0" width="240" height="880"></rect><rect class="lane" x="480" y="0" width="240" height="880"></rect><rect class="lane alt" x="720" y="0" width="240" height="880"></rect>
       <rect class="lane-head" x="0" y="0" width="240" height="60"></rect><rect class="lane-head" x="240" y="0" width="240" height="60"></rect><rect class="lane-head" x="480" y="0" width="240" height="60"></rect><rect class="lane-head" x="720" y="0" width="240" height="60"></rect>
-      <g class="lane-title" text-anchor="middle"><text x="120" y="38">Kimi 设计 / 修订</text><text x="360" y="38">DeepSeek 黑盒 / 审查</text><text x="600" y="38">GPT 复核 / 泳道</text><text x="840" y="38">真实测试 / 独立验收</text></g>
+      <g class="lane-title" text-anchor="middle"><text x="120" y="38">Kimi 设计 / 修订</text><text x="360" y="38">DeepSeek V4 子 Agent</text><text x="600" y="38">GPT 复核 / 泳道</text><text x="840" y="38">真实测试 / 独立验收</text></g>
       <circle cx="120" cy="92" r="11" fill="var(--coral)"></circle>
       <rect class="activity" x="42" y="125" width="156" height="58" rx="10"></rect><text class="node-label" x="120" y="152" text-anchor="middle"><tspan x="120">Kimi 输出完整方案</tspan><tspan x="120" dy="20">原始响应绑定候选</tspan></text>
-      <rect class="activity" x="282" y="220" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="247" text-anchor="middle"><tspan x="360">DeepSeek 写黑盒用例</tspan><tspan x="360" dy="20">并做缺陷审查</tspan></text>
+      <rect class="activity" x="282" y="220" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="247" text-anchor="middle"><tspan x="360">官方 V4 写黑盒用例</tspan><tspan x="360" dy="20">Thinking Max 审查</tspan></text>
       <rect class="activity" x="282" y="325" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="352" text-anchor="middle"><tspan x="360">GPT 原生证据复核</tspan><tspan x="360" dy="20">未过则 Kimi 修订</tspan></text>
       <polygon class="decision" points="360,415 435,460 360,505 285,460"></polygon><text class="node-label" x="360" y="455" text-anchor="middle"><tspan x="360">DeepSeek 与 GPT</tspan><tspan x="360" dy="20">同版通过？</tspan></text>
       <polygon class="decision" points="120,420 195,465 120,510 45,465"></polygon><text class="node-label" x="120" y="460" text-anchor="middle"><tspan x="120">已到最多 6 轮？</tspan><tspan x="120" dy="20">同候选哈希门禁</tspan></text>

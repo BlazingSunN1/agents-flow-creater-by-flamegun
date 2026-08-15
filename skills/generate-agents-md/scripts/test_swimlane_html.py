@@ -49,6 +49,9 @@ class SwimlaneHtmlContractTests(unittest.TestCase):
         self.assertIn("最多 6 轮", HTML)
         self.assertIn("incomplete", HTML)
         self.assertIn("同候选哈希门禁", HTML)
+        self.assertIn("DeepSeek V4 外部子 Agent", HTML)
+        self.assertIn("Thinking Max + JSON Output", HTML)
+        self.assertIn("finish_reason=stop", HTML)
         self.assertIn("maxRoundStop", BROWSER_TEST)
 
 
