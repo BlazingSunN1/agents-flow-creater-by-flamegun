@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "run_id": "{{SUCCESSFUL_REUSED_RUN_ID}}",
+  "status": "passed",
+  "evidence_cache_key": "{{CURRENT_EVIDENCE_CACHE_KEY}}",
+  "source_run_record": {
+    "module": "{{MODULE_ID}}",
+    "path": "{{IMMUTABLE_SUCCESSFUL_RUN_RECORD_PATH}}",
+    "sha256": "{{IMMUTABLE_SUCCESSFUL_RUN_RECORD_SHA256}}",
+    "context_path": "{{IMMUTABLE_SOURCE_CONTEXT_PROVENANCE_PATH}}",
+    "context_sha256": "{{IMMUTABLE_SOURCE_CONTEXT_PROVENANCE_SHA256}}"
+  },
+  "evidence_paths": [
+    {"path": "{{REUSED_EVIDENCE_PATH}}", "sha256": "{{REUSED_EVIDENCE_SHA256}}"}
+  ]
+}

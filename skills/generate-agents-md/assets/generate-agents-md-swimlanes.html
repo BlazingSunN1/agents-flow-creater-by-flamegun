@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agents Flow Creater by FlameGun 系统泳道图</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fffaf1;
+      --fg: #2b211d;
+      --coral: #f26b5e;
+      --coral-soft: #ffe0db;
+      --mustard: #d9a11e;
+      --mustard-soft: #fff0b8;
+      --lane-a: #fff7ed;
+      --lane-b: #fffdf7;
+      --border: #694c40;
+      --focus: #8f3129;
+    }
+    * { box-sizing: border-box; }
+    html, body { max-width: 100%; overflow-x: hidden; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-weight: 650;
+      line-height: 1.55;
+    }
+    main { width: min(100%, 1180px); margin: auto; padding: 24px; }
+    h1, h2, h3 { line-height: 1.25; font-weight: 800; }
+    code { overflow-wrap: anywhere; }
+    nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 30px; }
+    nav a, .back-link {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      padding: 8px 13px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      background: var(--mustard-soft);
+      color: var(--fg);
+      text-decoration: none;
+      font-weight: 800;
+    }
+    nav a:focus-visible, .module-link:focus, .back-link:focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+    section, details { margin-block: 34px; scroll-margin-top: 18px; }
+    .finding { border-left: 8px solid var(--coral); padding: 12px 16px; background: var(--coral-soft); }
+    .diagram { width: 100%; overflow-x: auto; overflow-y: hidden; border: 2px solid var(--border); background: #fff; }
+    svg { display: block; width: 100%; height: auto; min-width: 760px; font-family: inherit; font-weight: 700; }
+    .lane { fill: var(--lane-a); stroke: var(--border); stroke-width: 1.5; }
+    .lane.alt { fill: var(--lane-b); }
+    .lane-head { fill: var(--mustard-soft); stroke: var(--border); stroke-width: 1.5; }
+    .lane-title { fill: var(--fg); font-size: 18px; font-weight: 800; }
+    .activity { fill: var(--coral-soft); stroke: var(--border); stroke-width: 2; }
+    .decision { fill: var(--mustard-soft); stroke: var(--border); stroke-width: 2; }
+    .node-label { fill: var(--fg); font-size: 15px; font-weight: 750; }
+    .edge-label { fill: var(--fg); font-size: 13px; font-weight: 750; }
+    .flow { fill: none; stroke: var(--fg); stroke-width: 2.4; marker-end: url(#overview-arrow); }
+    .module-flow { fill: none; stroke: var(--fg); stroke-width: 2.4; marker-end: var(--module-arrow); }
+    .module-link { color: inherit; cursor: pointer; }
+    .module-link:hover .activity, .module-link:focus .activity { stroke: var(--coral); stroke-width: 4; }
+    .module-detail > summary { cursor: pointer; font-size: 1.45rem; font-weight: 800; min-height: 44px; }
+    .module-detail[open] > summary { margin-bottom: 14px; }
+    .table-scroll { max-width: 100%; overflow-x: auto; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; background: #fff; font-weight: 600; }
+    th { background: var(--mustard-soft); }
+    th, td { padding: 10px 12px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    @media (max-width: 640px) {
+      main { padding: 14px; }
+      svg { width: 760px; }
+      .node-label { font-size: 17px; }
+      .lane-title { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Agents Flow Creater by FlameGun 系统泳道图</h1>
+  <p>当前代码行为：从项目事实与需求基线提取工程约束，以真实命令、单写者和风险触发的只读独立 Agent 建立方案到黑盒结果的可验证追踪链。</p>
+
+  <section aria-labelledby="review-title">
+    <h2 id="review-title">代码审查发现</h2>
+    <div class="finding">
+      <p><strong>审查结果：</strong>只读独立 Agent 持续执行需求稳定性与黑盒审查；发现已测试先行修复，当前 411 项回归和 265 个关键源码变异全部通过。</p>
+      <p><strong>已修复：</strong><code>--allow-pattern</code> 只豁免基础设施误报，不再跳过敏感信息、占位符和待办扫描。</p>
+      <p><strong>已修复：</strong>开发计划、模块日志、泳道图和前端验证均在指定章节内校验完整规则；反引号敏感值和同一行独立身份主机也不会被漏检。</p>
+      <p><strong>已修复：</strong>敏感信息扫描已覆盖常见标记与大小写变体；非法 mode/scope 不能绕过根/子作用域门禁。</p>
+      <p><strong>已修复：</strong>模块切换会关闭其他模块，返回系统总览会收起所有模块，避免多个模块同时展开。</p>
+      <p><strong>本轮新增：</strong>每次代码模块修改后仍自动审查真实变更和受影响调用链；泳道改为阶段任务完成时统一同步，阶段中仅在流程变化时立即更新并验证，减少无效重画与 Token 消耗。</p>
+      <p><strong>本轮修复：</strong>全局规则不得反转机器门禁；需求基线路径、版本和哈希进入证据缓存键；追踪链拒绝跨语义角色复用同一工件；模板模式深检嵌套 schema；implementation 阶段的前端改动同样必须提供点击与 E2E 证据。</p>
+      <p><strong>本轮加固：</strong>所选需求的 Code module 必须覆盖当前 Changed files；模块日志只记录自身需求编号；跨角色复制同内容工件、重复授权字段、旧证据预复用及模板中的失败/可选门禁均失败关闭。</p>
+      <p><strong>相邻缺陷修复：</strong>追踪工件内容身份消除尾随空白差异；execution run 模板明确只填模块所属 REQ；仅 user-visible 的非前端任务不再误触浏览器/E2E。</p>
+      <p><strong>边界修复：</strong>追踪内容身份消除零宽格式字符但保留正文内部空白语义；命令清单可正确声明 trace=internal 的真实前端重构，仍强制浏览器与 E2E。</p>
+      <p><strong>浏览器可用性修复：</strong>本地 HTML 和前端页面必须先由回环地址上的已登记服务提供 HTTP(S) 入口；证据头与点击转录精确绑定实际 URL，拒绝 <code>file://</code>、含敏感连接值和非 HTTP(S) 地址。</p>
+      <p><strong>页面身份加固：</strong>HTTP(S) URL 还必须映射预览根目录下的当前入口工件，并在证据头和点击转录中同时绑定入口文件与浏览器实际响应体 SHA-256；泳道浏览器必须使用回环地址并只能以当前系统总览为入口，无关网页或模块细图不能冒充。</p>
+      <p><strong>复用稳定性加固：</strong>缓存键新增风险/扩展理由、直接依赖边界和 Build ID；工作集父级或叶子符号链接失败关闭；复用必须绑定结构化成功 run、唯一模块、Build ID、验收环境、当前缓存键和逐项证据哈希；单一源 run 只服务单模块，多模块必须重跑。</p>
+      <p><strong>阶段与追踪修复：</strong>implementation 阶段允许 BLACK_BOX 以严格的未启动状态留空 run 和工件，completion 仍要求完整独立黑盒；同一追踪单元格的多个 REQ 链接会被聚合门禁全部识别。</p>
+      <p><strong>行为证据加固：</strong>DOM 快照必须与实时入口响应字节相同且为 UTF-8；动作保存浏览器计算的可见/启用状态并按声明顺序及次数执行，每次点击绑定前后 DOM 工件并证明断言节点自身变化且结果可见；DOM/CSS/ARIA/禁用状态、组合器和项目相对外链 CSS 按文档顺序、优先级与 <code>!important</code> 交叉校验，无法重放的 CSS import 阻断；截断 HTTP、目录入口、无调色板索引 PNG、未知关键块、不连续 IDAT、隐藏或非交互泳道跳转全部失败关闭。风险字段固定为三段，复用源 run 的模块、基线、代码、Build ID、验收环境、风险、需求、规范化文件/编号集合及严格历史上下文路径/哈希逐项绑定当前上下文，多证据统一使用无歧义逗号语法。</p>
+      <p><strong>Token 优化：</strong>入口 Skill 已去除重复细节；每次执行先建立最小工作集，组合代码、命令、配置、环境和输入指纹生成缓存键，只有验证器确认完全一致且证据存在时才复用。</p>
+      <p><strong>本轮路由优化：</strong>普通事实提取不再加载受控敏感配置细节；相关能力只在用户本次明确授权时读取独立策略。外部多模型、证据复用和浏览器验收也拆为按场景加载的独立契约，历史上下文复用模板已加入显式资源路由。</p>
+      <p><strong>本轮审查修复：</strong>Machine-Enforced Policy 现在解析完整 YAML 标量并拒绝未知覆盖键；前端与泳道 CSS 的 <code>:not()</code> 支持多个排除参数、状态伪类且只按顶层逗号拆分，未知状态按失败关闭处理，隐藏控件不能伪造点击闭环。通用清单只路由复用与浏览器契约，不再复制底层 schema。</p>
+      <p><strong>稳定性优化：</strong>完整 argv 必须匹配来源声明；共享记录通过固定目录描述符、文件锁、期望哈希与原子替换防 symlink 竞态；前端证据拒绝空文件、伪报告和越界链接。</p>
+      <p><strong>多 Agent：</strong>实现 Agent 是代码和共享记录的唯一写者；实现阶段不提前要求黑盒；小型、标准、高风险严格启用最少必要角色；每个独立输入只覆盖当前需求的角色所需工件并逐文件绑定 SHA-256，独立输出再绑定输入清单 SHA-256，额外/缺失/漂移输入、证据复用或开放分歧都阻断。</p>
+      <p><strong>外部模型并列通道：</strong>显式启用时由隔离的 <code>spawn_external_agent.py</code> 让 Kimi 负责完整设计与修订、DeepSeek 编写黑盒用例并审查，Codex GPT 独立裁决；同候选门禁绑定脱敏上下文、固定提示词、外部原始响应/模型/usage、规范化合同及原生 GPT 输入/检查/输出证据。最多 6 轮，耗尽仍未双审通过则机器标记 <code>incomplete</code>。DeepSeek 用例仍须由独立黑盒通道真实执行，外部顾问不改变 Codex 模型与环境、不写工作区，也不替代原生子 Agent、唯一写者和运行时门禁。</p>
+      <p><strong>失败关闭：</strong>根级 AGENTS 使用权威机器策略枚举；交付包总门禁绑定 AGENTS、追踪矩阵、工作集、真实命令、计划进度、自动审查、当前模块 run、完成态 latest/index、多 Agent 与适用前端证据；追踪表坏行不再静默丢弃。</p>
+      <p><strong>本轮修复：</strong>计划绑定需求基线，进度绑定实现 run/code 和模块记录链接；自动审查用结构化 JSON 绑定真实命令、argv、时间、退出码和 rerun，模块 run/latest 绑定实际审查、独立评审、泳道与前端证据，严格拒绝 symlink 父链、hardlink 别名、隐藏字段和开放工作。</p>
+      <p><strong>结构优化：</strong>AGENTS 策略、追踪解析和原生 E2E 报告已拆分为独立校验模块，入口文件与函数均受大小边界约束。</p>
+      <p><strong>一键自检：</strong><code>python3 scripts/validate_skill.py</code> 聚合 Skill 包、代码结构、全部 CLI smoke、全量回归、源码变异和泳道脚本语法 6 层检查，任一层失败即整体失败。</p>
+      <p><strong>明确例外：</strong>经用户授权的项目级敏感连接配置仅按需进入独立规则与专用校验；用户明确要求时可只读审查该策略及隔离效果，但不获得写入或传播真实值的权限。默认上下文不展示策略细节，公共模板始终脱敏。</p>
+    </div>
+  </section>
+
+  <nav aria-label="泳道图目录">
+    <a href="#system-overview">系统总览</a>
+    <a href="#module-m01" data-open-module="module-m01">M01 事实与需求基线</a>
+    <a href="#module-m02" data-open-module="module-m02">M02 设计与测试资产</a>
+    <a href="#module-m03" data-open-module="module-m03">M03 实现与持续规范</a>
+    <a href="#module-m04" data-open-module="module-m04">M04 风险触发独立验收</a>
+  </nav>
+
+  <section id="system-overview" aria-labelledby="overview-title">
+    <h2 id="overview-title">系统总览</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 960 820" role="img" aria-labelledby="overview-svg-title overview-svg-desc">
+        <title id="overview-svg-title">Agents Flow Creater by FlameGun 系统总览</title>
+        <desc id="overview-svg-desc">需求经过基线提取、方案与测试资产、单写者实现、风险触发的只读独立审查和黑盒验收后形成可执行 AGENTS.md。</desc>
+        <defs><marker id="overview-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"></path></marker></defs>
+        <rect class="lane" x="0" y="0" width="240" height="820"></rect>
+        <rect class="lane alt" x="240" y="0" width="240" height="820"></rect>
+        <rect class="lane" x="480" y="0" width="240" height="820"></rect>
+        <rect class="lane alt" x="720" y="0" width="240" height="820"></rect>
+        <rect class="lane-head" x="0" y="0" width="240" height="60"></rect>
+        <rect class="lane-head" x="240" y="0" width="240" height="60"></rect>
+        <rect class="lane-head" x="480" y="0" width="240" height="60"></rect>
+        <rect class="lane-head" x="720" y="0" width="240" height="60"></rect>
+        <g class="lane-title" text-anchor="middle"><text x="120" y="38">用户 / 需求基线</text><text x="360" y="38">代码与事实</text><text x="600" y="38">交付资产 / 实现</text><text x="840" y="38">独立评审 Agent</text></g>
+        <circle cx="120" cy="92" r="12" fill="var(--coral)"></circle>
+        <rect class="activity" x="42" y="125" width="156" height="58" rx="10"></rect><text class="node-label" x="120" y="160" text-anchor="middle">提出生成或更新请求</text>
+        <a href="#module-m01" class="module-link" data-open-module="module-m01" aria-label="打开 M01 事实与需求基线模块泳道"><rect class="activity" x="282" y="210" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="237" text-anchor="middle"><tspan x="360">[M01] 建立工作集</tspan><tspan x="360" dy="20">校验基线与缓存键</tspan></text></a>
+        <a href="#module-m02" class="module-link" data-open-module="module-m02" aria-label="打开 M02 设计与测试资产模块泳道"><rect class="activity" x="522" y="325" width="156" height="62" rx="10"></rect><text class="node-label" x="600" y="352" text-anchor="middle"><tspan x="600">[M02] 方案/泳道/功能</tspan><tspan x="600" dy="20">原型/测试/验收用例</tspan></text></a>
+        <a href="#module-m03" class="module-link" data-open-module="module-m03" aria-label="打开 M03 实现与持续规范模块泳道"><rect class="activity" x="522" y="450" width="156" height="62" rx="10"></rect><text class="node-label" x="600" y="477" text-anchor="middle"><tspan x="600">[M03] 实现/测试</tspan><tspan x="600" dy="20">自动审查/追踪门禁</tspan></text></a>
+        <a href="#module-m04" class="module-link" data-open-module="module-m04" aria-label="打开 M04 风险触发独立验收模块泳道"><rect class="activity" x="762" y="575" width="156" height="62" rx="10"></rect><text class="node-label" x="840" y="602" text-anchor="middle"><tspan x="840">[M04] 只读 Agent</tspan><tspan x="840" dy="20">风险审查/黑盒验收</tspan></text></a>
+        <rect class="activity" x="42" y="690" width="156" height="58" rx="10"></rect><text class="node-label" x="120" y="725" text-anchor="middle">闭合追踪并交付证据</text>
+        <path class="flow" d="M120 104V125"></path><path class="flow" d="M120 183C120 200 330 190 345 210"></path><path class="flow" d="M360 272C360 300 570 300 585 325"></path><path class="flow" d="M600 387V450"></path><path class="flow" d="M600 512C600 540 810 548 825 575"></path><path class="flow" d="M840 637C840 670 170 662 145 690"></path>
+        <circle cx="120" cy="790" r="14" fill="#fff" stroke="var(--fg)" stroke-width="2"></circle><circle cx="120" cy="790" r="8" fill="var(--mustard)"></circle><path class="flow" d="M120 748V772"></path>
+      </svg>
+    </div>
+  </section>
+
+  <section aria-labelledby="module-index-title">
+    <h2 id="module-index-title">模块清单</h2>
+    <div class="table-scroll"><table><caption>模块输入输出和下游关系</caption><thead><tr><th>编号</th><th>模块</th><th>上游输入</th><th>对外输出</th><th>下游依赖</th></tr></thead><tbody>
+      <tr><td>M01</td><td>事实与需求基线</td><td>用户要求、进度索引、受影响模块、既有 AGENTS.md</td><td>最小工作集、需求基线、风险等级、经校验的证据缓存键</td><td>M02 设计与测试资产</td></tr>
+      <tr><td>M02</td><td>设计与测试资产</td><td>批准的需求基线与风险等级</td><td>方案、泳道、功能点、适用 UI/UX 原型、单元与验收用例</td><td>M03 实现与持续规范</td></tr>
+      <tr><td>M03</td><td>实现与持续规范</td><td>已批准追踪项与验收用例</td><td>单写者代码、真实命令结果、审查证据、当前模块 run、latest/index、前端证据和交付包总门禁</td><td>M04 风险触发独立验收</td></tr>
+      <tr><td>M04</td><td>风险触发独立验收</td><td>角色最小输入、验收用例、类发布接口、当前代码/构建</td><td>只读审查与 BB 证据、分歧阻断、分类回流或闭合追踪</td><td>实现 / 验收用例 / 需求基线 / 交付</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <details id="module-m01" class="module-detail" aria-labelledby="module-m01-title">
+    <summary><span id="module-m01-title" role="heading" aria-level="2">M01 事实与需求基线</span></summary>
+    <p>上游输入：用户请求、进度索引与仓库；对外输出：最小工作集、需求基线、风险等级和经验证的缓存键；下游依赖：设计与测试资产。</p>
+    <div class="diagram"><svg viewBox="0 0 960 720" role="img" aria-labelledby="m01-svg-title m01-svg-desc" style="--module-arrow: url(#module-arrow-m01)">
+      <title id="m01-svg-title">M01 事实与需求基线模块细化图</title><desc id="m01-svg-desc">Agent 先读紧凑索引与当前模块摘要，建立最小工作集；校验需求基线和组合证据缓存键，失效则重跑，随后输出批准基线。</desc>
+      <defs><marker id="module-arrow-m01" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"></path></marker></defs>
+      <rect class="lane" x="0" y="0" width="320" height="720"></rect><rect class="lane alt" x="320" y="0" width="320" height="720"></rect><rect class="lane" x="640" y="0" width="320" height="720"></rect>
+      <rect class="lane-head" x="0" y="0" width="320" height="60"></rect><rect class="lane-head" x="320" y="0" width="320" height="60"></rect><rect class="lane-head" x="640" y="0" width="320" height="60"></rect>
+      <g class="lane-title" text-anchor="middle"><text x="160" y="38">Agent</text><text x="480" y="38">仓库与配置</text><text x="800" y="38">需求基线 / 追踪</text></g>
+      <circle cx="160" cy="92" r="11" fill="var(--coral)"></circle><rect class="activity" x="80" y="125" width="160" height="58" rx="10"></rect><text class="node-label" x="160" y="160" text-anchor="middle">确定模式与作用域</text>
+      <rect class="activity" x="400" y="225" width="160" height="58" rx="10"></rect><text class="node-label" x="480" y="252" text-anchor="middle"><tspan x="480">先读索引/latest</tspan><tspan x="480" dy="20">当前 run 与需求行</tspan></text>
+      <rect class="activity" x="400" y="325" width="160" height="58" rx="10"></rect><text class="node-label" x="480" y="352" text-anchor="middle"><tspan x="480">建立最小工作集</tspan><tspan x="480" dy="20">按触发条件扩展</tspan></text>
+      <rect class="activity" x="400" y="425" width="160" height="58" rx="10"></rect><text class="node-label" x="480" y="452" text-anchor="middle"><tspan x="480">绑定风险/依赖边界</tspan><tspan x="480" dy="20">规则与命令进缓存键</tspan></text>
+      <rect class="activity" x="720" y="525" width="160" height="58" rx="10"></rect><text class="node-label" x="800" y="552" text-anchor="middle"><tspan x="800">校验成功 run 记录</tspan><tspan x="800" dy="20">失效证据转重跑</tspan></text>
+      <circle cx="800" cy="650" r="14" fill="#fff" stroke="var(--fg)" stroke-width="2"></circle><circle cx="800" cy="650" r="8" fill="var(--mustard)"></circle>
+      <path class="module-flow" d="M160 103V125"></path><path class="module-flow" d="M160 183C160 208 450 200 465 225"></path><path class="module-flow" d="M480 283V325"></path><path class="module-flow" d="M480 383V425"></path><path class="module-flow" d="M480 483C480 510 770 500 785 525"></path><path class="module-flow" d="M800 583V632"></path>
+    </svg></div><a class="back-link" href="#system-overview">返回系统总览</a>
+  </details>
+
+  <details id="module-m02" class="module-detail" aria-labelledby="module-m02-title">
+    <summary><span id="module-m02-title" role="heading" aria-level="2">M02 设计与测试资产</span></summary>
+    <p>上游输入：批准的需求基线、脱敏上下文与风险等级；显式启用外部评审时由 Kimi 形成并修订完整方案、DeepSeek 编写黑盒用例并审查、GPT 以原生证据独立裁决；原始响应与同候选哈希门禁限制最多 6 轮，耗尽则输出 machine-validated incomplete；对外输出：同版双审通过的方案、泳道、功能点、适用原型、测试点和完整验收用例；下游依赖：实现与真实黑盒执行。</p>
+    <div class="diagram"><svg viewBox="0 0 960 880" role="img" aria-labelledby="m02-svg-title m02-svg-desc" style="--module-arrow: url(#module-arrow-m02)">
+      <title id="m02-svg-title">M02 设计与测试资产模块细化图</title><desc id="m02-svg-desc">显式启用时 Kimi 生成并修订完整方案、DeepSeek 编写黑盒用例和审查、GPT 用原生输入检查输出证据独立复核；原始响应与同候选哈希绑定，最多六轮，耗尽后 incomplete，双审通过后才继续，DeepSeek 用例仍由独立黑盒通道执行。</desc>
+      <defs><marker id="module-arrow-m02" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"></path></marker></defs>
+      <rect class="lane" x="0" y="0" width="240" height="880"></rect><rect class="lane alt" x="240" y="0" width="240" height="880"></rect><rect class="lane" x="480" y="0" width="240" height="880"></rect><rect class="lane alt" x="720" y="0" width="240" height="880"></rect>
+      <rect class="lane-head" x="0" y="0" width="240" height="60"></rect><rect class="lane-head" x="240" y="0" width="240" height="60"></rect><rect class="lane-head" x="480" y="0" width="240" height="60"></rect><rect class="lane-head" x="720" y="0" width="240" height="60"></rect>
+      <g class="lane-title" text-anchor="middle"><text x="120" y="38">Kimi 设计 / 修订</text><text x="360" y="38">DeepSeek 黑盒 / 审查</text><text x="600" y="38">GPT 复核 / 泳道</text><text x="840" y="38">真实测试 / 独立验收</text></g>
+      <circle cx="120" cy="92" r="11" fill="var(--coral)"></circle>
+      <rect class="activity" x="42" y="125" width="156" height="58" rx="10"></rect><text class="node-label" x="120" y="152" text-anchor="middle"><tspan x="120">Kimi 输出完整方案</tspan><tspan x="120" dy="20">原始响应绑定候选</tspan></text>
+      <rect class="activity" x="282" y="220" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="247" text-anchor="middle"><tspan x="360">DeepSeek 写黑盒用例</tspan><tspan x="360" dy="20">并做缺陷审查</tspan></text>
+      <rect class="activity" x="282" y="325" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="352" text-anchor="middle"><tspan x="360">GPT 原生证据复核</tspan><tspan x="360" dy="20">未过则 Kimi 修订</tspan></text>
+      <polygon class="decision" points="360,415 435,460 360,505 285,460"></polygon><text class="node-label" x="360" y="455" text-anchor="middle"><tspan x="360">DeepSeek 与 GPT</tspan><tspan x="360" dy="20">同版通过？</tspan></text>
+      <polygon class="decision" points="120,420 195,465 120,510 45,465"></polygon><text class="node-label" x="120" y="460" text-anchor="middle"><tspan x="120">已到最多 6 轮？</tspan><tspan x="120" dy="20">同候选哈希门禁</tspan></text>
+      <rect class="activity" x="42" y="550" width="156" height="58" rx="10"></rect><text class="node-label" x="120" y="585" text-anchor="middle">是：incomplete</text>
+      <rect class="activity" x="522" y="535" width="156" height="62" rx="10"></rect><text class="node-label" x="600" y="562" text-anchor="middle"><tspan x="600">画总览/模块泳道</tspan><tspan x="600" dy="20">拆分 FEAT/UI</tspan></text>
+      <rect class="activity" x="762" y="640" width="156" height="62" rx="10"></rect><text class="node-label" x="840" y="667" text-anchor="middle"><tspan x="840">定义测试点与 UT</tspan><tspan x="840" dy="20">编写完整 AT 用例</tspan></text>
+      <rect class="activity" x="762" y="745" width="156" height="62" rx="10"></rect><text class="node-label" x="840" y="772" text-anchor="middle"><tspan x="840">批准交付资产</tspan><tspan x="840" dy="20">进入实现门禁</tspan></text>
+      <circle cx="840" cy="845" r="12" fill="#fff" stroke="var(--fg)" stroke-width="2"></circle><circle cx="840" cy="845" r="7" fill="var(--mustard)"></circle>
+      <text class="edge-label" x="470" y="445">是</text><text class="edge-label" x="235" y="445">否</text><text class="edge-label" x="530" y="620">继续测试与独立验收</text>
+      <path class="module-flow" d="M120 103V125"></path><path class="module-flow" d="M120 183C120 205 330 198 345 220"></path><path class="module-flow" d="M360 282V325"></path><path class="module-flow" d="M360 387V415"></path><path class="module-flow" d="M435 460C470 460 570 510 585 535"></path><path class="module-flow" d="M285 460H195"></path><path class="module-flow" d="M120 510V550"></path><path class="module-flow" d="M45 465H20V155H42"></path><path class="module-flow" d="M600 597C600 625 810 615 825 640"></path><path class="module-flow" d="M840 702V745"></path><path class="module-flow" d="M840 807V828"></path>
+    </svg></div><a class="back-link" href="#system-overview">返回系统总览</a>
+  </details>
+
+  <details id="module-m03" class="module-detail" aria-labelledby="module-m03-title">
+    <summary><span id="module-m03-title" role="heading" aria-level="2">M03 实现与持续规范</span></summary>
+    <p>上游输入：批准的追踪项、设计和验收用例；对外输出：唯一写者生成的实现代码、真实命令结果与原子同步证据；下游依赖：风险触发独立验收。</p>
+    <div class="diagram"><svg viewBox="0 0 960 940" role="img" aria-labelledby="m03-svg-title m03-svg-desc" style="--module-arrow: url(#module-arrow-m03)">
+      <title id="m03-svg-title">M03 实现与持续规范模块细化图</title><desc id="m03-svg-desc">唯一实现 Agent 只实现批准追踪项，通过真实命令清单执行规范和测试，在回环 HTTP 入口保存前端结构化证据；聚合门禁绑定自动审查、当前模块 run、latest、进度索引、独立评审和泳道证据。</desc>
+      <defs><marker id="module-arrow-m03" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"></path></marker></defs>
+      <rect class="lane" x="0" y="0" width="240" height="940"></rect><rect class="lane alt" x="240" y="0" width="240" height="940"></rect><rect class="lane" x="480" y="0" width="240" height="940"></rect><rect class="lane alt" x="720" y="0" width="240" height="940"></rect>
+      <rect class="lane-head" x="0" y="0" width="240" height="60"></rect><rect class="lane-head" x="240" y="0" width="240" height="60"></rect><rect class="lane-head" x="480" y="0" width="240" height="60"></rect><rect class="lane-head" x="720" y="0" width="240" height="60"></rect>
+      <g class="lane-title" text-anchor="middle"><text x="120" y="38">唯一写者 Agent</text><text x="360" y="38">真实命令 / 测试</text><text x="600" y="38">浏览器 / E2E</text><text x="840" y="38">原子记录 / 总门禁</text></g>
+      <circle cx="120" cy="92" r="11" fill="var(--coral)"></circle>
+      <rect class="activity" x="42" y="125" width="156" height="62" rx="10"></rect><text class="node-label" x="120" y="152" text-anchor="middle"><tspan x="120">只实现已批准</tspan><tspan x="120" dy="20">REQ / FEAT</tspan></text>
+      <rect class="activity" x="282" y="230" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="257" text-anchor="middle"><tspan x="360">校验真实命令清单</tspan><tspan x="360" dy="20">拒绝吞错/伪造命令</tspan></text>
+      <rect class="activity" x="282" y="335" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="362" text-anchor="middle"><tspan x="360">运行一键 Skill 自检</tspan><tspan x="360" dy="20">回归/变异/脚本语法</tspan></text>
+      <rect class="activity" x="522" y="440" width="156" height="62" rx="10"></rect><text class="node-label" x="600" y="467" text-anchor="middle"><tspan x="600">实时入口/DOM 同源</tspan><tspan x="600" dy="20">点击/E2E/完整 PNG</tspan></text>
+      <rect class="activity" x="762" y="545" width="156" height="62" rx="10"></rect><text class="node-label" x="840" y="572" text-anchor="middle"><tspan x="840">阶段完成或流程变化</tspan><tspan x="840" dy="20">同步泳道/追踪/日志</tspan></text>
+      <rect class="activity" x="762" y="650" width="156" height="62" rx="10"></rect><text class="node-label" x="840" y="677" text-anchor="middle"><tspan x="840">交付包失败关闭</tspan><tspan x="840" dy="20">审查/run/latest/index</tspan></text>
+      <rect class="activity" x="282" y="755" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="782" text-anchor="middle"><tspan x="360">自动审查当前工作集</tspan><tspan x="360" dy="20">按发现扩展并重跑</tspan></text>
+      <polygon class="decision" points="360,830 430,870 360,910 290,870"></polygon><text class="node-label" x="360" y="865" text-anchor="middle"><tspan x="360">零可执行问题</tspan><tspan x="360" dy="20">且审查可用？</tspan></text>
+      <circle cx="840" cy="870" r="14" fill="#fff" stroke="var(--fg)" stroke-width="2"></circle><circle cx="840" cy="870" r="8" fill="var(--mustard)"></circle>
+      <text class="edge-label" x="650" y="855">是：进入黑盒</text><text class="edge-label" x="135" y="850">否：回到实现并重跑</text>
+      <path class="module-flow" d="M120 103V125"></path><path class="module-flow" d="M120 187C120 210 330 205 345 230"></path><path class="module-flow" d="M360 292V335"></path><path class="module-flow" d="M360 397C360 425 570 415 585 440"></path><path class="module-flow" d="M600 502C600 530 810 520 825 545"></path><path class="module-flow" d="M840 607V650"></path><path class="module-flow" d="M840 712C840 740 390 730 375 755"></path><path class="module-flow" d="M360 817V830"></path><path class="module-flow" d="M430 870H822"></path><path class="module-flow" d="M290 870H120V205"></path>
+    </svg></div><a class="back-link" href="#system-overview">返回系统总览</a>
+  </details>
+
+  <details id="module-m04" class="module-detail" aria-labelledby="module-m04-title">
+    <summary><span id="module-m04-title" role="heading" aria-level="2">M04 风险触发独立验收</span></summary>
+    <p>上游输入：按角色裁剪的最小清单、批准 AT 用例和类发布接口；对外输出：只读审查、BB 结果、分歧或闭合追踪；下游依赖：需求基线与最终交付。</p>
+    <div class="diagram"><svg viewBox="0 0 960 700" role="img" aria-labelledby="m04-svg-title m04-svg-desc" style="--module-arrow: url(#module-arrow-m04)">
+      <title id="m04-svg-title">M04 风险触发独立验收模块细化图</title><desc id="m04-svg-desc">只读独立 Agent 按风险启动，不读取完整聊天、其他 Agent 推理或实现自报，不修改代码；分歧或失败分类后回到实现、验收用例、需求基线或阻断状态。</desc>
+      <defs><marker id="module-arrow-m04" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"></path></marker></defs>
+      <rect class="lane" x="0" y="0" width="240" height="700"></rect><rect class="lane alt" x="240" y="0" width="240" height="700"></rect><rect class="lane" x="480" y="0" width="240" height="700"></rect><rect class="lane alt" x="720" y="0" width="240" height="700"></rect>
+      <rect class="lane-head" x="0" y="0" width="240" height="60"></rect><rect class="lane-head" x="240" y="0" width="240" height="60"></rect><rect class="lane-head" x="480" y="0" width="240" height="60"></rect><rect class="lane-head" x="720" y="0" width="240" height="60"></rect>
+      <g class="lane-title" text-anchor="middle"><text x="120" y="38">只读独立 Agent</text><text x="360" y="38">隔离审查 / 黑盒</text><text x="600" y="38">哈希证据 / 分歧</text><text x="840" y="38">需求基线 / 交付</text></g>
+      <circle cx="120" cy="92" r="11" fill="var(--coral)"></circle>
+      <rect class="activity" x="42" y="125" width="156" height="62" rx="10"></rect><text class="node-label" x="120" y="152" text-anchor="middle"><tspan x="120">按风险启动最少角色</tspan><tspan x="120" dy="20">输入清单互相隔离</tspan></text>
+      <rect class="activity" x="282" y="230" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="257" text-anchor="middle"><tspan x="360">只读审查或真实入口</tspan><tspan x="360" dy="20">执行完整黑盒闭环</tspan></text>
+      <rect class="activity" x="522" y="335" width="156" height="62" rx="10"></rect><text class="node-label" x="600" y="362" text-anchor="middle"><tspan x="600">绑定 run/输入/输出</tspan><tspan x="600" dy="20">记录哈希与分歧</tspan></text>
+      <polygon class="decision" points="600,440 690,495 600,550 510,495"></polygon><text class="node-label" x="600" y="485" text-anchor="middle"><tspan x="600">全部通过且无 Bug</tspan><tspan x="600" dy="20">无开放分歧？</tspan></text>
+      <rect class="activity" x="762" y="455" width="156" height="62" rx="10"></rect><text class="node-label" x="840" y="482" text-anchor="middle"><tspan x="840">否：分类缺陷</tspan><tspan x="840" dy="20">按类型定向回流</tspan></text>
+      <circle cx="840" cy="550" r="12" fill="#fff" stroke="var(--fg)" stroke-width="2"></circle><circle cx="840" cy="550" r="7" fill="var(--coral)"></circle>
+      <rect class="activity" x="762" y="585" width="156" height="62" rx="10"></rect><text class="node-label" x="840" y="612" text-anchor="middle"><tspan x="840">是：完成阶段校验</tspan><tspan x="840" dy="20">闭合追踪并交付</tspan></text>
+      <circle cx="840" cy="675" r="12" fill="#fff" stroke="var(--fg)" stroke-width="2"></circle><circle cx="840" cy="675" r="7" fill="var(--mustard)"></circle>
+      <text class="edge-label" x="700" y="478">否</text><text class="edge-label" x="620" y="575">是</text>
+      <path class="module-flow" d="M120 103V125"></path><path class="module-flow" d="M120 187C120 210 330 205 345 230"></path><path class="module-flow" d="M360 292C360 320 570 310 585 335"></path><path class="module-flow" d="M600 397V440"></path><path class="module-flow" d="M690 495H762"></path><path class="module-flow" d="M840 517V533"></path><path class="module-flow" d="M600 550C600 580 745 580 762 606"></path><path class="module-flow" d="M840 647V658"></path>
+    </svg></div><a class="back-link" href="#system-overview">返回系统总览</a>
+  </details>
+
+  <section aria-labelledby="evidence-title">
+    <h2 id="evidence-title">证据与说明</h2>
+    <ul>
+      <li>代码与配置：<code>SKILL.md</code>、根模板、真实命令/上下文/追踪/多 Agent/前端/交付包验证器，以及原子记录更新器。</li>
+      <li>回归测试：411 项测试覆盖机器策略固定枚举及全局反转检测、外部多模型同候选哈希/六轮停止语义、本地 HTTP(S) 权威入口与完整响应、实时页面同源 UTF-8 DOM、点击前后可见文本/语义状态工件、DOM/CSS/ARIA/禁用、类型/属性/组合器、多参数及状态 <code>:not()</code> 选择器、外链/文档级联顺序与 <code>!important</code>、点击顺序/次数与断言覆盖、完整 PNG 扫描线/调色板/关键块/连续 IDAT/视口、泳道可见且可交互跳转、严格阶段角色、正式完成 run 与紧凑历史上下文逐字段复用、单模块来源身份、Build ID/环境绑定、多模块强制重跑、文件集合重复项拒绝、文件和需求集合规范化、三段风险/依赖缓存边界、工作集 symlink、同单元格多需求、单写者、全部 CLI smoke、基线/需求/模块/Changed files 绑定、跨角色工件隔离、模块级需求归属、前端适用性、阶段触发泳道同步、计划进度、结构化自动审查、最小独立 Agent 输入与输出绑定、严格 JSON schema、latest/index、结构边界、Playwright/Cypress 原生报告、Shell 阻断、受控敏感配置授权及开放问题语义；265 个关键源码变异均被杀死。</li>
+      <li>上下文门禁：工作集验证器从风险/扩展理由、直接依赖边界、变更文件、配置文件、输入文件和命令文本重算组合缓存键；只有结构化成功 run 记录同时绑定当前缓存键和逐项证据哈希时才允许复用，否则转为重跑。</li>
+      <li>文档预期：多 Agent 按风险增量启用而非无差别并发；前端默认要求桌面 PC 与 Playwright/Cypress 闭环，移动端只在批准需求、支持环境或变更范围明确涉及时成为门禁。</li>
+      <li>边界：机器校验能阻断结构、版本与证据一致性错误；需求含义和测试充分性仍需独立评审与真实黑盒行为证据。</li>
+      <li>待确认：项目使用的实际日志根路径和 run_id 格式应在 project 模式按仓库事实确定。</li>
+    </ul>
+  </section>
+</main>
+<script>
+  (() => {
+    const moduleDetails = [...document.querySelectorAll("details.module-detail")];
+    const showOnlyModule = (moduleId) => {
+      moduleDetails.forEach((detail) => { detail.open = detail.id === moduleId; });
+    };
+    const syncModuleToHash = () => {
+      const target = document.getElementById(location.hash.slice(1));
+      showOnlyModule(target instanceof HTMLDetailsElement ? target.id : "");
+    };
+    document.querySelectorAll("[data-open-module]").forEach((link) => {
+      const openLinkedModule = () => {
+        showOnlyModule(link.dataset.openModule);
+      };
+      link.addEventListener("click", openLinkedModule);
+      link.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openLinkedModule();
+        location.hash = link.dataset.openModule;
+      });
+    });
+    moduleDetails.forEach((detail) => {
+      detail.addEventListener("toggle", () => {
+        if (detail.open) showOnlyModule(detail.id);
+      });
+    });
+    addEventListener("hashchange", syncModuleToHash);
+    syncModuleToHash();
+  })();
+</script>
+</body>
+</html>

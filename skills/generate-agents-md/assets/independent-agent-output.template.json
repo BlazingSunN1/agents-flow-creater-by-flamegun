@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "role": "{{INDEPENDENT_ROLE}}",
+  "run_id": "{{INDEPENDENT_AGENT_RUN_ID}}",
+  "baseline_version": "{{BASELINE_VERSION}}",
+  "baseline_sha256": "{{BASELINE_SHA256}}",
+  "code_version": "{{CODE_VERSION}}",
+  "input_sha256": "{{INPUT_MANIFEST_SHA256}}",
+  "verdict": "{{PASS_ONLY_AFTER_INDEPENDENT_VERIFICATION}}",
+  "findings": []
+}

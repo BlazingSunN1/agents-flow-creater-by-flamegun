@@ -1,0 +1,12 @@
+# Completion Progress
+
+- Run ID: {{IMPLEMENTATION_RUN_ID}}
+- Code version: {{CODE_VERSION}}
+- Modules: {{SORTED_MODULE_KEYS}}
+- Module run records: {{MODULE_TO_CURRENT_RUN_RECORD_PATHS}}
+- Module latest records: {{MODULE_TO_LATEST_RECORD_PATHS_OR_NA_WHILE_IN_PROGRESS}}
+- Completion date: {{COMPLETION_DATE_OR_NA_WHILE_IN_PROGRESS}}
+- Delivered result: {{DELIVERED_RESULT_OR_CURRENT_PROGRESS}}
+- Validation performed: {{VALIDATION_COMMANDS_AND_EVIDENCE_PATHS_OR_NA}}
+- Remaining work: {{NONE_WHEN_COMPLETED_OR_OPEN_WORK}}
+- Status: {{PENDING_IN_PROGRESS_BLOCKED_OR_COMPLETED}}

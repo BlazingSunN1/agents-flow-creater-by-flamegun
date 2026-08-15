@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "stage": "{{IMPLEMENTATION_OR_COMPLETION}}",
+  "baseline_version": "{{BASELINE_VERSION}}",
+  "baseline_sha256": "{{BASELINE_SHA256}}",
+  "code_version": "{{CODE_VERSION}}",
+  "build_id": "{{BUILD_ID}}",
+  "implementation_run_id": "{{IMPLEMENTATION_RUN_ID}}",
+  "single_writer_run_id": "{{IMPLEMENTATION_RUN_ID}}",
+  "gates": [],
+  "open_disagreements": []
+}

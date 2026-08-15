@@ -1,0 +1,18 @@
+{
+  "name": "agents-flow-creater-by-flamegun",
+  "version": "0.1.0",
+  "description": "Generate, review, and enforce stable AGENTS.md delivery workflows.",
+  "author": {
+    "name": "FlameGun"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agents Flow Creater by FlameGun",
+    "shortDescription": "Build stable, evidence-backed AGENTS.md workflows.",
+    "longDescription": "Generate and review scoped AGENTS.md rules with traceability, risk gates, independent acceptance, frontend browser verification, swimlane synchronization, and token-aware evidence routing.",
+    "developerName": "FlameGun",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Use $generate-agents-md to inspect this project and build or review its stable AGENTS.md workflow."
+  }
+}

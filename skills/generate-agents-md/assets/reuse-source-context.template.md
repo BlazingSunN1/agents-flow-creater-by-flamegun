@@ -1,0 +1,4 @@
+# Context Workset {{SUCCESSFUL_REUSED_RUN_ID}}
+
+- Run ID: {{SUCCESSFUL_REUSED_RUN_ID}}
+- Evidence cache key: {{CURRENT_EVIDENCE_CACHE_KEY}}

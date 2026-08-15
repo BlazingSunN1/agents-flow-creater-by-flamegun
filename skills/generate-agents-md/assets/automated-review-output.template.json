@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "implementation_run_id": "{{IMPLEMENTATION_RUN_ID}}",
+  "code_version": "{{CODE_VERSION}}",
+  "code_fingerprint": "{{CONTEXT_CODE_FINGERPRINT}}",
+  "command_manifest_fingerprint": "{{CONTEXT_COMMAND_MANIFEST_FINGERPRINT}}",
+  "changed_files": ["{{NORMALIZED_CHANGED_FILE_PATH}}"],
+  "command_id": "automated_review",
+  "argv_sha256": "{{NULL_SEPARATED_ARGV_SHA256}}",
+  "exit_code": 0,
+  "started_at": "{{TIMEZONE_AWARE_START_TIME}}",
+  "ended_at": "{{TIMEZONE_AWARE_END_TIME}}",
+  "findings": [],
+  "reruns": {
+    "targeted_tests": 0,
+    "code_standards": 0,
+    "traceability": 0,
+    "swimlane_evidence": 0,
+    "automated_review": 0
+  }
+}

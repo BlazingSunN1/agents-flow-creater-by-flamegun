@@ -1,0 +1,23 @@
+# Run {{RUN_ID}}
+
+- Run ID: {{RUN_ID}}
+- Module: `{{MODULE_KEY}}`
+- Status: `{{STATUS}}`
+- Code version: `{{CODE_VERSION}}`
+- Context cache key: `{{EVIDENCE_CACHE_KEY}}`
+- Baseline version and SHA-256: `{{BASELINE_VERSION}}` / `{{BASELINE_SHA256}}`
+- Build ID and acceptance environment: `{{BUILD_ID}}` / {{ACCEPTANCE_ENVIRONMENT}}
+- Risk level and reason: {{RISK_LEVEL_AND_REASON}}
+- Traceability IDs: {{MODULE_OWNED_REQUIREMENT_IDS}}
+- Changed files: {{CHANGED_FILE_PATHS}}
+- Delivered result: {{DELIVERED_RESULT}}
+- Context workset manifest and reused evidence fingerprints: {{CONTEXT_MANIFEST_AND_REUSED_EVIDENCE}}
+- Automated review evidence: {{AUTOMATED_REVIEW_EVIDENCE_PATH}}
+- Independent review evidence: {{UI_UX_ACCEPTANCE_AND_BLACK_BOX_AGENT_RUN_IDS_AND_EVIDENCE}}
+- Swimlane evidence: {{SWIMLANE_EVIDENCE_PATH}}
+- Frontend evidence: {{FRONTEND_EVIDENCE_PATH_OR_NA}}
+- Classified findings and routes: {{FINDING_IDS_CLASSES_STATUS_ROUTES_AND_EVIDENCE}}
+- Verification evidence: {{VERIFICATION_COMMANDS_AND_RESULTS_OR_PATHS}}
+- Frontend interaction evidence: {{FRONTEND_EVIDENCE_PATH_BROWSER_AND_E2E_RUN_IDS}}
+- Swimlane diagrams and validated evidence: {{SWIMLANE_DIAGRAM_PATHS_AND_EVIDENCE_JSON}}
+- Remaining risks: {{REMAINING_RISKS}}

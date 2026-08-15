@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "frontend_applicable": "{{TRUE_OR_FALSE}}",
+  "frontend_preview_url": "{{HTTP_OR_HTTPS_FRONTEND_ENTRY_URL_OR_NA_REASON}}",
+  "frontend_preview_root": "{{PROJECT_RELATIVE_FRONTEND_PREVIEW_ROOT_OR_NA_REASON}}",
+  "frontend_entry_artifact": "{{PROJECT_RELATIVE_FRONTEND_ENTRY_ARTIFACT_OR_NA_REASON}}",
+  "commands": [
+    {"id": "targeted_tests", "argv": ["{{EXECUTABLE}}", "{{ARG}}"], "source": "{{COMMAND_SOURCE_PATH}}", "source_selector": "{{DECLARATION_SELECTOR}}", "source_command": "{{EXACT_DECLARED_COMMAND}}", "working_directory": ".", "applicability": "required"},
+    {"id": "full_test_or_build", "argv": ["{{EXECUTABLE}}", "{{ARG}}"], "source": "{{COMMAND_SOURCE_PATH}}", "source_selector": "{{DECLARATION_SELECTOR}}", "source_command": "{{EXACT_DECLARED_COMMAND}}", "working_directory": ".", "applicability": "required"},
+    {"id": "code_standards", "argv": ["{{EXECUTABLE}}", "{{ARG}}"], "source": "{{COMMAND_SOURCE_PATH}}", "source_selector": "{{DECLARATION_SELECTOR}}", "source_command": "{{EXACT_DECLARED_COMMAND}}", "working_directory": ".", "applicability": "required"},
+    {"id": "automated_review", "argv": ["{{EXECUTABLE}}", "{{ARG}}"], "source": "{{COMMAND_SOURCE_PATH}}", "source_selector": "{{DECLARATION_SELECTOR}}", "source_command": "{{EXACT_DECLARED_COMMAND}}", "working_directory": ".", "applicability": "required"},
+    {"id": "traceability", "argv": ["python3", "scripts/validate_traceability.py"], "source": "scripts/validate_traceability.py", "source_selector": "def main", "source_command": "python3 scripts/validate_traceability.py", "working_directory": ".", "applicability": "required"},
+    {"id": "context_manifest", "argv": ["python3", "scripts/validate_context_manifest.py"], "source": "scripts/validate_context_manifest.py", "source_selector": "def main", "source_command": "python3 scripts/validate_context_manifest.py", "working_directory": ".", "applicability": "required"},
+    {"id": "multi_agent_evidence", "argv": ["python3", "scripts/validate_multi_agent_evidence.py"], "source": "scripts/validate_multi_agent_evidence.py", "source_selector": "def main", "source_command": "python3 scripts/validate_multi_agent_evidence.py", "working_directory": ".", "applicability": "required"},
+    {"id": "swimlane_evidence", "argv": ["python3", "scripts/validate_swimlane_evidence.py"], "source": "scripts/validate_swimlane_evidence.py", "source_selector": "def main", "source_command": "python3 scripts/validate_swimlane_evidence.py", "working_directory": ".", "applicability": "required"},
+    {"id": "atomic_record_update", "argv": ["python3", "scripts/update_project_record.py"], "source": "scripts/update_project_record.py", "source_selector": "def main", "source_command": "python3 scripts/update_project_record.py", "working_directory": ".", "applicability": "required"},
+    {"id": "delivery_bundle", "argv": ["python3", "scripts/validate_delivery_bundle.py"], "source": "scripts/validate_delivery_bundle.py", "source_selector": "def main", "source_command": "python3 scripts/validate_delivery_bundle.py", "working_directory": ".", "applicability": "required"},
+    {"id": "frontend_evidence", "argv": ["python3", "scripts/validate_frontend_evidence.py"], "source": "scripts/validate_frontend_evidence.py", "source_selector": "def main", "source_command": "python3 scripts/validate_frontend_evidence.py", "working_directory": ".", "applicability": "{{REQUIRED_OR_NA_REASON}}"},
+    {"id": "frontend_e2e", "argv": ["{{PLAYWRIGHT_OR_CYPRESS_EXECUTABLE}}", "{{E2E_ARG}}"], "source": "{{FRONTEND_COMMAND_SOURCE_PATH}}", "source_selector": "{{FRONTEND_DECLARATION_SELECTOR}}", "source_command": "{{EXACT_FRONTEND_DECLARED_COMMAND}}", "working_directory": "{{FRONTEND_WORKING_DIRECTORY}}", "applicability": "{{REQUIRED_OR_NA_REASON}}"}
+  ]
+}

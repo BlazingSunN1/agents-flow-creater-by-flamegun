@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "baseline_version": "{{BASELINE_VERSION}}",
+  "baseline_sha256": "{{BASELINE_SHA256}}",
+  "code_version": "{{CODE_VERSION}}",
+  "build_id": "{{BUILD_ID}}",
+  "run_id": "{{IMPLEMENTATION_RUN_ID}}",
+  "diagrams": [
+    {"module": "system", "path": "{{SYSTEM_SWIMLANE_HTML}}", "sha256": "{{SYSTEM_SWIMLANE_SHA256}}", "code_evidence": ["{{CHANGED_CODE_PATH}}"]},
+    {"module": "{{MODULE_KEY}}", "path": "{{MODULE_SWIMLANE_HTML}}", "sha256": "{{MODULE_SWIMLANE_SHA256}}", "code_evidence": ["{{MODULE_CHANGED_CODE_PATH}}"]}
+  ],
+  "browser": {
+    "tool": "browser:control-in-app-browser",
+    "run_id": "{{BROWSER_RUN_ID}}",
+    "page_url": "{{LOOPBACK_HTTP_SWIMLANE_URL}}",
+    "preview_root": "{{PROJECT_RELATIVE_SWIMLANE_PREVIEW_ROOT}}",
+    "page_artifact_path": "{{SYSTEM_SWIMLANE_HTML}}",
+    "page_artifact_sha256": "{{SYSTEM_SWIMLANE_SHA256}}",
+    "observed_response_sha256": "{{BROWSER_OBSERVED_HTTP_RESPONSE_BODY_SHA256}}",
+    "transcript_path": "{{BROWSER_TRANSCRIPT_JSON}}",
+    "transcript_sha256": "{{BROWSER_TRANSCRIPT_SHA256}}"
+  },
+  "verdict": "pass"
+}
