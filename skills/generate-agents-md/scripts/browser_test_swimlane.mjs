@@ -49,11 +49,27 @@ export async function runSwimlaneBrowserTest(tab, url) {
     const m03Text = document.getElementById("module-m03")?.textContent || "";
     const overviewText = document.getElementById("system-overview")?.textContent || "";
     const pageText = document.body.textContent || "";
+    const visibleInViewport = (element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
+    };
+    const requiredM03Edges = [
+      ["m03-minimum-result", "m03-affected-checks"],
+      ["m03-affected-checks", "m03-freeze-result"],
+      ["m03-freeze-result", "m03-harden-after-freeze"],
+      ["m03-harden-after-freeze", "m03-mapped-verification"],
+      ["m03-mapped-verification", "m03-regression-preservation"],
+    ];
     return ({
     keyboardOpened: document.getElementById("module-m03")?.open === true,
     overviewHeaders: document.querySelectorAll("#system-overview .lane-head").length,
     overviewConnectors: document.querySelectorAll("#system-overview .flow").length,
-    horizontalOverflow: document.body.scrollWidth > document.documentElement.clientWidth,
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    m03VisibleLaneHeads: [...document.querySelectorAll("#module-m03 .lane-head")].filter(visibleInViewport).length,
+    m03VisibleConnectors: [...document.querySelectorAll("#module-m03 .module-flow")].filter(visibleInViewport).length,
+    m03OrderedTopology: requiredM03Edges.every(([from, to]) => Boolean(
+      document.querySelector(`#module-m03 .module-flow[data-from="${from}"][data-to="${to}"]`),
+    )),
     maxRoundStop: m02Text.includes("最多 6 轮")
       && m02Text.includes("incomplete")
       && m02Text.includes("同候选哈希门禁")
@@ -107,15 +123,27 @@ export async function runSwimlaneBrowserTest(tab, url) {
     deterministicGateIntegrity: m03Text.includes("门禁规划器只读输出")
       && m03Text.includes("唯一租约写者 CAS 合并")
       && m03Text.includes("每个可执行门禁 receipt 绑定当前输入指纹")
-      && m03Text.includes("最终聚合校验必须接收同一交付契约")
+      && m03Text.includes("最终聚合校验只在闭环或完成阶段接收同一交付契约")
       && m03Text.includes("实时执行且无自引用 receipt")
       && m03Text.includes("移动 Web 运行浏览器移动门禁")
       && m03Text.includes("原生移动运行 native_mobile_tests")
       && m03Text.includes("跨端变更同时运行两套门禁")
       && m03Text.includes("逐项绑定实际工件")
       && m03Text.includes("人工触发由独立审查者执行")
+      && m03Text.includes("不提前触发最终聚合")
       && m03Text.includes("有适用泳道且无流程变化才运行 swimlane_freshness")
       && m03Text.includes("普通用户可见文本不自动启动 UI/UX 原型 Agent"),
+    resultFirstHardening: Boolean(document.getElementById("m03-minimum-result"))
+      && Boolean(document.getElementById("m03-affected-checks"))
+      && Boolean(document.getElementById("m03-freeze-result"))
+      && Boolean(document.getElementById("m03-harden-after-freeze"))
+      && Boolean(document.getElementById("m03-mapped-verification"))
+      && Boolean(document.getElementById("m03-regression-preservation"))
+      && m03Text.includes("真实入口跑通最小业务流程")
+      && m03Text.includes("冻结代码版本、Build ID、验收命令、可观测结果和证据 SHA-256")
+      && m03Text.includes("冻结后才启动非必要门禁")
+      && m03Text.includes("发生回归时先恢复最小业务闭环")
+      && m03Text.includes("治理完整或门禁通过不能替代业务成果"),
     validationTiers: overviewText.includes("validate_skill.py --quick")
       && overviewText.includes("validate_skill.py --affected")
       && overviewText.includes("validate_skill.py --full")
@@ -126,7 +154,7 @@ export async function runSwimlaneBrowserTest(tab, url) {
       && m03Text.includes("最多3轮/同错2次"),
     });
   });
-  if (!finalState.keyboardOpened || finalState.overviewHeaders !== 4 || finalState.overviewConnectors < 1 || finalState.horizontalOverflow || !finalState.maxRoundStop || !finalState.roleNeutralWriterLease || !finalState.moduleClosure || !finalState.standardDecisionBranches || !finalState.overviewSystemAggregate || !finalState.gateOutputAttestation || !finalState.semanticSwimlaneBatching || !finalState.triggeredReview || !finalState.deterministicGateIntegrity || !finalState.validationTiers) {
+  if (!finalState.keyboardOpened || finalState.overviewHeaders !== 4 || finalState.overviewConnectors < 1 || finalState.horizontalOverflow || finalState.m03VisibleLaneHeads < 1 || finalState.m03VisibleConnectors < 1 || !finalState.m03OrderedTopology || !finalState.maxRoundStop || !finalState.roleNeutralWriterLease || !finalState.moduleClosure || !finalState.standardDecisionBranches || !finalState.overviewSystemAggregate || !finalState.gateOutputAttestation || !finalState.semanticSwimlaneBatching || !finalState.triggeredReview || !finalState.deterministicGateIntegrity || !finalState.resultFirstHardening || !finalState.validationTiers) {
     throw new Error(`overview or keyboard closure failed: ${JSON.stringify(finalState)}`);
   }
   const logs = await tab.dev.logs({ levels: ["error", "warn"], limit: 100 });

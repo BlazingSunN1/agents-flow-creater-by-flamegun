@@ -707,6 +707,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
                 "environment_id": trace.get("Acceptance environment"),
             },
             "change": {
+                "delivery_phase": "completed" if stage == "completion" else "result_candidate",
+                "baseline_frozen": stage == "completion",
                 "requirement_ids": [item.strip() for item in context.get("Requirement IDs", "").split(",") if item.strip()],
                 "modules": modules,
                 "changed_files": _split_paths(context.get("Changed files", "")),

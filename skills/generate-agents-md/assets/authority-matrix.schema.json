@@ -1,12 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/generate-agents-md/authority-matrix.schema.json",
-  "title": "Machine-Enforced Authority Matrix",
+  "title": "Compact Machine-Enforced Authority Declaration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "scope_binding", "module_binding", "run_binding", "independent_gate_proof", "rows"],
+  "required": ["schema_version", "contract", "scope_binding", "module_binding", "run_binding", "independent_gate_proof", "default", "actions", "policy_overrides", "binding_overrides"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
+    "contract": {"const": "expanded-authority-matrix-v1"},
     "scope_binding": {"const": "effective-root-agents"},
     "module_binding": {"const": "registered-module-key-and-owned-paths"},
     "run_binding": {"const": "local-coordination-or-host-attested-receipts"},
@@ -27,24 +28,14 @@
         "host_verifier": {"const": "optional-strict-security"}
       }
     },
-    "rows": {
-      "type": "array",
-      "minItems": 96,
-      "maxItems": 96,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["actor", "action", "object", "policy", "scope", "module_binding", "run_binding"],
-        "properties": {
-          "actor": {"enum": ["dispatcher", "module-maintainer", "independent-reviewer", "system-aggregation", "implementation", "system-governance-bootstrap"]},
-          "action": {"enum": ["route", "write", "design", "implement", "review", "black-box", "accept", "release", "close", "aggregate", "issue_independent_verdict", "write_module_artifacts", "record_completion_after_verified_gates", "write_system_manifest", "orchestrate_read_validate", "bootstrap_system_governance"]},
-          "object": {"enum": ["module-delivery", "project-record", "system-delivery", "gate-verdict", "module-artifacts", "system-manifest", "system-governance"]},
-          "policy": {"enum": ["allow", "deny", "independent-only", "external-explicit-only"]},
-          "scope": {"enum": ["repository", "exact-external-authorized-targets"]},
-          "module_binding": {"enum": ["registered-module-key", "pending-stable-module-registration"]},
-          "run_binding": {"enum": ["local-coordination-or-host-attested-receipt", "local-coordination-or-host-attested-or-explicit-local-controlled-bootstrap-receipt"]}
-        }
-      }
-    }
+    "default": {"const": {"policy": "deny", "scope": "repository", "module_binding": "registered-module-key", "run_binding": "local-coordination-or-host-attested-receipt"}},
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "write", "design", "implement", "review", "black-box", "accept", "release", "close", "aggregate", "issue_independent_verdict", "write_module_artifacts", "record_completion_after_verified_gates", "write_system_manifest", "orchestrate_read_validate", "bootstrap_system_governance"],
+      "const": {"route": "module-delivery", "write": "project-record", "design": "module-delivery", "implement": "module-delivery", "review": "module-delivery", "black-box": "module-delivery", "accept": "module-delivery", "release": "module-delivery", "close": "module-delivery", "aggregate": "system-delivery", "issue_independent_verdict": "gate-verdict", "write_module_artifacts": "module-artifacts", "record_completion_after_verified_gates": "module-delivery", "write_system_manifest": "system-manifest", "orchestrate_read_validate": "system-delivery", "bootstrap_system_governance": "system-governance"}
+    },
+    "policy_overrides": {"const": {"dispatcher": {"route": "allow", "orchestrate_read_validate": "allow"}, "module-maintainer": {"write": "allow", "design": "allow", "implement": "allow", "write_module_artifacts": "allow", "record_completion_after_verified_gates": "independent-only"}, "independent-reviewer": {"review": "allow", "black-box": "allow", "accept": "allow", "issue_independent_verdict": "allow"}, "system-aggregation": {"aggregate": "allow", "write_system_manifest": "allow"}, "implementation": {"write": "allow", "design": "allow", "implement": "allow", "write_module_artifacts": "allow"}, "system-governance-bootstrap": {"bootstrap_system_governance": "external-explicit-only"}}},
+    "binding_overrides": {"const": {"system-governance-bootstrap.bootstrap_system_governance": {"scope": "exact-external-authorized-targets", "module_binding": "pending-stable-module-registration", "run_binding": "local-coordination-or-host-attested-or-explicit-local-controlled-bootstrap-receipt"}}}
   }
 }

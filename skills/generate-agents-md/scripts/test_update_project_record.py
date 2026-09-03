@@ -477,13 +477,10 @@ class AuthorizedProjectRecordTests(unittest.TestCase):
         self.assertFalse((self.root / self.target).exists())
 
     def test_mutated_current_authority_matrix_cannot_authorize_write(self) -> None:
-        deny = (
-            '{"actor":"dispatcher","action":"write","object":"project-record",'
-            '"policy":"deny"'
-        )
+        dispatcher = '"dispatcher":{'
         text = self.agents.read_text(encoding="utf-8")
         self.agents.write_text(
-            text.replace(deny, deny.replace('"deny"', '"allow"'), 1), encoding="utf-8",
+            text.replace(dispatcher, dispatcher + '"write":"allow",', 1), encoding="utf-8",
         )
         self.lease_value = dict(
             self.lease_value,

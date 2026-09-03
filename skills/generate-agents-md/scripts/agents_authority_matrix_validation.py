@@ -115,9 +115,40 @@ EXPECTED_AUTHORITY_MATRIX: dict[str, Any] = {
     "rows": _expected_rows(),
 }
 
+# The project-facing declaration keeps the same expanded v1 capability semantics while
+# avoiding 96 repetitive rows in every root AGENTS.md. Validators expand this closed
+# declaration before hashing; existing expanded v1 documents remain readable.
+EXPECTED_AUTHORITY_DECLARATION: dict[str, Any] = {
+    "schema_version": 2,
+    "contract": "expanded-authority-matrix-v1",
+    "scope_binding": EXPECTED_AUTHORITY_MATRIX["scope_binding"],
+    "module_binding": EXPECTED_AUTHORITY_MATRIX["module_binding"],
+    "run_binding": EXPECTED_AUTHORITY_MATRIX["run_binding"],
+    "independent_gate_proof": GATE_PROOF_CONTRACT,
+    "default": {
+        "policy": "deny",
+        "scope": "repository",
+        "module_binding": "registered-module-key",
+        "run_binding": "local-coordination-or-host-attested-receipt",
+    },
+    "actions": ACTION_OBJECTS,
+    "policy_overrides": ALLOWED_POLICIES,
+    "binding_overrides": {
+        "system-governance-bootstrap.bootstrap_system_governance": {
+            "scope": "exact-external-authorized-targets",
+            "module_binding": "pending-stable-module-registration",
+            "run_binding": (
+                "local-coordination-or-host-attested-or-explicit-local-controlled-"
+                "bootstrap-receipt"
+            ),
+        },
+    },
+}
+
 
 def canonical_matrix_sha256(value: dict[str, Any] = EXPECTED_AUTHORITY_MATRIX) -> str:
-    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    normalized = EXPECTED_AUTHORITY_MATRIX if value == EXPECTED_AUTHORITY_DECLARATION else value
+    payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -211,7 +242,7 @@ def _proof_is_canonical(proof: Any) -> bool:
 
 
 def _matrix_is_canonical(value: dict[str, Any]) -> bool:
-    return (
+    expanded_is_canonical = (
         tuple(value) == TOP_LEVEL_FIELDS
         and type(value.get("schema_version")) is int
         and value.get("schema_version") == 1
@@ -221,6 +252,7 @@ def _matrix_is_canonical(value: dict[str, Any]) -> bool:
         and _proof_is_canonical(value.get("independent_gate_proof"))
         and _rows_are_canonical(value.get("rows"))
     )
+    return expanded_is_canonical or value == EXPECTED_AUTHORITY_DECLARATION
 
 
 PROSE_ACTOR_RE = re.compile(

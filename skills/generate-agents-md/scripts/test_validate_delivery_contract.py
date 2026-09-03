@@ -38,7 +38,7 @@ class DeliveryContractValidatorTests(unittest.TestCase):
             "automated_review", "code_standards", "context_manifest", "delivery_bundle",
             "delivery_contract", "multi_agent_evidence", "swimlane_evidence", "swimlane_freshness",
             "native_mobile_tests", "targeted_tests", "traceability", "full_test_or_build",
-            "atomic_record_update",
+            "atomic_record_update", "real_entry_acceptance",
         )
         source_command = "python3 -m unittest"
         (self.root / "docs/commands.txt").write_text(source_command, encoding="utf-8")
@@ -93,6 +93,8 @@ class DeliveryContractValidatorTests(unittest.TestCase):
                 "environment_id": "local-test",
             },
             "change": {
+                "delivery_phase": "closure_candidate",
+                "baseline_frozen": True,
                 "requirement_ids": ["REQ-001"],
                 "modules": ["module"],
                 "changed_files": ["src/module.py"],
@@ -124,6 +126,54 @@ class DeliveryContractValidatorTests(unittest.TestCase):
         )
         self._write_gate_receipts(data)
         return data
+
+    def test_affected_checks_and_frozen_baseline_require_current_business_receipts(self) -> None:
+        for phase, frozen in (("affected_checks_passed", False), ("baseline_frozen", True)):
+            with self.subTest(phase=phase):
+                data = self.contract()
+                data["stage"] = "implementation"
+                data["status"] = "in_progress"
+                data["change"].update({"delivery_phase": phase, "baseline_frozen": frozen})
+                impact = compute_impact_fingerprint(data, self.root)
+                data["gate_plan"] = build_gate_plan(
+                    data["change"], stage="implementation", impact_fingerprint=impact,
+                    command_fingerprints=compute_command_fingerprints(data, self.root),
+                )
+                self._write_gate_receipts(data)
+                del data["gate_receipts"]["real_entry_acceptance"]
+                self.path.write_text(json.dumps(data), encoding="utf-8")
+                self.assertIn("missing-gate-receipt", self.codes())
+
+    def test_delivery_phase_is_not_part_of_business_evidence_fingerprint(self) -> None:
+        data = self.contract()
+        before = compute_impact_fingerprint(data, self.root)
+        data["change"]["delivery_phase"] = "completed"
+        after = compute_impact_fingerprint(data, self.root)
+        self.assertEqual(before, after)
+
+    def test_human_snapshot_review_does_not_require_unreached_business_receipts(self) -> None:
+        data = self.contract()
+        data["stage"] = "implementation"
+        data["status"] = "in_progress"
+        data["change"].update({
+            "delivery_phase": "result_candidate",
+            "baseline_frozen": False,
+            "human_review_triggered": True,
+        })
+        impact = compute_impact_fingerprint(data, self.root)
+        data["gate_plan"] = build_gate_plan(
+            data["change"], stage="implementation", impact_fingerprint=impact,
+            command_fingerprints=compute_command_fingerprints(data, self.root),
+        )
+        self._write_gate_receipts(data)
+        del data["gate_receipts"]["real_entry_acceptance"]
+        del data["gate_receipts"]["targeted_tests"]
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertNotIn("missing-gate-receipt", self.codes())
+
+        del data["gate_receipts"]["automated_review"]
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("missing-gate-receipt", self.codes())
 
     def _write_gate_receipts(self, data: dict[str, object]) -> None:
         receipts: dict[str, object] = {}
@@ -158,6 +208,8 @@ class DeliveryContractValidatorTests(unittest.TestCase):
         data["stage"] = "completion"
         data["status"] = "completed"
         data["change"].update({
+            "delivery_phase": "completed",
+            "baseline_frozen": True,
             "risk_level": "small",
             "risk_reason": "internal refactor",
             "surfaces": ["internal"],
@@ -227,7 +279,11 @@ class DeliveryContractValidatorTests(unittest.TestCase):
         data = self.contract()
         data["stage"] = "completion"
         data["status"] = "completed"
-        data["change"]["flow_impact"] = "uncertain"
+        data["change"].update({
+            "delivery_phase": "completed",
+            "baseline_frozen": True,
+            "flow_impact": "uncertain",
+        })
         self.path.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("invalid-gate-plan-input", self.codes())
 

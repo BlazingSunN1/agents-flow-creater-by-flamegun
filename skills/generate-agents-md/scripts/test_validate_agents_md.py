@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from validate_agents_md import _is_overbroad_allow_pattern, validate_text
+from agents_authority_matrix_validation import EXPECTED_AUTHORITY_MATRIX
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -44,6 +45,23 @@ def remove_authority_matrix(text: str) -> str:
         count=1,
         flags=re.MULTILINE,
     )
+
+
+def expanded_authority_fixture(text: str) -> str:
+    section_pattern = re.compile(
+        r"(^## Machine-Enforced Authority Matrix\s*$[\s\S]*?```json\s*\n)"
+        r"[\s\S]*?(\n```)(?=[\s\S]*?^## )",
+        re.MULTILINE,
+    )
+    payload = json.dumps(
+        EXPECTED_AUTHORITY_MATRIX,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    expanded, count = section_pattern.subn(r"\g<1>" + payload + r"\g<2>", text, count=1)
+    if count != 1:
+        raise AssertionError("authority matrix JSON block not found")
+    return expanded
 
 
 def project_root_fixture() -> str:
@@ -1157,17 +1175,17 @@ class ValidatorRegressionTests(unittest.TestCase):
     def test_writer_cannot_close_but_may_record_verified_completion(self) -> None:
         base = project_root_fixture()
         self.assertNotIn("invalid-authority-matrix", error_codes(base, mode="project", scope="root"))
-        close_deny = (
-            '{"actor":"module-maintainer","action":"close","object":"module-delivery",'
-            '"policy":"deny"'
-        )
+        maintainer = '"module-maintainer":{'
         self.assertIn(
             "invalid-authority-matrix",
-            error_codes(base.replace(close_deny, close_deny.replace('"deny"', '"allow"'), 1), mode="project", scope="root"),
+            error_codes(
+                base.replace(maintainer, maintainer + '"close":"allow",', 1),
+                mode="project",
+                scope="root",
+            ),
         )
         self.assertIn(
-            '{"actor":"module-maintainer","action":"record_completion_after_verified_gates",'
-            '"object":"module-delivery","policy":"independent-only"',
+            '"record_completion_after_verified_gates":"independent-only"',
             base,
         )
 
@@ -1714,18 +1732,13 @@ class ValidatorRegressionTests(unittest.TestCase):
                 )
 
     def test_authority_matrix_schema_is_closed_and_rows_are_unique(self) -> None:
-        first_row = (
-            '{"actor":"dispatcher","action":"route","object":"module-delivery",'
-            '"policy":"allow","scope":"repository","module_binding":"registered-module-key",'
-            '"run_binding":"local-coordination-or-host-attested-receipt"}'
-        )
         mutations = (
-            (first_row, first_row.replace('"dispatcher"', '"Dispatcher"')),
-            (first_row, first_row.replace('"route"', '"route-work"')),
-            (first_row, first_row.replace('"allow"', '"green-light"')),
-            (first_row, first_row[:-1] + ',"note":"override"}'),
-            (first_row, first_row + ",\n" + first_row),
-            (first_row + ",\n", ""),
+            ('"schema_version":2', '"schema_version":3'),
+            ('"contract":"expanded-authority-matrix-v1"', '"contract":"other"'),
+            ('"route":"module-delivery"', '"route-work":"module-delivery"'),
+            ('"route":"allow"', '"route":"green-light"'),
+            ('"default":{', '"note":"override","default":{'),
+            ('"route":"module-delivery",', ''),
         )
         for mode, base in (("public-template", ROOT_TEMPLATE), ("project", project_root_fixture())):
             for old, new in mutations:
@@ -1735,6 +1748,19 @@ class ValidatorRegressionTests(unittest.TestCase):
                         "invalid-authority-matrix",
                         error_codes(mutated, mode=mode, scope="root"),
                     )
+        expanded = expanded_authority_fixture(ROOT_TEMPLATE)
+        expanded_mutations = (
+            ('"actor":"dispatcher","action":"route"',
+             '"actor":"dispatcher","action":"unknown-action"'),
+            ('"actor":"dispatcher","action":"route"',
+             '"actor":"dispatcher","action":"route","note":"forbidden"'),
+        )
+        for old, new in expanded_mutations:
+            with self.subTest(encoding="expanded-v1", mutation=new):
+                self.assertIn(
+                    "invalid-authority-matrix",
+                    error_codes(expanded.replace(old, new, 1), mode="public-template", scope="root"),
+                )
 
     def test_authority_matrix_schema_asset_is_closed(self) -> None:
         schema = json.loads(
@@ -1742,9 +1768,8 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
         self.assertFalse(schema["additionalProperties"])
         self.assertFalse(schema["properties"]["independent_gate_proof"]["additionalProperties"])
-        rows = schema["properties"]["rows"]
-        self.assertEqual((96, 96), (rows["minItems"], rows["maxItems"]))
-        self.assertFalse(rows["items"]["additionalProperties"])
+        self.assertEqual(2, schema["properties"]["schema_version"]["const"])
+        self.assertEqual("expanded-authority-matrix-v1", schema["properties"]["contract"]["const"])
         self.assertEqual(
             [
                 "route", "write", "design", "implement", "review", "black-box",
@@ -1753,30 +1778,40 @@ class ValidatorRegressionTests(unittest.TestCase):
                 "write_system_manifest", "orchestrate_read_validate",
                 "bootstrap_system_governance",
             ],
-            rows["items"]["properties"]["action"]["enum"],
+            schema["properties"]["actions"]["required"],
         )
 
     def test_authority_matrix_fixed_denials_cannot_be_reauthorized(self) -> None:
-        denied_rows = (
-            ("module-maintainer", "accept", "module-delivery"),
-            ("module-maintainer", "release", "module-delivery"),
-            ("module-maintainer", "close", "module-delivery"),
-            ("dispatcher", "write", "project-record"),
-            ("dispatcher", "release", "module-delivery"),
-            ("dispatcher", "close", "module-delivery"),
+        denied_actions = (
+            ("module-maintainer", "accept"),
+            ("module-maintainer", "release"),
+            ("module-maintainer", "close"),
+            ("dispatcher", "write"),
+            ("dispatcher", "release"),
+            ("dispatcher", "close"),
         )
         for mode, base in (("public-template", ROOT_TEMPLATE), ("project", project_root_fixture())):
-            for actor, action, object_name in denied_rows:
-                old = (
-                    f'{{"actor":"{actor}","action":"{action}","object":"{object_name}",'
-                    '"policy":"deny"'
-                )
+            for actor, action in denied_actions:
+                old = f'"{actor}":{{'
                 with self.subTest(mode=mode, actor=actor, action=action):
-                    mutated = base.replace(old, old.replace('"deny"', '"allow"'), 1)
+                    mutated = base.replace(old, old + f'"{action}":"allow",', 1)
                     self.assertIn(
                         "invalid-authority-matrix",
                         error_codes(mutated, mode=mode, scope="root"),
                     )
+        expanded = expanded_authority_fixture(ROOT_TEMPLATE)
+        for actor, action in denied_actions:
+            old = f'"actor":"{actor}","action":"{action}",'
+            with self.subTest(encoding="expanded-v1", actor=actor, action=action):
+                row_start = expanded.index(old)
+                policy_start = expanded.index('"policy":"deny"', row_start)
+                mutated = expanded[:policy_start] + expanded[policy_start:].replace(
+                    '"policy":"deny"', '"policy":"allow"', 1
+                )
+                self.assertIn(
+                    "invalid-authority-matrix",
+                    error_codes(mutated, mode="public-template", scope="root"),
+                )
 
     def test_authority_matrix_prose_cannot_override_fixed_denials(self) -> None:
         reversals = (
@@ -1817,12 +1852,16 @@ class ValidatorRegressionTests(unittest.TestCase):
                         "invalid-authority-matrix",
                         error_codes(base.replace(old, new, 1), mode=mode, scope="root"),
                     )
+        expanded = expanded_authority_fixture(ROOT_TEMPLATE)
+        for old, new in mutations:
+            with self.subTest(encoding="expanded-v1", field=old):
+                self.assertIn(
+                    "invalid-authority-matrix",
+                    error_codes(expanded.replace(old, new, 1), mode="public-template", scope="root"),
+                )
 
     def test_authority_matrix_independent_only_cannot_become_self_pass(self) -> None:
-        old = (
-            '{"actor":"module-maintainer","action":"record_completion_after_verified_gates",'
-            '"object":"module-delivery","policy":"independent-only"'
-        )
+        old = '"record_completion_after_verified_gates":"independent-only"'
         for mode, base in (("public-template", ROOT_TEMPLATE), ("project", project_root_fixture())):
             with self.subTest(mode=mode):
                 mutated = base.replace(old, old.replace('"independent-only"', '"allow"'), 1)
@@ -1830,6 +1869,17 @@ class ValidatorRegressionTests(unittest.TestCase):
                     "invalid-authority-matrix",
                     error_codes(mutated, mode=mode, scope="root"),
                 )
+        expanded = expanded_authority_fixture(ROOT_TEMPLATE)
+        row = '"actor":"module-maintainer","action":"record_completion_after_verified_gates",'
+        row_start = expanded.index(row)
+        policy_start = expanded.index('"policy":"independent-only"', row_start)
+        mutated = expanded[:policy_start] + expanded[policy_start:].replace(
+            '"policy":"independent-only"', '"policy":"allow"', 1
+        )
+        self.assertIn(
+            "invalid-authority-matrix",
+            error_codes(mutated, mode="public-template", scope="root"),
+        )
 
     def test_authority_matrix_hash_is_bound_by_machine_policy(self) -> None:
         marker = "authority_matrix_sha256: "
@@ -2584,6 +2634,46 @@ class ValidatorRegressionTests(unittest.TestCase):
         text = ROOT_TEMPLATE.replace(
             "Every task closes the minimum reliable loop:",
             "Large projects may use this optional workflow:",
+        )
+        self.assertIn(
+            "missing-minimum-reliable-loop",
+            error_codes(text, mode="public-template", scope="root"),
+        )
+
+    def test_result_first_hardening_sequence_is_required(self) -> None:
+        text = ROOT_TEMPLATE.replace(
+            "First drive the smallest end-to-end business flow through a real entry, the approved core behavior, and an observable acceptance result.",
+            "Begin by expanding all governance gates.",
+        )
+        self.assertIn(
+            "missing-minimum-reliable-loop",
+            error_codes(text, mode="public-template", scope="root"),
+        )
+
+    def test_negated_result_first_sequence_is_rejected(self) -> None:
+        text = ROOT_TEMPLATE.replace(
+            "First drive the smallest end-to-end business flow through a real entry, the approved core behavior, and an observable acceptance result.",
+            "Do not drive the smallest end-to-end business flow through a real entry or observable acceptance result.",
+        )
+        self.assertIn(
+            "missing-minimum-reliable-loop",
+            error_codes(text, mode="public-template", scope="root"),
+        )
+
+    def test_multiline_result_first_rule_is_accepted(self) -> None:
+        text = ROOT_TEMPLATE.replace(
+            "`result_candidate -> affected_checks_passed -> baseline_frozen -> hardening -> closure_candidate`",
+            "`result_candidate ->\n  affected_checks_passed -> baseline_frozen ->\n  hardening -> closure_candidate`",
+        )
+        self.assertNotIn(
+            "missing-minimum-reliable-loop",
+            error_codes(text, mode="public-template", scope="root"),
+        )
+
+    def test_frozen_result_must_survive_hardening(self) -> None:
+        text = ROOT_TEMPLATE.replace(
+            "If any later optimization regresses it, stop that optimization, restore or repair the minimum business flow, and rerun the frozen acceptance command before continuing;",
+            "If later optimization regresses it, continue polishing;",
         )
         self.assertIn(
             "missing-minimum-reliable-loop",

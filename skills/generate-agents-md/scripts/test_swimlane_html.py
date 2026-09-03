@@ -193,19 +193,56 @@ class SwimlaneHtmlContractTests(unittest.TestCase):
             "门禁规划器只读输出",
             "唯一租约写者 CAS 合并",
             "每个可执行门禁 receipt 绑定当前输入指纹",
-            "最终聚合校验必须接收同一交付契约",
+            "最终聚合校验只在闭环或完成阶段接收同一交付契约",
             "实时执行且无自引用 receipt",
             "移动 Web 运行浏览器移动门禁",
             "原生移动运行 native_mobile_tests",
             "跨端变更同时运行两套门禁",
             "逐项绑定实际工件",
             "人工触发由独立审查者执行",
+            "只要求当前阶段已经到达的业务 receipt 与审查 receipt",
+            "不提前触发最终聚合",
             "有适用泳道且无流程变化才运行 swimlane_freshness",
             "普通用户可见文本不自动启动 UI/UX 原型 Agent",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, m03)
         self.assertIn("deterministicGateIntegrity", BROWSER_TEST)
+        self.assertIn("最终聚合校验只在闭环或完成阶段接收同一交付契约", BROWSER_TEST)
+        self.assertIn("不提前触发最终聚合", BROWSER_TEST)
+        self.assertNotIn("最终聚合校验必须接收同一交付契约", BROWSER_TEST)
+
+    def test_m03_visualizes_result_first_freeze_then_harden_sequence(self) -> None:
+        m03 = HTML.split('<details id="module-m03"', 1)[1].split("</details>", 1)[0]
+        for marker in (
+            'id="m03-minimum-result"',
+            'id="m03-affected-checks"',
+            'id="m03-freeze-result"',
+            'id="m03-harden-after-freeze"',
+            'id="m03-regression-preservation"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, m03)
+        expected_edges = (
+            ('m03-minimum-result', 'm03-affected-checks'),
+            ('m03-affected-checks', 'm03-freeze-result'),
+            ('m03-freeze-result', 'm03-harden-after-freeze'),
+            ('m03-harden-after-freeze', 'm03-mapped-verification'),
+            ('m03-mapped-verification', 'm03-regression-preservation'),
+        )
+        for source, target in expected_edges:
+            with self.subTest(source=source, target=target):
+                self.assertIn(f'data-from="{source}" data-to="{target}"', m03)
+        for phrase in (
+            "真实入口跑通最小业务流程",
+            "冻结代码版本、Build ID、验收命令、可观测结果和证据 SHA-256",
+            "冻结后才启动非必要门禁",
+            "发生回归时先恢复最小业务闭环",
+            "治理完整或门禁通过不能替代业务成果",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, m03)
+        self.assertIn("resultFirstHardening", BROWSER_TEST)
 
     def test_validation_summary_tracks_invariants_without_frozen_counts(self) -> None:
         from run_mutation_checks import MUTANTS

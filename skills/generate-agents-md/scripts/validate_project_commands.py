@@ -15,6 +15,7 @@ from browser_url_validation import is_http_browser_url
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
 REQUIRED_COMMANDS = {
     "delivery_contract",
+    "real_entry_acceptance",
     "targeted_tests",
     "full_test_or_build",
     "code_standards",

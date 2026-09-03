@@ -11,8 +11,8 @@ description: 从仓库事实和项目需求提取可验证约束，生成、更�
 - 只写会稳定改变 Agent 行为的项目规则；系统、开发者和用户指令始终更高优先级。
 - 根级只放全仓共同规则，子级 `AGENTS.md` 只写作用域差异，避免重复。
 - 产物使用 UTF-8；不得把 RTF、HTML 或含 NUL 的内容当 Markdown。
-- 公共模板必须脱敏。涉及受控敏感连接配置时，仅在用户明确授权的项目任务中，或用户明确要求只读审查该策略或隔离效果时，完整读取 `references/sensitive-configuration-policy.md`；只读审查不授予写入或传播真实值的权限，普通任务不得加载该文件。
-- 优先级固定为需求正确闭环与稳定交付第一、开发效率第二；安全与性能控制按已证实风险启用，不得用低收益机制阻塞交付。不得因节省上下文跳过追踪、测试、适用审查或验收。
+- 公共模板脱敏。敏感连接仅在用户授权的项目任务，或明确要求只读审查该策略或隔离效果时读取 `references/sensitive-configuration-policy.md`；只读不授权写入/传播真实值。
+- 优先级：需求闭环与稳定交付 > 效率。状态为 `result_candidate → affected_checks_passed → baseline_frozen → hardening → closure_candidate`；成果前仅做正确执行、受影响验收或防不可逆损害检查，冻结 receipt 后才加载有映射的打磨。治理门禁不得替代成果，也不得用无事实收益的安全、性能或 Token 机制阻塞适用验收。
 - 稳定交付是流程设计的唯一目的；无映射就不得新增或启动。
 
 ## 模式
@@ -42,18 +42,18 @@ description: 从仓库事实和项目需求提取可验证约束，生成、更�
 - 根文件从 `assets/AGENTS.template.md` 开始，子目录使用 `assets/AGENTS.scoped.template.md`，按需取用 `assets/AGENTS.optional-sections.md`。
 - 保留根模板的 `Machine-Enforced Policy` 固定枚举；项目规则只能补充，不能删除、改为可选或冲突。
 - 逐项处理既有规则；删除或弱化须有过时、重复、冲突或作用域错误证据。
-- 共享记录仅由 `docs/governance/module-writer-registry.json` 唯一登记且持匹配 module、Agent/run、路径和策略哈希之活动租约的维护/实现 Agent 写入；Dispatcher/审查者身份和重复活动写者失败关闭，层级不授权。默认 `delivery-first-local-coordination` 通过 `scripts/update_project_record.py` 校验边界并锁/CAS/原子替换；严格模式仅按风险或人工要求启用。该机制不拦截绕过入口的同用户直接文件写入，不得冒充 OS 隔离。
+- 共享记录仅由 `docs/governance/module-writer-registry.json` 中持匹配 module、Agent/run、路径、策略哈希活动租约的实现/维护 Agent 写；Dispatcher、审查者或重复写者失败关闭，层级不授权。默认 `delivery-first-local-coordination` 由 `scripts/update_project_record.py` 校验边界并锁/CAS 原子更新；严格模式按风险或人工启用。它不能拦截绕过入口的同用户写入，不得冒充 OS 隔离。
 
 ### 4. 建立稳定交付链
 
 - 用 `assets/requirement-traceability.template.md` 绑定 `REQ-*` 至 `FLOW-*`、`FEAT-*`、`UI-*`、`UT-*`、`AT-*`、`MOD-*`、`BB-*`；歧义返回需求基线，禁止为实现缺陷改变需求。
-- 所有任务先闭合最小可靠链：已批准的目标/范围/非目标/可量化验收 → 最小实现 → 受影响测试和现有相关静态检查 → 对照验收点记录当前证据。其他环节只按风险证据加载。
-- 仅当受影响需求和风险映射证明适用时，才从以下链路取用必要阶段：方案设计 → 系统/模块泳道 → 功能点 → 独立 UI/UX 原型 → 测试点/单元用例 → 独立验收用例 → 实现与持续代码规范 → 独立黑盒验收。不适用环节记一条可验证理由，不生成空产物。
+- 最小可靠链：目标/边界/验收 → 真实入口至业务结果 → 受影响检查 → 当前证据。冻结版本与验收证据后才打磨；回归恢复重验。细则见 `references/delivery-orchestration.md`。
+- 仅按需求和风险映射加载必要阶段：方案 → 系统/模块泳道 → 功能点 → 适用 UI/UX 原型 → 测试点/单元用例 → 独立验收用例 → 实现/规范 → 独立黑盒。不适用只记可验证理由，不生成空产物。
 - 实现/维护 Agent 用 `gpt-5.6-sol/high`；方案、审核、裁决和独立验收用 `gpt-5.6-sol/xhigh`。后者只读且不持租约；修订只由不同 Agent/run 的当前租约写者执行，写者不得自验。默认保存本地结构绑定，严格模式才要求宿主证明运行身份。
 - 小型任务须影响已知、无外部行为/契约/流程变化且有定向验证，不新增 Agent、原型、泳道或全链产物。标准任务只加行为对应门禁；完整多 Agent 治理仅用于已证实高风险、并发大模块或明确独立/合规要求。未知影响先调查收敛。
 - 用 `assets/delivery-contract.template.json`、`assets/gate-receipt.template.json` 建立单一决策索引；规划器只读，持租约 writer 经 CAS 合并，禁止手改或复用旧门禁。细则见 `references/delivery-orchestration.md`。
-- 用 `assets/project-commands.template.json` 登记真实 argv、来源、选择器、工作目录；前端另登记权威预览 URL、根和入口。拒绝恒定成功、吞错、伪 runner 和证据侧改入口。
-- receipt 绑定角色/run/基线/工件/输入输出哈希/verdict。`delivery_contract`、`delivery_bundle`、`system_delivery_bundle` 属于实时最终聚合，列入 `aggregate_command_ids`，不为自身或彼此签 receipt，避免自引用。默认校验本地结构、哈希和身份分离，严格模式再宿主复核；漂移、未知字段、失败门禁或开放分歧阻断。
+- 用 `assets/project-commands.template.json` 登记真实 argv、来源、选择器和目录。首次成果可先跑仓库已核实入口；形成 receipt、冻结或完成前必须登记校验。前端另记权威预览 URL、根和入口。拒绝恒定成功、吞错、伪 runner 和证据侧改入口。
+- receipt 绑定角色/run/基线/工件/输入输出哈希/verdict。三类聚合验证器仅在闭环候选或完成阶段实时执行；普通增量不运行。列入 `aggregate_command_ids` 且不互签 receipt。默认校验结构、哈希和身份分离，严格模式再宿主复核；漂移、失败门禁或开放分歧阻断。
 - 仅在 `project` 模式显式选择 `authorization-mode=local-controlled-same-user` 时启用 same-user bootstrap/签名租约并读取 `references/strict-security-governance.md`。默认 `delivery-first-local-coordination` 不加载；禁止回退或冒充 runtime 证明。
 - `项目内公钥或调用方替换公钥`不是可信根。
 

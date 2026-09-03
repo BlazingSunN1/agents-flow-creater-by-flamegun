@@ -286,7 +286,9 @@ class SkillValidationTests(unittest.TestCase):
     def test_heavy_contracts_use_progressive_disclosure(self) -> None:
         skill_path = SKILL_ROOT / "SKILL.md"
         skill = skill_path.read_text(encoding="utf-8")
+        root_template = (SKILL_ROOT / "assets" / "AGENTS.template.md").read_text(encoding="utf-8")
         self.assertLessEqual(len(skill.encode("utf-8")), 12_000)
+        self.assertLessEqual(len(root_template.encode("utf-8")), 48_000)
         self.assertLessEqual(max(map(len, skill.splitlines())), 900)
         for relative in (
             "references/multi-model-review-policy.md",
@@ -297,6 +299,11 @@ class SkillValidationTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 self.assertTrue((SKILL_ROOT / relative).is_file())
                 self.assertIn(relative, skill)
+
+    def test_final_aggregate_validators_are_closure_only(self) -> None:
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("仅在闭环候选或完成阶段实时执行", skill)
+        self.assertNotIn("是实时最终聚合", skill)
 
     def test_strict_security_details_are_conditionally_routed(self) -> None:
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")

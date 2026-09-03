@@ -46,11 +46,15 @@ DISPATCHER_OWNERSHIP_HEADING_RE = re.compile(
 
 REQUIRED_MACHINE_POLICY = {
     "schema_version": "1",
+    "delivery_sequence": "result_candidate_then_affected_checks_then_freeze_then_mapped_hardening",
+    "pre_result_gate_policy": "correctness_and_irreversible_only",
+    "post_freeze_regression_replay": "required",
+    "security_gate_policy": "mapped_surface_or_explicit_only",
     "automated_review": "required_at_module_closure_candidate_or_human_trigger",
     "context_manifest_validation": "required_before_expansion_or_reuse",
     "traceability_validation": "required_before_handoff_and_completion",
     "delivery_bundle_validation": "required_before_handoff_and_completion",
-    "project_command_validation": "required_before_command_execution",
+    "project_command_validation": "required_before_evidenced_gate_or_completion",
     "frontend_evidence_validation": "required_after_frontend_change",
     "multi_agent_evidence_validation": "required_before_handoff_and_completion",
     "swimlane_evidence_validation": "required_before_downstream_use_and_stage_completion",

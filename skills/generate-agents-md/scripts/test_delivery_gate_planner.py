@@ -22,6 +22,8 @@ class DeliveryGatePlannerTests(unittest.TestCase):
 
     def change(self, **overrides: object) -> dict[str, object]:
         value: dict[str, object] = {
+            "delivery_phase": "result_candidate",
+            "baseline_frozen": False,
             "risk_level": "small",
             "surfaces": ["internal"],
             "flow_impact": "none",
@@ -39,8 +41,91 @@ class DeliveryGatePlannerTests(unittest.TestCase):
         self.assertEqual([], plan["independent_roles"])
         self.assertNotIn("automated_review", plan["required_command_ids"])
 
+    def test_result_candidate_runs_only_affected_business_checks(self) -> None:
+        plan = build_gate_plan(
+            self.change(
+                risk_level="high-risk",
+                surfaces=["auth", "security"],
+            ),
+            stage="implementation",
+            impact_fingerprint="f" * 64,
+        )
+        self.assertEqual(
+            ["real_entry_acceptance", "targeted_tests"],
+            plan["required_command_ids"],
+        )
+        for deferred in (
+            "code_standards", "full_test_or_build", "traceability",
+            "context_manifest", "automated_review", "multi_agent_evidence",
+        ):
+            self.assertNotIn(deferred, plan["required_command_ids"])
+
+    def test_cross_module_aggregation_waits_until_closure(self) -> None:
+        pre_closure = build_gate_plan(
+            self.change(
+                risk_level="high-risk",
+                surfaces=["cross-module"],
+                cross_module=True,
+            ),
+            stage="implementation",
+            impact_fingerprint="7" * 64,
+        )
+        self.assertNotIn("system_delivery_bundle", pre_closure["required_command_ids"])
+        self.assertEqual([], pre_closure["aggregate_command_ids"])
+
+        closure = build_gate_plan(
+            self.change(
+                delivery_phase="closure_candidate",
+                baseline_frozen=True,
+                risk_level="high-risk",
+                surfaces=["cross-module"],
+                cross_module=True,
+            ),
+            stage="closure_candidate",
+            impact_fingerprint="7" * 64,
+        )
+        self.assertIn("system_delivery_bundle", closure["required_command_ids"])
+        self.assertIn("system_delivery_bundle", closure["aggregate_command_ids"])
+
+    def test_affected_checks_passed_is_a_representable_unfrozen_phase(self) -> None:
+        plan = build_gate_plan(
+            self.change(delivery_phase="affected_checks_passed"),
+            stage="implementation",
+            impact_fingerprint="e" * 64,
+        )
+        self.assertEqual(
+            ["real_entry_acceptance", "targeted_tests"],
+            plan["required_command_ids"],
+        )
+        with self.assertRaises(GatePlanError):
+            build_gate_plan(
+                self.change(delivery_phase="affected_checks_passed", baseline_frozen=True),
+                stage="implementation",
+                impact_fingerprint="e" * 64,
+            )
+
+    def test_hardening_requires_frozen_baseline_and_adds_mapped_quality(self) -> None:
+        with self.assertRaises(GatePlanError):
+            build_gate_plan(
+                self.change(delivery_phase="hardening"),
+                stage="implementation",
+                impact_fingerprint="f" * 64,
+            )
+        plan = build_gate_plan(
+            self.change(delivery_phase="hardening", baseline_frozen=True),
+            stage="implementation",
+            impact_fingerprint="f" * 64,
+        )
+        self.assertIn("code_standards", plan["required_command_ids"])
+        self.assertNotIn("full_test_or_build", plan["required_command_ids"])
+        self.assertNotIn("traceability", plan["required_command_ids"])
+        self.assertNotIn("context_manifest", plan["required_command_ids"])
+
     def test_small_completion_stays_single_agent_and_avoids_heavy_bundle(self) -> None:
-        plan = build_gate_plan(self.change(), stage="completion", impact_fingerprint="1" * 64)
+        plan = build_gate_plan(
+            self.change(delivery_phase="completed", baseline_frozen=True),
+            stage="completion", impact_fingerprint="1" * 64,
+        )
         self.assertEqual("affected", plan["validation_tier"])
         self.assertEqual([], plan["independent_roles"])
         self.assertNotIn("multi_agent_evidence", plan["required_command_ids"])
@@ -49,6 +134,8 @@ class DeliveryGatePlannerTests(unittest.TestCase):
     def test_standard_closure_uses_affected_and_review(self) -> None:
         plan = build_gate_plan(
             self.change(
+                delivery_phase="closure_candidate",
+                baseline_frozen=True,
                 risk_level="standard",
                 surfaces=["behavior-change"],
             ),
@@ -63,6 +150,8 @@ class DeliveryGatePlannerTests(unittest.TestCase):
     def test_high_risk_completion_uses_full_and_independent_roles(self) -> None:
         plan = build_gate_plan(
             self.change(
+                delivery_phase="completed",
+                baseline_frozen=True,
                 risk_level="high-risk",
                 surfaces=["public-api", "cross-module"],
                 cross_module=True,
@@ -84,6 +173,8 @@ class DeliveryGatePlannerTests(unittest.TestCase):
     def test_ui_completion_requires_browser_evidence_but_not_mobile_by_default(self) -> None:
         plan = build_gate_plan(
             self.change(
+                delivery_phase="completed",
+                baseline_frozen=True,
                 risk_level="standard",
                 surfaces=["ui", "user-visible"],
                 frontend_applicable=True,
@@ -100,6 +191,7 @@ class DeliveryGatePlannerTests(unittest.TestCase):
     def test_explicit_mobile_completion_requires_frontend_mobile_and_black_box(self) -> None:
         plan = build_gate_plan(
             self.change(
+                delivery_phase="completed", baseline_frozen=True,
                 risk_level="standard", surfaces=["mobile", "touch"],
                 frontend_applicable=True,
             ),
@@ -114,7 +206,10 @@ class DeliveryGatePlannerTests(unittest.TestCase):
         for surface in ("mobile", "native-mobile"):
             with self.subTest(surface=surface):
                 plan = build_gate_plan(
-                    self.change(risk_level="standard", surfaces=[surface]),
+                    self.change(
+                        delivery_phase="completed", baseline_frozen=True,
+                        risk_level="standard", surfaces=[surface],
+                    ),
                     stage="completion", impact_fingerprint="8" * 64,
                 )
                 self.assertIn("native_mobile_tests", plan["required_command_ids"])
@@ -124,6 +219,7 @@ class DeliveryGatePlannerTests(unittest.TestCase):
         with self.assertRaises(GatePlanError):
             build_gate_plan(
                 self.change(
+                    delivery_phase="completed", baseline_frozen=True,
                     risk_level="standard", surfaces=["native-mobile"],
                     frontend_applicable=True,
                 ),
@@ -133,6 +229,8 @@ class DeliveryGatePlannerTests(unittest.TestCase):
     def test_combined_web_and_native_mobile_requires_both_gate_families(self) -> None:
         plan = build_gate_plan(
             self.change(
+                delivery_phase="completed",
+                baseline_frozen=True,
                 risk_level="standard",
                 surfaces=["ui", "native-mobile"],
                 frontend_applicable=True,
@@ -147,7 +245,10 @@ class DeliveryGatePlannerTests(unittest.TestCase):
         for surface in ("mobile-web", "responsive"):
             with self.subTest(surface=surface), self.assertRaises(GatePlanError):
                 build_gate_plan(
-                    self.change(risk_level="standard", surfaces=[surface]),
+                    self.change(
+                        delivery_phase="completed", baseline_frozen=True,
+                        risk_level="standard", surfaces=[surface],
+                    ),
                     stage="completion", impact_fingerprint="8" * 64,
                 )
 
@@ -158,24 +259,30 @@ class DeliveryGatePlannerTests(unittest.TestCase):
         )
         self.assertIn("CHANGE_REVIEW", plan["independent_roles"])
         self.assertIn("multi_agent_evidence", plan["required_command_ids"])
+        self.assertIn("automated_review", plan["required_command_ids"])
+        self.assertNotIn("delivery_bundle", plan["required_command_ids"])
+        self.assertEqual([], plan["aggregate_command_ids"])
 
     def test_user_visible_text_alone_does_not_create_ui_ux_agent(self) -> None:
         plan = build_gate_plan(
-            self.change(risk_level="standard", surfaces=["user-visible"]),
+            self.change(
+                delivery_phase="closure_candidate", baseline_frozen=True,
+                risk_level="standard", surfaces=["user-visible"],
+            ),
             stage="closure_candidate", impact_fingerprint="5" * 64,
         )
         self.assertNotIn("UI_UX", plan["independent_roles"])
 
     def test_flow_none_completion_checks_freshness_only_when_swimlane_applies(self) -> None:
         plan = build_gate_plan(
-            self.change(swimlane_applicable=True),
+            self.change(delivery_phase="completed", baseline_frozen=True, swimlane_applicable=True),
             stage="completion", impact_fingerprint="3" * 64,
         )
         self.assertIn("swimlane_freshness", plan["required_command_ids"])
         self.assertNotIn("swimlane_evidence", plan["required_command_ids"])
 
         no_swimlane = build_gate_plan(
-            self.change(swimlane_applicable=False),
+            self.change(delivery_phase="completed", baseline_frozen=True, swimlane_applicable=False),
             stage="completion", impact_fingerprint="2" * 64,
         )
         self.assertNotIn("swimlane_freshness", no_swimlane["required_command_ids"])
@@ -190,7 +297,10 @@ class DeliveryGatePlannerTests(unittest.TestCase):
 
     def test_final_aggregate_validators_are_outside_receipt_graph(self) -> None:
         plan = build_gate_plan(
-            self.change(risk_level="standard", surfaces=["behavior-change"]),
+            self.change(
+                delivery_phase="closure_candidate", baseline_frozen=True,
+                risk_level="standard", surfaces=["behavior-change"],
+            ),
             stage="closure_candidate", impact_fingerprint="a" * 64,
         )
         self.assertEqual(
@@ -210,13 +320,19 @@ class DeliveryGatePlannerTests(unittest.TestCase):
             )
         with self.assertRaises(GatePlanError):
             build_gate_plan(
-                self.change(flow_impact="uncertain"),
+                self.change(
+                    delivery_phase="completed", baseline_frozen=True,
+                    flow_impact="uncertain",
+                ),
                 stage="completion",
                 impact_fingerprint="f" * 64,
             )
 
     def test_same_inputs_produce_byte_identical_plan(self) -> None:
-        change = self.change(risk_level="standard", surfaces=["behavior-change"])
+        change = self.change(
+            delivery_phase="closure_candidate", baseline_frozen=True,
+            risk_level="standard", surfaces=["behavior-change"],
+        )
         first = build_gate_plan(
             change, stage="closure_candidate", impact_fingerprint="7" * 64,
             command_fingerprints={"targeted_tests": "8" * 64},
@@ -251,6 +367,7 @@ class DeliveryGatePlannerTests(unittest.TestCase):
 
     def test_one_command_change_invalidates_only_its_gate_input(self) -> None:
         change = self.change(risk_level="standard", surfaces=["behavior-change"])
+        change.update(delivery_phase="closure_candidate", baseline_frozen=True)
         initial = {"targeted_tests": "1" * 64, "code_standards": "2" * 64}
         changed = {**initial, "targeted_tests": "3" * 64}
         before = build_gate_plan(
@@ -282,7 +399,10 @@ class DeliveryGatePlannerTests(unittest.TestCase):
             },
             "identity": {"code_version": "v1", "build_id": "b1", "environment_id": "local"},
             "change": {
-                **self.change(risk_level="standard", surfaces=["behavior-change"]),
+                **self.change(
+                    delivery_phase="closure_candidate", baseline_frozen=True,
+                    risk_level="standard", surfaces=["behavior-change"],
+                ),
                 "changed_files": ["code.py"], "configuration_files": [], "input_files": [],
             },
         }

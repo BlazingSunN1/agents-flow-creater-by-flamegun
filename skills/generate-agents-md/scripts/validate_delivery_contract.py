@@ -28,6 +28,7 @@ ARTIFACT_FIELDS = {
 REF_FIELDS = {"path", "sha256"}
 IDENTITY_FIELDS = {"code_version", "build_id", "environment_id"}
 CHANGE_FIELDS = {
+    "delivery_phase", "baseline_frozen",
     "requirement_ids", "modules", "changed_files", "configuration_files", "input_files",
     "direct_dependency_boundaries", "risk_level", "risk_reason", "surfaces", "flow_impact",
     "frontend_applicable", "swimlane_applicable", "cross_module", "human_review_triggered",
@@ -205,12 +206,19 @@ def _validate_gate_receipts(data: dict[str, object], root: Path, issues: list[Is
         return
     expected = {str(item) for item in fingerprints}
     supplied = {str(item) for item in receipt_refs}
-    require_complete = (
-        data.get("stage") in {"closure_candidate", "completion"}
-        or bool(data.get("change", {}).get("human_review_triggered"))
-    )
-    if require_complete:
-        for command_id in sorted(expected - supplied):
+    phase = data.get("change", {}).get("delivery_phase")
+    if data.get("stage") in {"closure_candidate", "completion"}:
+        required = expected
+    else:
+        required = (
+            expected & {"real_entry_acceptance", "targeted_tests"}
+            if phase in {"affected_checks_passed", "baseline_frozen", "hardening"}
+            else set()
+        )
+        if bool(data.get("change", {}).get("human_review_triggered")):
+            required |= expected & {"automated_review", "multi_agent_evidence"}
+    if required:
+        for command_id in sorted(required - supplied):
             issues.append(Issue("error", "missing-gate-receipt", f"缺少当前门禁 receipt：{command_id}"))
     for command_id in sorted(supplied - expected):
         issues.append(Issue("error", "unexpected-gate-receipt", f"receipt 不属于当前门禁计划：{command_id}"))
@@ -309,7 +317,10 @@ def _validate_change(change: object, issues: list[Issue]) -> None:
     for field in ("direct_dependency_boundaries", "risk_reason"):
         if not isinstance(change.get(field), str) or not str(change.get(field)).strip():
             issues.append(Issue("error", "invalid-change-set", f"{field} 必须是非空字符串"))
-    for field in ("frontend_applicable", "swimlane_applicable", "cross_module", "human_review_triggered"):
+    for field in (
+        "baseline_frozen", "frontend_applicable", "swimlane_applicable",
+        "cross_module", "human_review_triggered",
+    ):
         if type(change.get(field)) is not bool:
             issues.append(Issue("error", "invalid-change-set", f"{field} 必须是布尔值"))
     modules = change.get("modules")

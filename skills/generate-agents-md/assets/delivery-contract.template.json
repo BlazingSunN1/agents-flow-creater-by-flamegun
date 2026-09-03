@@ -21,6 +21,8 @@
     "environment_id": "{{ENVIRONMENT_ID}}"
   },
   "change": {
+    "delivery_phase": "{{BOOTSTRAP_RESULT_CANDIDATE_AFFECTED_CHECKS_PASSED_BASELINE_FROZEN_HARDENING_CLOSURE_CANDIDATE_OR_COMPLETED}}",
+    "baseline_frozen": false,
     "requirement_ids": ["{{REQ_ID}}"],
     "modules": ["{{MODULE_ID}}"],
     "changed_files": ["{{PROJECT_RELATIVE_CHANGED_FILE}}"],
@@ -44,7 +46,7 @@
   },
   "gate_plan": {
     "schema_version": 1,
-    "planner_version": "delivery-gates-v2",
+    "planner_version": "delivery-gates-v3",
     "validation_tier": "{{QUICK_AFFECTED_OR_FULL}}",
     "required_command_ids": ["{{PLANNER_OUTPUT_COMMAND_ID}}"],
     "aggregate_command_ids": ["{{FINAL_AGGREGATE_COMMAND_ID_WITHOUT_RECEIPT}}"],

@@ -12,7 +12,7 @@ from agents_policy_common import (
     extract_heading_section as _extract_heading_section,
     section_has_line as _section_has_line,
 )
-
+from agents_result_first_validation import has_result_first_hardening_sequence
 
 def _validate_traceability_policy(text: str, *, mode: str) -> list[Issue]:
     section = _extract_heading_section(text, TRACEABILITY_HEADING_RE)
@@ -87,9 +87,10 @@ def _traceability_risk_checks(section: str, path_pattern: str) -> tuple[tuple[bo
     ),
     (
     _section_has_line(section, (r"minimum reliable loop|最小可靠链", r"objective|目标", r"scope|范围", r"non-goals?|非目标", r"acceptance|验收"))
-    and _section_has_line(section, (r"smallest implementation|最小实现", r"affected tests?|受影响测试", r"static checks?|静态检查", r"evidence|证据")),
+    and _section_has_line(section, (r"smallest implementation|最小实现", r"affected tests?|受影响测试", r"static checks?|静态检查", r"evidence|证据"))
+    and has_result_first_hardening_sequence(section),
     "missing-minimum-reliable-loop",
-    "缺少所有任务必须闭合的最小可靠交付链",
+    "缺少所有任务必须闭合的最小可靠交付链、成果冻结或打磨回归保护",
     ),
     (
     _section_has_line(section, (r"small|小型", r"standard|标准", r"high-risk|高风险", r"reason|evidence|原因|依据"))
@@ -127,9 +128,9 @@ def _traceability_implementation_checks(section: str, path_pattern: str) -> tupl
     "缺少新增或改变行为先更新追踪产物再继续编码的变更控制",
     ),
     (
-    _section_has_line(section, (r"code standards?|代码规范", r"continuously|持续", r"before and during|实现前.*实现中", r"`[^`]+`")),
-    "missing-continuous-code-standards",
-    "缺少在实现前和实现中持续执行真实代码规范命令的规则",
+    _section_has_line(section, (r"code standards?|code-standard|代码规范", r"after.*frozen|冻结后", r"mapped|映射", r"`[^`]+`")),
+    "missing-mapped-code-standards",
+    "缺少冻结后按变更面映射执行真实代码规范命令的规则",
     ),
     (
     _section_has_line(section, (r"independent black-box Agent|独立黑盒 Agent", r"acceptance cases?|验收用例", r"release-like|类发布", r"without|不得|不能", r"modify code|修改代码|self-report|自报")),
@@ -491,7 +492,6 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
     )
     issues.extend(_native_sol_contradiction_issues(text, contradiction_patterns))
     return issues
-
 
 def _native_sol_contradiction_issues(text: str, patterns: tuple[str, ...]) -> list[Issue]:
     flattened = " ".join(line.strip() for line in text.splitlines())

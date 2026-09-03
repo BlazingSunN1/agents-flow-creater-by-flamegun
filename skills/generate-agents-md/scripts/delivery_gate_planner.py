@@ -9,7 +9,7 @@ from strict_json import loads as strict_json_loads
 
 
 ALLOWED_STAGES = {"planning", "implementation", "closure_candidate", "completion"}
-PLANNER_VERSION = "delivery-gates-v2"
+PLANNER_VERSION = "delivery-gates-v3"
 ALLOWED_SURFACES = {
     "internal", "behavior-change", "user-visible", "ui", "api", "mobile", "touch",
     "responsive", "mobile-web", "native-mobile", "public-api", "auth", "security", "privacy", "migration",
@@ -27,6 +27,18 @@ HIGH_RISK_SURFACES = {
 }
 RISK_ORDER = {"small": 0, "standard": 1, "high-risk": 2}
 FLOW_IMPACTS = {"none", "changed", "uncertain"}
+DELIVERY_PHASES = {
+    "bootstrap", "result_candidate", "affected_checks_passed", "baseline_frozen",
+    "hardening", "closure_candidate", "completed",
+}
+PHASES_BY_STAGE = {
+    "planning": {"bootstrap"},
+    "implementation": {
+        "result_candidate", "affected_checks_passed", "baseline_frozen", "hardening",
+    },
+    "closure_candidate": {"closure_candidate"},
+    "completion": {"completed"},
+}
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
 
@@ -103,7 +115,10 @@ def compute_impact_fingerprint(contract: object, project_root: Path) -> str:
         "baseline_version": baseline.get("version"),
         "linked_artifacts": linked,
         "identity": contract.get("identity"),
-        "change": change,
+        "change": {
+            key: value for key, value in change.items()
+            if key not in {"delivery_phase", "baseline_frozen"}
+        },
         "live_file_sets": file_sets,
         "planner_version": PLANNER_VERSION,
     }
@@ -145,13 +160,23 @@ def _validate_inputs(change: object, stage: str, fingerprint: str) -> dict[str, 
     if not isinstance(fingerprint, str) or SHA256_RE.fullmatch(fingerprint) is None:
         raise GatePlanError("impact fingerprint must be a lowercase SHA-256")
     risk = change.get("risk_level")
+    phase = change.get("delivery_phase")
+    frozen = change.get("baseline_frozen")
     surfaces = change.get("surfaces")
     flow = change.get("flow_impact")
-    booleans = ("frontend_applicable", "swimlane_applicable", "cross_module", "human_review_triggered")
+    booleans = (
+        "baseline_frozen", "frontend_applicable", "swimlane_applicable",
+        "cross_module", "human_review_triggered",
+    )
     if risk not in RISK_ORDER or not isinstance(surfaces, list) or not surfaces:
         raise GatePlanError("risk_level or surfaces is invalid")
     if any(type(change.get(field)) is not bool for field in booleans):
         raise GatePlanError("planner flags must be booleans")
+    if phase not in DELIVERY_PHASES or phase not in PHASES_BY_STAGE[stage]:
+        raise GatePlanError(f"delivery phase {phase!r} is incompatible with stage {stage!r}")
+    requires_frozen = phase in {"baseline_frozen", "hardening", "closure_candidate", "completed"}
+    if frozen is not requires_frozen:
+        raise GatePlanError("baseline_frozen does not match delivery phase")
     if any(not isinstance(item, str) or item not in ALLOWED_SURFACES for item in surfaces):
         raise GatePlanError("unknown change surface")
     if len(surfaces) != len(set(surfaces)) or flow not in FLOW_IMPACTS:
@@ -208,13 +233,18 @@ def _independent_roles(
 def _required_commands(
     change: dict[str, object], surfaces: set[str], stage: str, tier: str, roles: set[str],
 ) -> set[str]:
-    commands = {"delivery_contract", "targeted_tests", "code_standards", "traceability", "context_manifest"}
-    if tier == "full":
-        commands.add("full_test_or_build")
-    if change["swimlane_applicable"] and change["flow_impact"] != "none":
-        commands.add("swimlane_evidence")
-    elif change["swimlane_applicable"] and stage in {"closure_candidate", "completion"}:
-        commands.add("swimlane_freshness")
+    phase = str(change["delivery_phase"])
+    commands = {"real_entry_acceptance", "targeted_tests"}
+    if phase == "hardening":
+        commands.add("code_standards")
+    if phase in {"closure_candidate", "completed"}:
+        commands.update({"delivery_contract", "code_standards", "traceability", "context_manifest"})
+        if tier == "full":
+            commands.add("full_test_or_build")
+        if change["swimlane_applicable"] and change["flow_impact"] != "none":
+            commands.add("swimlane_evidence")
+        elif change["swimlane_applicable"]:
+            commands.add("swimlane_freshness")
     if roles:
         commands.add("multi_agent_evidence")
     if stage in {"closure_candidate", "completion"} or change["human_review_triggered"]:
@@ -225,15 +255,20 @@ def _required_commands(
         commands.add("mobile_frontend_e2e")
     if "native-mobile" in surfaces or ("mobile" in surfaces and not change["frontend_applicable"]):
         commands.add("native_mobile_tests")
-    if roles:
+    if roles and phase in {"closure_candidate", "completed"}:
         commands.add("delivery_bundle")
-    if change["cross_module"] or "cross-module" in surfaces:
+    if phase in {"closure_candidate", "completed"} and (
+        change["cross_module"] or "cross-module" in surfaces
+    ):
         commands.add("system_delivery_bundle")
     return commands
 
 
 def _reasons(change: dict[str, object], stage: str, tier: str) -> list[str]:
-    reasons = [f"risk={change['risk_level']}", f"stage={stage}", f"tier={tier}"]
+    reasons = [
+        f"risk={change['risk_level']}", f"stage={stage}",
+        f"phase={change['delivery_phase']}", f"tier={tier}",
+    ]
     if change["flow_impact"] != "none":
         reasons.append(f"flow_impact={change['flow_impact']}")
     if change["human_review_triggered"]:
