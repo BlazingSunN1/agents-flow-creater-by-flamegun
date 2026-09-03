@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "registry_kind": "local-coordination-module-writer-registry",
+  "active_leases": [
+    {
+      "module_key": "{{MODULE_KEY}}",
+      "maintainer_title": "{{MODULE_AGENT_TITLE}}",
+      "agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
+      "run_id": "{{IMPLEMENTATION_RUN_ID}}",
+      "lease_id": "{{LOCAL_COORDINATION_WRITE_LEASE_ID}}",
+      "role": "module-maintainer",
+      "owned_paths": ["{{MODULE_OWNED_PATH}}"],
+      "lease_status": "active"
+    }
+  ]
+}

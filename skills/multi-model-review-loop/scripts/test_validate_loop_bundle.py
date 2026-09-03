@@ -13,6 +13,12 @@ from spawn_external_agent import PROVIDER_REQUEST_PROFILES, SYSTEM_PROMPTS
 from validate_loop_bundle import canonical_sha256, validate_bundle, validate_history, validate_spawn_manifest
 
 
+EXECUTION_PROFILE = {
+    "transport": "bounded-sse-v1", "idle_timeout_seconds": 180.0,
+    "deadline_seconds": 1800.0, "max_output_tokens": 32768, "retry_limit": 1,
+}
+
+
 def valid_scope() -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -24,6 +30,13 @@ def valid_scope() -> dict[str, object]:
             "behaviors": ["success"],
         }],
         "context_artifacts": [],
+        "clarification_register": {
+            "schema_version": 1,
+            "draft_objective": "Produce and independently review the complete implementation plan.",
+            "resolved_objective": "Produce and independently review the complete implementation plan.",
+            "no_questions_reason": "The objective and acceptance criterion are already explicit.",
+            "questions": [],
+        },
         "max_rounds": 6,
     }
 
@@ -77,6 +90,24 @@ class LoopBundleTests(unittest.TestCase):
         gpt["deepseek_review_sha256"] = canonical_sha256(deepseek)
         with self.assertRaisesRegex(ValueError, "behavior"):
             validate_bundle(scope, kimi, deepseek, gpt)
+
+    def test_failed_review_round_can_record_nonexact_behavior_coverage(self) -> None:
+        scope, kimi, deepseek, gpt = valid_bundle()
+        deepseek["black_box_tests"].append({
+            "id": "BB-002", "requirement": "AC-001", "behavior": "permission",
+            "preconditions": ["review is ready"], "steps": ["inspect permission behavior"],
+            "expected": ["extra behavior is reported"], "evidence_required": ["review record"],
+        })
+        gpt["verdict"] = "fail"
+        gpt["additional_defects"] = [{
+            "id": "G-001", "severity": "P1", "criterion": "AC-001", "location": "coverage",
+            "evidence": "An extra behavior is present.", "impact": "Exact coverage is blocked.",
+            "correction": "Remove the extra behavior.", "verification": "Re-run coverage review.",
+        }]
+        gpt["deepseek_review_sha256"] = canonical_sha256(deepseek)
+        validate_bundle(scope, kimi, deepseek, gpt, require_pass=False)
+        with self.assertRaisesRegex(ValueError, "coverage"):
+            validate_bundle(scope, kimi, deepseek, gpt, require_pass=True)
 
     def test_revision_change_map_matches_accepted_defects(self) -> None:
         scope, kimi, deepseek, gpt = valid_bundle()
@@ -228,6 +259,7 @@ class LoopBundleTests(unittest.TestCase):
                 "model": f"{provider}-model",
                 "content": json.dumps(contract), "usage": {"total_tokens": 10},
                 "response_id": f"{provider}-response-1", "finish_reason": "stop",
+                **EXECUTION_PROFILE,
             }), encoding="utf-8")
             candidate_hash = canonical_sha256(kimi)
             prompt = {
@@ -235,6 +267,7 @@ class LoopBundleTests(unittest.TestCase):
                 "candidate_version": 1, "scope_sha256": contract["scope_sha256"],
                 "objective": scope["objective"], "acceptance_criteria": scope["acceptance_criteria"],
                 "context_artifacts": scope["context_artifacts"],
+                "clarification_register": scope["clarification_register"],
                 "candidate": (
                     "NOT_APPLICABLE" if provider == "kimi"
                     else json.dumps(
@@ -259,6 +292,9 @@ class LoopBundleTests(unittest.TestCase):
                 "usage": {"total_tokens": 10},
                 "request_model": f"{provider}-model", "finish_reason": "stop",
                 "request_profile": PROVIDER_REQUEST_PROFILES[provider],
+                "transport": "bounded-sse-v1", "idle_timeout_seconds": 180.0,
+                "deadline_seconds": 1800.0, "max_output_tokens": 32768,
+                "retry_limit": 1,
                 "candidate_version": 1, "scope_sha256": contract["scope_sha256"],
                 "candidate_sha256": candidate_hash, "normalized_path": files[provider].name,
                 "normalized_sha256": hashlib.sha256(files[provider].read_bytes()).hexdigest(),
@@ -312,6 +348,7 @@ class LoopBundleTests(unittest.TestCase):
                 "provider": "deepseek", "request_model": "not-kimi", "model": "not-kimi",
                 "content": json.dumps(valid_kimi()), "usage": None, "response_id": None,
                 "finish_reason": "stop",
+                **EXECUTION_PROFILE,
             }), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "provider"):
                 load_contract(path, "kimi")
@@ -338,6 +375,9 @@ class LoopBundleTests(unittest.TestCase):
                 "request_model": "k3", "model": "k3", "response_id": "response-1",
                 "finish_reason": "stop", "usage": None,
                 "request_profile": PROVIDER_REQUEST_PROFILES["kimi"],
+                "transport": "bounded-sse-v1", "idle_timeout_seconds": 180.0,
+                "deadline_seconds": 1800.0, "max_output_tokens": 32768,
+                "retry_limit": 1,
                 "candidate_version": 1,
                 "scope_sha256": kimi["scope_sha256"],
                 "candidate_sha256": canonical_sha256(kimi),
@@ -351,6 +391,7 @@ class LoopBundleTests(unittest.TestCase):
                 "candidate_version": 1, "scope_sha256": kimi["scope_sha256"],
                 "objective": scope["objective"], "acceptance_criteria": scope["acceptance_criteria"],
                 "context_artifacts": scope["context_artifacts"],
+                "clarification_register": scope["clarification_register"],
                 "candidate": "NOT_APPLICABLE", "candidate_sha256": "NOT_APPLICABLE",
                 "correction_ids": [], "corrections": [],
             }
@@ -360,6 +401,7 @@ class LoopBundleTests(unittest.TestCase):
                 "provider": "kimi", "request_model": "k3", "model": "k3",
                 "content": json.dumps(kimi), "usage": None,
                 "response_id": "response-1", "finish_reason": "stop",
+                **EXECUTION_PROFILE,
             }), encoding="utf-8")
             manifest["system_sha256"] = hashlib.sha256(system_text.encode()).hexdigest()
             manifest["prompt_sha256"] = hashlib.sha256(Path(manifest["prompt_path"]).read_bytes()).hexdigest()
@@ -371,6 +413,10 @@ class LoopBundleTests(unittest.TestCase):
             manifest["request_profile"] = PROVIDER_REQUEST_PROFILES["kimi"]
             manifest["task_id"] = "unrelated-v1-kimi"
             with self.assertRaisesRegex(ValueError, "task"):
+                validate_spawn_manifest(manifest, normalized, "kimi", scope, kimi, canonical_sha256(kimi))
+            manifest["task_id"] = "task-1-v1-kimi"
+            manifest["deadline_seconds"] = 0
+            with self.assertRaisesRegex(ValueError, "execution profile"):
                 validate_spawn_manifest(manifest, normalized, "kimi", scope, kimi, canonical_sha256(kimi))
 
 

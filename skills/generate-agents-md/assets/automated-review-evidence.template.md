@@ -4,6 +4,8 @@
 - Code version: {{CODE_VERSION}}
 - Code fingerprint: {{CONTEXT_CODE_FINGERPRINT}}
 - Command manifest fingerprint: {{CONTEXT_COMMAND_MANIFEST_FINGERPRINT}}
+- Review trigger: {{MODULE_CLOSURE_CANDIDATE_OR_HUMAN_REQUESTED}}
+- Human trigger reference: {{N_A_OR_HUMAN_REQUEST_LOCATOR}}
 - Scope: {{CHANGED_FILE_PATHS}}; callers; callees; interfaces; configuration; tests; traceability; swimlanes
 - Changed files: {{CHANGED_FILE_PATHS}}
 - Review command ID: automated_review

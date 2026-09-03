@@ -8,16 +8,27 @@ from pathlib import Path
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 CLI_SCRIPTS = (
+    "activate_local_controlled_module_lease.py",
+    "apply_local_controlled_module_write.py",
+    "apply_system_governance_bootstrap_v2.py",
+    "plan_delivery_gates.py",
     "update_project_record.py",
     "validate_agents_md.py",
     "validate_code_structure.py",
     "validate_context_manifest.py",
     "validate_delivery_bundle.py",
+    "validate_delivery_contract.py",
     "validate_frontend_evidence.py",
+    "validate_local_controlled_trust.py",
+    "validate_local_controlled_module_lease.py",
     "validate_multi_agent_evidence.py",
+    "validate_native_review_loop.py",
+    "validate_plugin_distribution.py",
     "validate_project_commands.py",
+    "validate_requirement_questions.py",
     "validate_skill.py",
     "validate_swimlane_evidence.py",
+    "validate_system_delivery_bundle.py",
     "validate_traceability.py",
 )
 

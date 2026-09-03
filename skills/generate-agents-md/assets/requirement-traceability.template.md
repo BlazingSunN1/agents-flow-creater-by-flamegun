@@ -5,6 +5,8 @@
 - Baseline artifact: `{{BASELINE_ARTIFACT_PATH}}`
 - Baseline version: `{{BASELINE_VERSION}}`
 - Baseline SHA-256: `{{BASELINE_SHA256}}`
+- Authority matrix locator: `AGENTS.md#machine-enforced-authority-matrix`
+- Authority matrix SHA-256: `aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643`
 - Code version: `{{CODE_VERSION}}`
 - Build ID: `{{BUILD_ID}}`
 - Acceptance environment: {{ACCEPTANCE_ENVIRONMENT}}
@@ -14,7 +16,7 @@
 - Change surfaces: {{CHANGE_SURFACES}}
 - Implementation run ID: `{{IMPLEMENTATION_RUN_ID}}`
 
-Allowed change surfaces are `internal`, `behavior-change`, `user-visible`, `ui`, `api`, `mobile`, `touch`, `responsive`, `public-api`, `auth`, `security`, `privacy`, `migration`, `persistence`, `async`, `cross-module`, and `data-schema`. `mobile`, `touch`, and `responsive` are recorded only when the approved scope explicitly includes them; they do not make mobile adaptation globally mandatory. Any `public-api`, `auth`, `security`, `privacy`, `migration`, `persistence`, `async`, `cross-module`, or `data-schema` change is `high-risk`; any `behavior-change`, `user-visible`, `ui`, or `api` change is at least `standard`. Unknown impact is `high-risk` until disproved.
+Allowed change surfaces are `internal`, `behavior-change`, `user-visible`, `ui`, `api`, `mobile`, `mobile-web`, `native-mobile`, `touch`, `responsive`, `public-api`, `auth`, `security`, `privacy`, `migration`, `persistence`, `async`, `cross-module`, and `data-schema`. `mobile-web`, `touch`, and `responsive` use browser/E2E validation; `native-mobile` uses the registered native test command; legacy `mobile` is disambiguated by `frontend_applicable`. They are recorded only when the approved scope explicitly includes them and do not make mobile adaptation globally mandatory. Any `public-api`, `auth`, `security`, `privacy`, `migration`, `persistence`, `async`, `cross-module`, or `data-schema` change is `high-risk`; any `behavior-change`, `user-visible`, `ui`, `api`, `mobile`, `mobile-web`, or `native-mobile` change is at least `standard`. Unknown impact is `high-risk` until disproved.
 
 ## Traceability
 
@@ -45,3 +47,5 @@ When findings exist, replace `None` with this exact table:
 | DEF-001 | implementation_defect | open | implementation | [EVID-001]({{FINDING_EVIDENCE_PATH}}) |
 
 Allowed class-to-route mappings are `implementation_defect → implementation`, `requirement_ambiguity → requirement-baseline`, `acceptance_case_defect → acceptance-cases`, `environment_blocker → blocked`, and `approved_requirement_change → new-baseline`. Never change the requirement baseline merely to make an implementation defect pass.
+
+Requirement ambiguities must also be recorded in the machine-validated question list created from `assets/requirement-questions.template.json`. Every `NOT_PROVIDED` item remains `delivery_disposition=NON_BLOCKING_P2`, including `legal`, `security`, `irreversible-destruction`, and `missing-required-permission` risks. Those risks change only the safe action: do not perform an unapproved, unsafe, or destructive operation; record that action as unverified while the remaining safe scope continues with an explicit reversible default and fallback. `ANSWERED` requires a corrected requirement/objective baseline and completed reruns for the full affected scope.

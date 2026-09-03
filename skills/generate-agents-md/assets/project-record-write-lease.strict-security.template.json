@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "receipt_kind": "host-attested-project-record-write-lease",
+  "lease_id": "{{HOST_ATTESTED_WRITE_LEASE_ID}}",
+  "module_key": "{{MODULE_KEY}}",
+  "maintainer_title": "{{MODULE_AGENT_TITLE}}",
+  "agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
+  "run_id": "{{IMPLEMENTATION_RUN_ID}}",
+  "target_path": "{{PROJECT_RECORD_PATH}}",
+  "owned_paths": ["{{MODULE_OWNED_PATH}}"],
+  "agents_path": "AGENTS.md",
+  "agents_sha256": "{{EFFECTIVE_ROOT_AGENTS_SHA256}}",
+  "authority_matrix_path": "AGENTS.md#machine-enforced-authority-matrix",
+  "authority_matrix_sha256": "aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643",
+  "lease_status": "active"
+}

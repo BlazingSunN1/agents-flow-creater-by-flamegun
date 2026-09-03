@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from clarification_validation import validate_clarification_register
 from validate_contract import (
     BEHAVIORS,
     load_contract,
@@ -24,7 +25,7 @@ from provider_manifest_validation import validate_spawn_manifest
 
 SCOPE_FIELDS = {
     "schema_version", "task_id", "objective", "acceptance_criteria",
-    "context_artifacts", "max_rounds",
+    "context_artifacts", "clarification_register", "max_rounds",
 }
 CRITERION_FIELDS = {"id", "text", "behaviors"}
 HISTORY_FIELDS = {"schema_version", "task_id", "max_rounds", "rounds"}
@@ -86,6 +87,9 @@ def validate_scope(scope: dict[str, Any]) -> tuple[set[str], dict[str, set[str]]
         raise ValueError("scope must use the exact schema_version 1 fields")
     if any(not isinstance(scope.get(name), str) or not scope[name].strip() for name in ("task_id", "objective")):
         raise ValueError("scope task_id and objective must be non-empty strings")
+    if any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+           for character in scope["task_id"]):
+        raise ValueError("scope task_id must be one stable path segment")
     rounds = scope.get("max_rounds")
     if not isinstance(rounds, int) or isinstance(rounds, bool) or not 1 <= rounds <= 6:
         raise ValueError("max_rounds must be an integer from 1 through 6")
@@ -117,6 +121,11 @@ def validate_scope(scope: dict[str, Any]) -> tuple[set[str], dict[str, set[str]]
         identifiers.append(item["id"])
     if len(identifiers) != len(set(identifiers)):
         raise ValueError("scope context artifact IDs must be unique")
+    criterion_text = {item["id"]: item["text"] for item in criteria}
+    register = scope.get("clarification_register")
+    validate_clarification_register(register, allow_open=False, criteria=criterion_text)
+    if register["resolved_objective"] != scope["objective"]:
+        raise ValueError("scope objective differs from the resolved clarification objective")
     return set(behaviors), behaviors
 
 
@@ -131,20 +140,21 @@ def _validate_versions(scope: dict[str, Any], contracts: list[dict[str, Any]]) -
 
 
 def _validate_criteria(
-    criteria: set[str], behaviors: dict[str, set[str]], kimi: dict[str, Any], deepseek: dict[str, Any],
+    criteria: set[str], behaviors: dict[str, set[str]], kimi: dict[str, Any],
+    deepseek: dict[str, Any], require_exact: bool,
 ) -> None:
     mapped = [item["criterion"] for item in kimi["acceptance_criteria_mapping"]]
     if len(mapped) != len(set(mapped)) or set(mapped) != criteria:
         raise ValueError("Kimi acceptance criteria mapping must exactly cover the scope")
     coverage = deepseek["coverage"]
-    if len(coverage) != len(set(coverage)) or set(coverage) != criteria:
-        raise ValueError("DeepSeek coverage must exactly cover the scope")
+    if len(coverage) != len(set(coverage)) or not set(coverage) <= criteria:
+        raise ValueError("DeepSeek coverage must contain only unique scope criteria")
     actual: dict[str, set[str]] = {identifier: set() for identifier in criteria}
     for case in deepseek["black_box_tests"]:
         if case["requirement"] not in actual:
             raise ValueError("black-box test references an unknown acceptance criterion")
         actual[case["requirement"]].add(case["behavior"])
-    if any(behaviors[key] != actual[key] for key in criteria):
+    if require_exact and (set(coverage) != criteria or any(behaviors[key] != actual[key] for key in criteria)):
         raise ValueError("black-box behavior coverage is incomplete")
 
 
@@ -346,9 +356,8 @@ def _load_round(
     return paths, kimi, deepseek, gpt, kimi_manifest
 
 
-def validate_history(
-    history: dict[str, Any], history_path: Path, scope: dict[str, Any], final_paths: dict[str, Path],
-) -> str:
+def validate_history(history: dict[str, Any], history_path: Path, scope: dict[str, Any],
+                     final_paths: dict[str, Path], *, allow_revised_tail: bool = False) -> str:
     if set(history) != HISTORY_FIELDS or type(history.get("schema_version")) is not int or history["schema_version"] != 1:
         raise ValueError("history must use the exact schema_version 1 fields")
     if history.get("task_id") != scope["task_id"] or history.get("max_rounds") != scope["max_rounds"]:
@@ -384,7 +393,9 @@ def validate_history(
         if row["status"] == "incomplete" and index != len(rounds):
             raise ValueError("only the final history round may be incomplete")
     final_status = rounds[-1]["status"]
-    if final_status not in {"passed", "incomplete"}:
+    if final_status == "revised" and allow_revised_tail:
+        pass
+    elif final_status not in {"passed", "incomplete"}:
         raise ValueError("final history round must pass or be incomplete")
     if final_status == "incomplete":
         last_deepseek, last_gpt = loaded[-1][2], loaded[-1][3]
@@ -411,7 +422,7 @@ def validate_bundle(
         raise ValueError("Kimi change_map defect IDs must be unique")
     if (version == 1 and change_ids) or (expected_change_ids is not None and change_ids != expected_change_ids):
         raise ValueError("Kimi change_map must exactly match accepted revision defects")
-    _validate_criteria(criteria, behaviors, kimi, deepseek)
+    _validate_criteria(criteria, behaviors, kimi, deepseek, require_pass)
     _validate_provenance(scope, kimi, deepseek, gpt)
     _validate_adjudication(deepseek, gpt, require_pass)
 

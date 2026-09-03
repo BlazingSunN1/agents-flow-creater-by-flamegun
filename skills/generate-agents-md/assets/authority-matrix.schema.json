@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/generate-agents-md/authority-matrix.schema.json",
+  "title": "Machine-Enforced Authority Matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scope_binding", "module_binding", "run_binding", "independent_gate_proof", "rows"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "scope_binding": {"const": "effective-root-agents"},
+    "module_binding": {"const": "registered-module-key-and-owned-paths"},
+    "run_binding": {"const": "local-coordination-or-host-attested-receipts"},
+    "independent_gate_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_identity", "run_identity", "status", "verdict", "receipt_path", "receipt_sha256", "candidate_sha256", "code_version", "build_id", "host_verifier"],
+      "properties": {
+        "agent_identity": {"const": "distinct-from-writer-and-other-gates"},
+        "run_identity": {"const": "distinct-current-coordination-run"},
+        "status": {"const": "completed"},
+        "verdict": {"const": "pass"},
+        "receipt_path": {"const": "required-project-relative-path"},
+        "receipt_sha256": {"const": "required-sha256"},
+        "candidate_sha256": {"const": "required-sha256"},
+        "code_version": {"const": "required"},
+        "build_id": {"const": "required"},
+        "host_verifier": {"const": "optional-strict-security"}
+      }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 96,
+      "maxItems": 96,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["actor", "action", "object", "policy", "scope", "module_binding", "run_binding"],
+        "properties": {
+          "actor": {"enum": ["dispatcher", "module-maintainer", "independent-reviewer", "system-aggregation", "implementation", "system-governance-bootstrap"]},
+          "action": {"enum": ["route", "write", "design", "implement", "review", "black-box", "accept", "release", "close", "aggregate", "issue_independent_verdict", "write_module_artifacts", "record_completion_after_verified_gates", "write_system_manifest", "orchestrate_read_validate", "bootstrap_system_governance"]},
+          "object": {"enum": ["module-delivery", "project-record", "system-delivery", "gate-verdict", "module-artifacts", "system-manifest", "system-governance"]},
+          "policy": {"enum": ["allow", "deny", "independent-only", "external-explicit-only"]},
+          "scope": {"enum": ["repository", "exact-external-authorized-targets"]},
+          "module_binding": {"enum": ["registered-module-key", "pending-stable-module-registration"]},
+          "run_binding": {"enum": ["local-coordination-or-host-attested-receipt", "local-coordination-or-host-attested-or-explicit-local-controlled-bootstrap-receipt"]}
+        }
+      }
+    }
+  }
+}

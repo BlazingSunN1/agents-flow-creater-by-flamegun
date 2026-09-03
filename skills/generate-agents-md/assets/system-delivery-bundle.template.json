@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "dispatcher_mode": "read-only",
+  "authority_binding": {
+    "locator": "AGENTS.md#machine-enforced-authority-matrix",
+    "sha256": "aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643",
+    "required_rows": [
+      {"role": "system-aggregation", "action": "write_system_manifest", "policy": "allow"},
+      {"role": "dispatcher", "action": "orchestrate_read_validate", "policy": "allow"}
+    ]
+  },
+  "dispatcher_title": "System Dispatcher",
+  "dispatcher_provider": "codex-native-agent",
+  "dispatcher_model": "gpt-5.6-sol",
+  "dispatcher_agent_id": "{{DISPATCHER_AGENT_ID}}",
+  "dispatcher_run_id": "{{DISPATCHER_RUN_ID}}",
+  "dispatcher_spawn_receipt": "{{DISPATCHER_SPAWN_RECORD_PATH}}",
+  "dispatcher_spawn_receipt_sha256": "{{DISPATCHER_SPAWN_RECORD_SHA256}}",
+  "aggregation_writer_role": "SYSTEM_AGGREGATION",
+  "aggregation_writer_title": "System Aggregation Writer",
+  "aggregation_writer_provider": "codex-native-agent",
+  "aggregation_writer_model": "gpt-5.6-sol",
+  "aggregation_writer_agent_id": "{{AGGREGATION_AGENT_ID}}",
+  "aggregation_writer_run_id": "{{AGGREGATION_RUN_ID}}",
+  "aggregation_spawn_receipt": "{{AGGREGATION_SPAWN_RECORD_PATH}}",
+  "aggregation_spawn_receipt_sha256": "{{AGGREGATION_SPAWN_RECORD_SHA256}}",
+  "requirement_ids": ["{{SYSTEM_REQUIREMENT_ID}}"],
+  "code_version": "{{CODE_VERSION}}",
+  "build_id": "{{BUILD_ID}}",
+  "agents_path": "AGENTS.md",
+  "agents_sha256": "{{AGENTS_SHA256}}",
+  "system_changed_files": ["{{CHANGED_FILE}}"],
+  "affected_modules": ["{{MODULE_KEY_A}}", "{{MODULE_KEY_B}}"],
+  "module_bundles": [
+    {
+      "module": "{{MODULE_KEY_A}}",
+      "bundle_manifest_path": "{{MODULE_BUNDLE_A_PATH}}",
+      "bundle_manifest_sha256": "{{MODULE_BUNDLE_A_SHA256}}"
+    },
+    {
+      "module": "{{MODULE_KEY_B}}",
+      "bundle_manifest_path": "{{MODULE_BUNDLE_B_PATH}}",
+      "bundle_manifest_sha256": "{{MODULE_BUNDLE_B_SHA256}}"
+    }
+  ],
+  "open_findings": []
+}

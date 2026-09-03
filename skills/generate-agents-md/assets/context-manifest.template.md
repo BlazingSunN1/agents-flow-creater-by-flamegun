@@ -4,6 +4,8 @@
 - Baseline artifact: {{BASELINE_ARTIFACT_PATH}}
 - Baseline version: {{BASELINE_VERSION}}
 - Baseline SHA-256: {{BASELINE_SHA256}}
+- Authority matrix locator: AGENTS.md#machine-enforced-authority-matrix
+- Authority matrix SHA-256: aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643
 - Code version: {{CODE_VERSION}}
 - Build ID: {{BUILD_ID}}
 - Risk / expansion reason: {{RISK_LEVEL}}; {{RISK_REASON}}; {{WORKSET_EXPANSION_REASON}}
@@ -29,5 +31,9 @@
 - Reuse decision: {{RERUN_OR_REUSE_RUN_ID}}
 - Reuse record: {{REUSE_RECORD_JSON_OR_NA_REASON}}
 - Evidence paths: {{EVIDENCE_PATHS_OR_NA_REASON}}
+
+Bind the frozen authority interface by its exact locator and canonical SHA-256. Missing fields, drift, a symlinked root policy, or hardlink aliases in the effective policy chain fail closed.
+
+For the cache-key sequence below, insert authority matrix locator and authority matrix SHA-256 immediately after baseline SHA-256 and before normalized Requirement IDs.
 
 Compute each file-set fingerprint from sorted project-relative regular-file paths and file SHA-256 values. `Requirement IDs` must be unique. `Effective AGENTS files` must exactly list every existing regular non-symlink `AGENTS.md` from the project root through each changed/configuration/input file's parent directory; a symlinked AGENTS file, symlinked workset parent, or symlinked workset leaf fails closed. Compute the command fingerprint from the exact Required commands text, and bind both the effective AGENTS chain and command manifest by their complete bytes. Canonicalize the module map as modules sorted by key, each written `module=comma-sorted-paths`, joined by semicolons; module file sets must be non-overlapping and must exactly cover Changed files. Compute `Evidence cache key` as SHA-256 over the NUL-separated baseline artifact path, baseline version, baseline SHA-256, normalized sorted Requirement IDs, canonical module map, risk/expansion reason, direct dependency boundaries, code version, build ID, code fingerprint, command fingerprint, effective-AGENTS fingerprint, command-manifest fingerprint, configuration fingerprint, environment ID, input fingerprint, and evidence fingerprint in that order. Use `rerun` with an `N/A:` reuse-record reason unless every value matches a successful reusable evidence record. A singular source-run record may be reused only for a one-module workset; multi-module worksets must rerun. Otherwise use `reuse: <prior_run_id>` and bind `Reuse record` to `assets/reuse-evidence.template.json`, including the exact module and distinct immutable completed source-run record path/hash. Read only these linked artifacts by default. Update and validate this manifest before expanding context or reusing evidence.

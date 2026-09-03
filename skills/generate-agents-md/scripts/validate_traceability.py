@@ -8,6 +8,7 @@ import unicodedata
 from dataclasses import asdict
 from pathlib import Path
 
+from authority_binding_validation import authority_binding_issues, authority_metadata_issues
 
 from traceability_common import (
     ALLOWED_SURFACES,
@@ -35,11 +36,11 @@ from traceability_parsing import (
     _parse_metadata,
     _parse_table,
     _resolve_project_path,
-    _validate_iso8601,
 )
 from trace_template_validation import validate_template_tables
 from trace_stage_validation import black_box_not_started, pending_black_box_issues
 from trace_row_identity_validation import requirement_identity_issues
+from trace_baseline_validation import _validate_baseline
 
 def validate_traceability(
     path: Path,
@@ -56,10 +57,15 @@ def validate_traceability(
     metadata = _validate_metadata(text, issues)
     tables = _parse_required_tables(text, template, issues)
     if template:
+        issues.extend(Issue("error", code, message) for code, message in authority_metadata_issues(metadata))
         issues.extend(validate_template_tables(tables[0], tables[1], tables[2], tables[3]))
         return _deduplicate(issues)
     trace_rows, trace_numbers, gate_rows, gate_numbers, finding_rows, finding_numbers = tables
     root = project_root.resolve()
+    issues.extend(
+        Issue("error", code, message)
+        for code, message in authority_binding_issues(metadata, root)
+    )
     surfaces = _validate_risk(metadata, issues)
     expected_sha = _validate_baseline(metadata, root, issues)
     _validate_trace_rows(trace_rows, trace_numbers, surfaces, root, issues)
@@ -169,19 +175,6 @@ def _validate_risk(metadata: dict[str, str], issues: list[Issue]) -> set[str]:
     if not metadata.get("Risk reason", "").strip():
         issues.append(Issue("error", "missing-risk-reason", "Risk reason 不能为空"))
     return surfaces
-
-
-def _validate_baseline(metadata: dict[str, str], root: Path, issues: list[Issue]) -> str:
-    baseline_path = _resolve_project_path(metadata.get("Baseline artifact", ""), root, issues, "baseline-artifact")
-    expected_sha = metadata.get("Baseline SHA-256", "").casefold()
-    if not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
-        issues.append(Issue("error", "invalid-baseline-sha256", "Baseline SHA-256 必须是 64 位十六进制"))
-    elif baseline_path and baseline_path.is_file():
-        actual_sha = hashlib.sha256(baseline_path.read_bytes()).hexdigest()
-        if actual_sha != expected_sha:
-            issues.append(Issue("error", "stale-baseline-hash", "需求基线文件已变化，SHA-256 与追踪矩阵不一致"))
-    _validate_iso8601(metadata.get("Verified at", ""), issues)
-    return expected_sha
 
 
 def _validate_trace_rows(trace_rows: list[dict[str, str]], row_numbers: list[int], surfaces: set[str], root: Path, issues: list[Issue]) -> None:

@@ -23,7 +23,7 @@ These instructions apply to `{{SCOPED_DIRECTORY}}/**`.
 
 ## Local Frontend Verification
 
-- When this scope contains frontend code, inherit the parent desktop PC click-through gate and run `{{DIRECTORY_PLAYWRIGHT_OR_CYPRESS_COMMAND}}` for the affected flow. Inherit a mobile gate only when the approved requirement, supported environment, or affected scope explicitly includes mobile, touch, or responsive behavior.
+- When this scope contains Web frontend code, inherit the parent desktop PC click-through gate and run `{{DIRECTORY_PLAYWRIGHT_OR_CYPRESS_COMMAND}}` for the affected flow. Inherit a mobile browser gate only when the approved requirement, supported environment, or affected scope explicitly includes mobile Web, touch, or responsive browser behavior. Native mobile inherits the registered native test command instead.
 
 ## Local Change Boundaries
 

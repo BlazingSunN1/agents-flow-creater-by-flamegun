@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "receipt_kind": "codex-native-spawn-result",
+  "provider": "codex-native-agent",
+  "requested_model": "gpt-5.6-sol",
+  "recorded_model": "gpt-5.6-sol",
+  "agent_id": "{{DISPATCHER_AGENT_ID}}",
+  "run_id": "{{DISPATCHER_RUN_ID}}",
+  "role": "dispatcher",
+  "module": "system",
+  "maintainer_title": "System Dispatcher"
+}

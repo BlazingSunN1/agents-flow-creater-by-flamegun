@@ -1,0 +1,61 @@
+# Deterministic Delivery Orchestration
+
+Load this reference when creating or updating a delivery contract, choosing validation depth, reusing evidence, or running an automated repair loop.
+
+## One decision index
+
+`docs/governance/delivery-contract.json` is the single machine-readable decision index for a candidate. Start from `assets/delivery-contract.template.json`. It binds the approved baseline, traceability, questions, plan, progress, command manifest, code/build/environment identity, normalized workset, deterministic gate plan, and bounded repair policy by path and SHA-256.
+
+The contract is not a second requirements document, progress log, or evidence transcript. Those artifacts remain authoritative for their own content; the contract only points to their current immutable identity and computes which gates apply. The final delivery-bundle validator must receive this contract and reject any traceability, question list, plan, progress, command manifest, stage, baseline, workset, or candidate identity that differs from the bundle inputs. Human-readable progress and `latest` records may reference the contract, but cannot independently override its gate decision.
+
+## Deterministic planner
+
+Populate facts first, then generate the plan rather than editing it by hand. The planner is read-only and prints only the derived plan; the canonical module writer merges that output into the contract through the registered lease/CAS-protected atomic record updater:
+
+```bash
+python3 scripts/plan_delivery_gates.py docs/governance/delivery-contract.json --project-root .
+python3 scripts/validate_delivery_contract.py docs/governance/delivery-contract.json --project-root .
+```
+
+The planner derives the minimum risk from declared change surfaces, rejects under-classification, sorts outputs, and binds every receipt-bearing required command to a gate-input fingerprint. It separately lists the final aggregate validators in `aggregate_command_ids`. Repeated runs over identical inputs must produce byte-equivalent plan content. A missing, disabled, removed, or manually weakened required command fails closed.
+
+## Validation tiers
+
+- `quick`: known small implementation work only; package, structure, CLI, syntax, and direct target feedback. It never proves closure.
+- `affected`: the default closure-candidate tier for known standard impact. Run with one `--changed-file` per normalized project-relative path. It selects mapped tests and relevant fast checks.
+- `full`: final Skill release, high-risk or cross-module change, shared planner/schema change, or any unknown affected mapping. Unknown impact automatically escalates; it never silently skips checks.
+
+For this Skill:
+
+```bash
+python3 scripts/validate_skill.py --affected --changed-file scripts/example.py
+python3 scripts/validate_skill.py --full
+```
+
+Local plugin release adds a distribution gate after cachebuster update and reinstall:
+
+```bash
+python3 scripts/validate_skill.py --full --distribution --require-direct-skills
+```
+
+It compares the source package, exact manifest-version cache, and every same-name direct Skill copy required by this maintainer setup. A missing, stale, or shadowing copy fails the release. Plugin-only environments that intentionally keep no direct copies omit `--require-direct-skills`; a package-local pass still cannot replace the cache comparison.
+
+The JSON output records requested and effective tiers plus an escalation reason, so an Agent need not load the full workflow prose to understand the decision.
+
+## Invalidation
+
+The candidate fingerprint binds baseline, requirements-facing artifacts, normalized workset, live code/config/input hashes, identity, and planner version. Each receipt-bearing command gets a separate gate-input fingerprint that also binds that command's exact manifest entry. Every executed underlying gate emits an immutable `assets/gate-receipt.template.json`-shaped receipt containing that exact fingerprint, output path/hash, run ID and pass verdict; closure and human-triggered review fail when one is missing, stale, drifted or belongs to another command. `delivery_contract`, `delivery_bundle`, and `system_delivery_bundle` form a second phase outside this receipt graph: execute them live after underlying receipts exist and never issue or accept aggregate self-receipts. Updating progress alone does not invalidate unrelated gate inputs; changing a command changes that command binding; changing baseline, workset code, rules, configuration, environment, or input invalidates dependent gates and downstream review/acceptance evidence.
+
+`swimlane_applicable` is a required boolean fact. When false, neither swimlane gate is planned. When true, `flow_impact=none` uses `swimlane_freshness` only at closure; `changed` or `uncertain` uses `swimlane_evidence`, and completion still requires uncertainty to be resolved. Mobile Web and native mobile are separate but composable: `mobile-web`, touch, responsive, or legacy `mobile` with `frontend_applicable=true` uses browser/E2E gates; `native-mobile`, or legacy `mobile` with `frontend_applicable=false`, uses `native_mobile_tests`. A combined Web plus native-mobile change runs both families; native-only scope does not require browser automation.
+
+Receipts remain immutable. Recompute current fingerprints and mark old receipts stale instead of rewriting history. Any code change after review or black-box acceptance invalidates those downstream conclusions.
+
+## Bounded repair
+
+Automatic repair is conditional, not mandatory. Use it only for formatting, deterministic generated artifacts, or a local implementation defect constrained by a failing regression test. The contract fixes `max_rounds <= 3`, `same_failure_limit <= 2`, regression-before-fix, and completion blocking on exhaustion.
+
+Stop and record an open defect when the same failure fingerprint repeats twice, the candidate fingerprint does not change, a new P0 or security finding appears, or the round limit is reached. Never auto-edit an approved requirement baseline, acceptance criterion, AGENTS authority, permission/security decision, public contract, or destructive operation. Never weaken a test or gate to obtain a pass.
+
+## Agent budget
+
+Do not create an Agent merely because a workflow stage exists. The planner requests independent roles only at closure candidate, completion, high-risk, actual UI interaction/design work, or explicit human-review triggers. Plain user-visible text does not imply UI/UX work. Keep one leased writer; independent roles are read-only and receive only the contract summary, affected requirements/files, exact gate input, and the artifact they must return.

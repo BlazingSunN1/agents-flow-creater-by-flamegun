@@ -10,6 +10,9 @@ from validate_context_manifest import _parse_metadata as parse_context_metadata
 from validate_context_manifest import _split_paths
 from validate_traceability import GATE_COLUMNS, LINK_RE, TRACE_COLUMNS, _parse_metadata, _parse_table
 from template_schema_validation import multi_agent_issues as _multi_agent_template_issues
+from implementation_agent_validation import HostAttestationVerifier, _test_only_validate_implementation_agent, validate_implementation_agent
+from native_gate_agent_validation import validate_native_gate_agent
+from multi_agent_input_validation import validate_gate_input
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
 SHA256_RE = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
 BASE_ROLES = {"ACCEPTANCE_CASES", "BLACK_BOX"}
@@ -17,10 +20,16 @@ STANDARD_ROLES = {"CHANGE_REVIEW"}
 HIGH_RISK_ROLES = {"REQUIREMENT_REVIEW", "SPECIALIST_REVIEW"}
 UI_ROLES = {"UI_UX"}
 KNOWN_ROLES = BASE_ROLES | STANDARD_ROLES | HIGH_RISK_ROLES | UI_ROLES
-TOP_LEVEL_FIELDS = {"schema_version", "stage", "baseline_version", "baseline_sha256", "code_version",
-                    "build_id", "implementation_run_id", "single_writer_run_id", "gates", "open_disagreements"}
+TOP_LEVEL_FIELDS = {"schema_version", "stage", "baseline_version", "baseline_sha256", "code_version", "candidate_sha256",
+                    "build_id", "implementation_agent_title", "implementation_run_id",
+                    "implementation_agent_provider", "implementation_agent_model",
+                    "implementation_agent_reasoning_effort",
+                    "implementation_agent_id", "implementation_spawn_receipt",
+                    "implementation_spawn_receipt_sha256",
+                    "single_writer_run_id", "gates", "open_disagreements"}
 GATE_FIELDS = {
-    "role", "run_id", "provider", "focus", "input_manifest", "input_sha256",
+    "role", "run_id", "provider", "agent_model", "agent_reasoning_effort", "agent_id",
+    "spawn_receipt", "spawn_receipt_sha256", "output_receipt", "output_receipt_sha256", "focus", "input_manifest", "input_sha256",
     "output_evidence", "output_sha256", "may_modify_code", "may_modify_shared_records",
     "received_full_chat", "received_other_agent_reasoning",
     "accepted_implementation_self_report", "verdict"}
@@ -29,21 +38,26 @@ class Issue:
     severity: str
     code: str
     message: str
-
-
-def validate_multi_agent_evidence(
-    path: Path,
-    *,
-    trace_path: Path,
-    context_path: Path,
-    project_root: Path,
-    stage: str = "completion",
-    template: bool = False,
+def validate_multi_agent_evidence(path: Path, *, trace_path: Path, context_path: Path, project_root: Path,
+                                  stage: str = "completion", template: bool = False) -> list[Issue]:
+    return _validate_multi_agent_evidence_impl(path, trace_path=trace_path, context_path=context_path, project_root=project_root, stage=stage, template=template, verifier=None, expected_requirement_questions_locator=None, expected_requirement_questions_sha256=None)
+def _test_only_validate_multi_agent_evidence(
+    path: Path, *, trace_path: Path, context_path: Path, project_root: Path,
+    stage: str = "completion", template: bool = False, _test_only_host_attestation_verifier: HostAttestationVerifier,
+    _test_only_expected_requirement_questions_locator: str,
+    _test_only_expected_requirement_questions_sha256: str,
+) -> list[Issue]:
+    return _validate_multi_agent_evidence_impl(path, trace_path=trace_path, context_path=context_path, project_root=project_root, stage=stage, template=template, verifier=_test_only_host_attestation_verifier, expected_requirement_questions_locator=_test_only_expected_requirement_questions_locator, expected_requirement_questions_sha256=_test_only_expected_requirement_questions_sha256)
+def _validate_multi_agent_evidence_impl(
+    path: Path, *, trace_path: Path, context_path: Path, project_root: Path, stage: str,
+    template: bool, verifier: HostAttestationVerifier | None,
+    expected_requirement_questions_locator: str | None,
+    expected_requirement_questions_sha256: str | None,
 ) -> list[Issue]:
     data, issues = _read_json(path)
     if data is None:
         return issues
-    _validate_structure(data, issues)
+    _validate_structure(data, issues, template=template)
     if template:
         issues.extend(Issue("error", code, message) for code, message in _multi_agent_template_issues(data, GATE_FIELDS))
         return _deduplicate(issues)
@@ -51,6 +65,10 @@ def validate_multi_agent_evidence(
         issues.append(Issue("error", "placeholder", "多 Agent 证据包含未解析占位符"))
     root = project_root.resolve()
     context, forbidden_outputs = _agent_context(context_path, root, issues)
+    validator = validate_implementation_agent if verifier is None else _test_only_validate_implementation_agent
+    verifier_kw = {} if verifier is None else {"_test_only_host_attestation_verifier": verifier}
+    implementation_issues = validator(data, context, root, **verifier_kw)
+    issues.extend(Issue(item.severity, item.code, item.message) for item in implementation_issues)
     requirement_ids = {
         item.strip() for item in context.get("Requirement IDs", "").split(",") if item.strip()
     }
@@ -61,13 +79,15 @@ def validate_multi_agent_evidence(
         issues.append(Issue("error", "agent-stage-mismatch", "多 Agent 证据 stage 与当前门禁不一致"))
     _validate_binding(data, metadata, issues)
     allowed_inputs = _allowed_role_inputs(role_paths, context)
-    _validate_gates(data, metadata, trace_gates, root, stage, context, allowed_inputs, forbidden_outputs, issues)
+    _validate_gates(
+        data, metadata, trace_gates, root, stage, context, allowed_inputs,
+        forbidden_outputs, verifier, expected_requirement_questions_locator,
+        expected_requirement_questions_sha256, issues,
+    )
     disagreements = data.get("open_disagreements")
     if disagreements != []:
         issues.append(Issue("error", "open-agent-disagreement", "多 Agent 分歧必须关闭后才能通过"))
     return _deduplicate(issues)
-
-
 def _read_json(path: Path) -> tuple[dict[str, object] | None, list[Issue]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_object)
@@ -76,14 +96,17 @@ def _read_json(path: Path) -> tuple[dict[str, object] | None, list[Issue]]:
     if not isinstance(data, dict):
         return None, [Issue("error", "invalid-agent-evidence", "多 Agent 证据根节点必须是对象")]
     return data, []
-
-
-def _validate_structure(data: dict[str, object], issues: list[Issue]) -> None:
+def _validate_structure(data: dict[str, object], issues: list[Issue], *, template: bool = False) -> None:
     if type(data.get("schema_version")) is not int or data.get("schema_version") != 1:
         issues.append(Issue("error", "invalid-schema-version", "schema_version 必须是 1"))
     for field in (
         "stage", "baseline_version", "baseline_sha256", "code_version", "build_id",
-        "implementation_run_id", "single_writer_run_id", "gates", "open_disagreements",
+        "candidate_sha256",
+        "implementation_agent_title", "implementation_agent_provider",
+        "implementation_agent_model", "implementation_agent_reasoning_effort", "implementation_agent_id",
+        "implementation_run_id", "implementation_spawn_receipt",
+        "implementation_spawn_receipt_sha256", "single_writer_run_id",
+        "gates", "open_disagreements",
     ):
         if field not in data:
             issues.append(Issue("error", "missing-field", f"缺少多 Agent 证据字段：{field}"))
@@ -94,10 +117,12 @@ def _validate_structure(data: dict[str, object], issues: list[Issue]) -> None:
         issues.append(Issue("error", "invalid-agent-evidence-types", "多 Agent 身份、版本、构建和阶段字段必须是非空字符串"))
     if type(data.get("open_disagreements")) is not list:
         issues.append(Issue("error", "invalid-agent-disagreements", "open_disagreements 必须是数组"))
+    candidate_sha = data.get("candidate_sha256")
+    if (type(candidate_sha) is not str
+            or (SHA256_RE.fullmatch(candidate_sha) is None and not (template and PLACEHOLDER_RE.fullmatch(candidate_sha)))):
+        issues.append(Issue("error", "invalid-candidate-sha256", "candidate_sha256 必须是 64 位 SHA-256"))
     if set(data) != TOP_LEVEL_FIELDS:
         issues.append(Issue("error", "invalid-agent-evidence-fields", "多 Agent 证据含缺失、重复或未知字段"))
-
-
 def _read_trace(
     path: Path, requirement_ids: set[str], issues: list[Issue],
 ) -> tuple[dict[str, str] | None, dict[str, dict[str, str]], dict[str, set[str]]]:
@@ -114,8 +139,6 @@ def _read_trace(
         {row["Gate"].strip(): row for row in (rows or [])},
         _trace_role_paths(text, requirement_ids),
     )
-
-
 def _trace_role_paths(text: str, requirement_ids: set[str]) -> dict[str, set[str]]:
     rows, _, _ = _parse_table(text, "Traceability", TRACE_COLUMNS)
     columns = {
@@ -135,8 +158,6 @@ def _trace_role_paths(text: str, requirement_ids: set[str]) -> dict[str, set[str
             for name in names:
                 result[role].update(path.strip() for _, path in LINK_RE.findall(row.get(name, "")))
     return result
-
-
 def _allowed_role_inputs(
     role_paths: dict[str, set[str]], context: dict[str, str],
 ) -> dict[str, set[str]]:
@@ -149,8 +170,6 @@ def _allowed_role_inputs(
     for role in ("CHANGE_REVIEW", "SPECIALIST_REVIEW"):
         result.setdefault(role, {baseline}).update(direct)
     return result
-
-
 def _validate_binding(data: dict[str, object], metadata: dict[str, str], issues: list[Issue]) -> None:
     mappings = (
         ("baseline_version", "Baseline version"), ("baseline_sha256", "Baseline SHA-256"),
@@ -162,8 +181,6 @@ def _validate_binding(data: dict[str, object], metadata: dict[str, str], issues:
             issues.append(Issue("error", "stale-agent-binding", f"{evidence_field} 与追踪矩阵不一致"))
     if data.get("single_writer_run_id") != data.get("implementation_run_id"):
         issues.append(Issue("error", "multiple-or-wrong-writer", "唯一写者必须是实现 Agent"))
-
-
 def _required_roles(metadata: dict[str, str], stage: str) -> set[str]:
     risk = metadata.get("Risk level", "")
     surfaces = {part.strip().casefold() for part in metadata.get("Change surfaces", "").split(",")}
@@ -177,8 +194,6 @@ def _required_roles(metadata: dict[str, str], stage: str) -> set[str]:
     if surfaces & {"ui", "user-visible"}:
         roles |= UI_ROLES
     return roles
-
-
 def _validate_gates(
     data: dict[str, object],
     metadata: dict[str, str],
@@ -188,6 +203,9 @@ def _validate_gates(
     context: dict[str, str],
     allowed_inputs: dict[str, set[str]],
     forbidden_outputs: set[tuple[int, int]],
+    host_attestation_verifier: HostAttestationVerifier | None,
+    expected_requirement_questions_locator: str | None,
+    expected_requirement_questions_sha256: str | None,
     issues: list[Issue],
 ) -> None:
     gates = data.get("gates")
@@ -195,6 +213,9 @@ def _validate_gates(
         return
     role_map: dict[str, dict[str, object]] = {}
     run_ids: set[str] = {str(data.get("implementation_run_id", ""))}
+    agent_ids: set[str] = {str(data.get("implementation_agent_id", ""))}
+    modules = [item.strip().casefold() for item in context.get("Modules", "").split(",") if item.strip()]
+    module = modules[0] if len(modules) == 1 else None
     artifact_identities: set[tuple[int, int]] = set()
     artifact_hashes: set[str] = set()
     for raw in gates:
@@ -211,22 +232,24 @@ def _validate_gates(
             issues.append(Issue("error", "duplicate-agent-role", f"独立 Agent 角色重复：{role}"))
         role_map[role] = raw
         _validate_gate(
-            role, raw, data, trace_gates, run_ids, artifact_identities,
+            role, raw, data, trace_gates, run_ids, agent_ids, module, artifact_identities,
             artifact_hashes, context, allowed_inputs, forbidden_outputs, root, issues,
+            host_attestation_verifier, expected_requirement_questions_locator,
+            expected_requirement_questions_sha256,
         )
     required = _required_roles(metadata, stage)
     for role in required - set(role_map):
         issues.append(Issue("error", "missing-agent-role", f"当前风险缺少独立 Agent：{role}"))
     for role in set(role_map) - required:
         issues.append(Issue("error", "nonapplicable-agent-role", f"当前阶段和风险不应启动独立 Agent：{role}"))
-
-
 def _validate_gate(
     role: str,
     gate: dict[str, object],
     evidence: dict[str, object],
     trace_gates: dict[str, dict[str, str]],
     run_ids: set[str],
+    agent_ids: set[str],
+    module: str | None,
     artifact_identities: set[tuple[int, int]],
     artifact_hashes: set[str],
     context: dict[str, str],
@@ -234,37 +257,38 @@ def _validate_gate(
     forbidden_outputs: set[tuple[int, int]],
     root: Path,
     issues: list[Issue],
+    host_attestation_verifier: HostAttestationVerifier | None,
+    expected_requirement_questions_locator: str | None,
+    expected_requirement_questions_sha256: str | None,
 ) -> None:
     raw_run_id = gate.get("run_id")
     run_id = raw_run_id.strip() if isinstance(raw_run_id, str) else ""
-    if not run_id or run_id in run_ids:
-        issues.append(Issue("error", "reused-or-missing-agent-run", f"{role} 的 run_id 缺失或复用"))
-    else:
-        run_ids.add(run_id)
+    issues.extend(Issue(item.severity, item.code, item.message) for item in validate_native_gate_agent(
+        gate, role, module, root, agent_ids, run_ids, host_attestation_verifier, evidence,
+    ))
     trace_row = trace_gates.get(role)
     if trace_row and run_id != trace_row.get("Agent run ID", "").strip():
         issues.append(Issue("error", "trace-agent-run-mismatch", f"{role} 的 run_id 与追踪矩阵不一致"))
     if any(not isinstance(gate.get(field), str) or not gate.get(field, "").strip() for field in ("provider", "focus")):
         issues.append(Issue("error", "missing-agent-scope", f"{role} 缺少 provider 或 focus"))
-    elif gate.get("provider") not in {"independent-agent", "codex-native-agent"}:
-        issues.append(Issue("error", "external-provider-cannot-satisfy-native-gate", f"{role} 必须由原生独立 Agent 执行"))
     for boundary in ("may_modify_code", "may_modify_shared_records", "received_full_chat", "received_other_agent_reasoning", "accepted_implementation_self_report"):
         if gate.get(boundary) is not False:
             issues.append(Issue("error", "unsafe-agent-boundary", f"{role} 必须将 {boundary} 设为 false"))
     _validate_gate_artifacts(
         role, gate, evidence, context, trace_row, artifact_identities,
-        artifact_hashes, allowed_inputs, forbidden_outputs, root, issues,
+        artifact_hashes, allowed_inputs, forbidden_outputs, root, issues, host_attestation_verifier,
+        expected_requirement_questions_locator, expected_requirement_questions_sha256,
     )
     if gate.get("verdict") != "pass":
         issues.append(Issue("error", "agent-gate-not-pass", f"{role} verdict 必须是 pass"))
-
-
 def _validate_gate_artifacts(
     role: str, gate: dict[str, object], evidence: dict[str, object],
     context: dict[str, str], trace_row: dict[str, str] | None,
     artifact_identities: set[tuple[int, int]], artifact_hashes: set[str],
     allowed_inputs: dict[str, set[str]], forbidden_outputs: set[tuple[int, int]],
-    root: Path, issues: list[Issue],
+    root: Path, issues: list[Issue], host_attestation_verifier: HostAttestationVerifier | None,
+    expected_requirement_questions_locator: str | None,
+    expected_requirement_questions_sha256: str | None,
 ) -> None:
     for path_field, hash_field in (("input_manifest", "input_sha256"), ("output_evidence", "output_sha256")):
         raw_path = str(gate.get(path_field, ""))
@@ -279,10 +303,11 @@ def _validate_gate_artifacts(
             artifact_identities.add(identity)
             artifact_hashes.add(digest)
             if path_field == "input_manifest":
-                _validate_gate_input(
-                    resolved, role, gate, evidence, context,
-                    allowed_inputs.get(role, set()), root, issues,
-                )
+                issues.extend(Issue(item.severity, item.code, item.message) for item in validate_gate_input(
+                    resolved, role, gate, evidence, context, allowed_inputs.get(role, set()),
+                    root, host_attestation_verifier, expected_requirement_questions_locator,
+                    expected_requirement_questions_sha256,
+                ))
             if path_field == "output_evidence" and identity in forbidden_outputs:
                 issues.append(Issue("error", "agent-output-reuses-workset", f"{role} 输出不得复用变更或输入文件"))
             if path_field == "output_evidence":
@@ -292,8 +317,6 @@ def _validate_gate_artifacts(
             links = LINK_RE.findall(trace_row.get(column, ""))
             if len(links) == 1 and links[0][1].strip() != raw_path:
                 issues.append(Issue("error", "trace-agent-artifact-mismatch", f"{role} 的 {path_field} 与追踪矩阵不一致"))
-
-
 def _agent_context(
     context_path: Path, root: Path, issues: list[Issue],
 ) -> tuple[dict[str, str], set[tuple[int, int]]]:
@@ -311,83 +334,6 @@ def _agent_context(
             except OSError:
                 issues.append(Issue("error", "missing-agent-context-input", f"工作集输入不存在：{raw_path}"))
     return context, identities
-
-
-def _validate_gate_input(
-    path: Path, role: str, gate: dict[str, object], evidence: dict[str, object],
-    context: dict[str, str], allowed_paths: set[str], root: Path, issues: list[Issue],
-) -> None:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_object)
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
-        issues.append(Issue("error", "invalid-agent-input", f"{role} 输入必须是无重复键的结构化 JSON"))
-        return
-    requirement_ids = sorted(item.strip() for item in context.get("Requirement IDs", "").split(",") if item.strip())
-    expected = {
-        "schema_version": 1, "role": role, "run_id": gate.get("run_id"),
-        "baseline_version": evidence.get("baseline_version"),
-        "baseline_sha256": evidence.get("baseline_sha256"),
-        "requirement_ids": requirement_ids,
-        "includes_full_chat": False, "includes_other_agent_reasoning": False,
-        "includes_implementation_self_report": False,
-    }
-    required_keys = {*expected, "artifacts"}
-    if not isinstance(data, dict) or set(data) != required_keys:
-        issues.append(Issue("error", "invalid-agent-input", f"{role} 输入结构不完整或含未知字段"))
-        return
-    strings = ("role", "run_id", "baseline_version", "baseline_sha256")
-    artifacts = data.get("artifacts")
-    if (type(data.get("schema_version")) is not int
-            or any(type(data.get(field)) is not str for field in strings)
-            or type(data.get("requirement_ids")) is not list
-            or any(type(data.get(field)) is not bool for field in (
-                "includes_full_chat", "includes_other_agent_reasoning",
-                "includes_implementation_self_report",
-            ))
-            or not isinstance(artifacts, list) or not artifacts):
-        issues.append(Issue("error", "invalid-agent-input", f"{role} 输入字段类型不合法"))
-        return
-    if any(data.get(key) != value for key, value in expected.items()):
-        issues.append(Issue("error", "stale-agent-input", f"{role} 输入未绑定当前角色、run、基线或需求"))
-    if not _valid_input_artifacts(artifacts, allowed_paths, root):
-        issues.append(Issue(
-            "error", "invalid-agent-input-paths",
-            f"{role} 输入工件必须精确覆盖角色所需路径并绑定当前 SHA-256",
-        ))
-
-
-def _valid_input_artifacts(artifacts: list[object], allowed_paths: set[str], root: Path) -> bool:
-    paths: list[str] = []
-    identities: set[tuple[int, int]] = set()
-    for artifact in artifacts:
-        if not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}:
-            return False
-        raw_path, expected = artifact.get("path"), artifact.get("sha256")
-        if type(raw_path) is not str or type(expected) is not str:
-            return False
-        candidate = Path(raw_path)
-        if candidate.is_absolute() or raw_path != candidate.as_posix() or ".." in candidate.parts:
-            return False
-        current = root
-        for part in candidate.parts:
-            current = current / part
-            if current.is_symlink():
-                return False
-        if not current.is_file():
-            return False
-        identity = (current.stat().st_dev, current.stat().st_ino)
-        if identity in identities or not SHA256_RE.fullmatch(expected):
-            return False
-        if hashlib.sha256(current.read_bytes()).hexdigest() != expected.casefold():
-            return False
-        paths.append(raw_path)
-        identities.add(identity)
-    if len(paths) != len(set(paths)) or set(paths) - allowed_paths:
-        return False
-    if allowed_paths - set(paths):
-        return False
-    return True
-
 
 def _validate_gate_output(
     path: Path, role: str, gate: dict[str, object],
@@ -418,7 +364,6 @@ def _validate_gate_output(
     elif any(data.get(key) != value for key, value in expected.items()):
         issues.append(Issue("error", "stale-agent-output", f"{role} 输出未绑定当前角色、run、基线或代码"))
 
-
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
@@ -426,7 +371,6 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
             raise ValueError("duplicate-key")
         result[key] = value
     return result
-
 
 def _canonical_artifact_hash(path: Path) -> str:
     payload = path.read_bytes()

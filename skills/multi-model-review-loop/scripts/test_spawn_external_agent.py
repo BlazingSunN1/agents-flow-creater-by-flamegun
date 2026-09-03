@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,9 +14,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from spawn_external_agent import (
     PROVIDER_REQUEST_PROFILES, SYSTEM_PROMPTS, child_environment, output_paths,
-    planned_commands, result_manifest, validate_inputs, validate_usage,
+    planned_commands, result_manifest, resume_existing, validate_inputs, validate_usage,
 )
-from call_model import build_request, extract_result, validate_call_paths
+from external_provider_policy import EXTERNAL_PROVIDERS_ENABLED, require_external_providers_enabled
+from call_model import (
+    build_request, extract_result, parse_args as parse_call_args,
+    parse_provider_stream, post, validate_call_paths,
+)
+
+
+EXECUTION_PROFILE = {
+    "transport": "bounded-sse-v1", "idle_timeout_seconds": 180.0,
+    "deadline_seconds": 1800.0, "max_output_tokens": 32768, "retry_limit": 1,
+}
 
 
 class SpawnExternalAgentTests(unittest.TestCase):
@@ -32,6 +43,11 @@ class SpawnExternalAgentTests(unittest.TestCase):
             "objective": "Review the exact requested workflow.",
             "acceptance_criteria": [{"id": "AC-001", "text": "complete", "behaviors": ["success"]}],
             "context_artifacts": [],
+            "clarification_register": {
+                "schema_version": 1, "draft_objective": "Review the exact requested workflow.",
+                "resolved_objective": "Review the exact requested workflow.", "questions": [],
+                "no_questions_reason": "The synthetic test objective is already explicit.",
+            },
             "candidate": "NOT_APPLICABLE" if provider == "kimi" else "complete candidate",
             "candidate_sha256": "NOT_APPLICABLE" if provider == "kimi" else "b" * 64,
             "correction_ids": [], "corrections": [],
@@ -39,7 +55,8 @@ class SpawnExternalAgentTests(unittest.TestCase):
         return argparse.Namespace(
             provider=provider, system_file=system, prompt_file=prompt,
             output_dir=root / "run", task_id=task_id, timeout=180.0,
-            max_tokens=8192, retries=1, dry_run=True,
+            deadline=1800.0, max_tokens=32768, retries=1, dry_run=True,
+            resume=False,
         ), temporary
 
     def test_kimi_and_deepseek_use_distinct_validated_outputs(self) -> None:
@@ -53,6 +70,11 @@ class SpawnExternalAgentTests(unittest.TestCase):
                 self.assertIn(provider, validate)
                 self.assertEqual(3, len(output_paths(args.output_dir, provider)))
 
+    def test_external_providers_are_hard_paused(self) -> None:
+        self.assertIs(EXTERNAL_PROVIDERS_ENABLED, False)
+        with self.assertRaisesRegex(ValueError, "temporarily paused"):
+            require_external_providers_enabled()
+
     def test_deepseek_uses_official_v4_chat_completions_profile(self) -> None:
         args, temporary = self.fixture("deepseek")
         self.addCleanup(temporary.cleanup)
@@ -64,10 +86,11 @@ class SpawnExternalAgentTests(unittest.TestCase):
         self.assertEqual({"type": "enabled"}, payload["thinking"])
         self.assertEqual("max", payload["reasoning_effort"])
         self.assertEqual({"type": "json_object"}, payload["response_format"])
-        self.assertFalse(payload["stream"])
+        self.assertTrue(payload["stream"])
+        self.assertEqual({"include_usage": True}, payload["stream_options"])
         self.assertNotIn("temperature", payload)
         self.assertEqual(
-            "deepseek-v4-official-chat-completions-v1",
+            "deepseek-v4-official-chat-completions-bounded-sse-v2",
             PROVIDER_REQUEST_PROFILES["deepseek"],
         )
 
@@ -104,6 +127,66 @@ class SpawnExternalAgentTests(unittest.TestCase):
         response["model"] = "deepseek-v4-flash"
         with self.assertRaisesRegex(ValueError, "model differs"):
             extract_result(response, "deepseek", "deepseek-v4-pro")
+
+    def test_stream_aggregates_long_output_and_requires_done(self) -> None:
+        chunks = [
+            b': keep-alive\n',
+            b'data: {"id":"r-1","model":"k3","choices":[{"index":0,"delta":{"content":"{"},"finish_reason":null}]}\n',
+            *[
+                b'data: {"id":"r-1","model":"k3","choices":[{"index":0,"delta":{"content":"x"},"finish_reason":null}]}\n'
+                for _ in range(4096)
+            ],
+            b'data: {"id":"r-1","model":"k3","choices":[{"index":0,"delta":{"content":"}"},"finish_reason":"stop"}]}\n',
+            b'data: {"id":"r-1","model":"k3","choices":[],"usage":{"prompt_tokens":3,"completion_tokens":4098,"total_tokens":4101}}\n',
+            b'data: [DONE]\n',
+        ]
+        response = parse_provider_stream(chunks)
+        result = extract_result(response, "kimi", "k3")
+        self.assertEqual("{" + "x" * 4096 + "}", result["content"])
+        self.assertEqual(4101, result["usage"]["total_tokens"])
+        with self.assertRaisesRegex(ValueError, "completion marker"):
+            parse_provider_stream(chunks[:-1])
+
+    def test_partial_stream_disconnect_is_not_retried(self) -> None:
+        class PartialResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def __iter__(self):
+                yield b'data: {"id":"r-1","model":"k3","choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":null}]}\n'
+                raise TimeoutError("synthetic disconnect")
+
+        request = urllib.request.Request("https://example.invalid")
+        with patch("urllib.request.urlopen", return_value=PartialResponse()) as opened:
+            with self.assertRaisesRegex(ValueError, "disconnected after output began"):
+                post(request, 1.0, 2, "kimi", 60.0)
+        self.assertEqual(1, opened.call_count)
+
+    def test_long_task_has_an_overall_deadline_despite_keepalives(self) -> None:
+        chunks = [b': keep-alive\n', b'data: [DONE]\n']
+        with self.assertRaisesRegex(ValueError, "overall deadline"):
+            parse_provider_stream(chunks, deadline_at=0.0)
+
+    def test_default_and_maximum_long_task_output_budgets(self) -> None:
+        with patch.object(sys, "argv", [
+            "call_model.py", "kimi", "--system-file", "system",
+            "--prompt-file", "prompt", "--output", "output",
+        ]):
+            self.assertEqual(32768, parse_call_args().max_tokens)
+        args, temporary = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        args.max_tokens = 262_144
+        validate_inputs(args)
+        args.max_tokens = 262_145
+        with self.assertRaisesRegex(ValueError, "max-tokens"):
+            validate_inputs(args)
+        args.max_tokens = 32768
+        args.deadline = 7201
+        with self.assertRaisesRegex(ValueError, "deadline"):
+            validate_inputs(args)
 
     def test_unstable_task_id_and_symlink_input_are_rejected(self) -> None:
         args, temporary = self.fixture()
@@ -220,6 +303,39 @@ class SpawnExternalAgentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "fresh"):
             validate_inputs(args)
 
+    def test_resume_normalizes_existing_raw_response_without_provider_recall(self) -> None:
+        from subprocess import CompletedProcess
+
+        from test_validate_contract import valid_kimi
+
+        args, temporary = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        args.resume = True
+        args.output_dir.mkdir()
+        raw, normalized, manifest = output_paths(args.output_dir, args.provider)
+        raw.write_text("provider bytes already received", encoding="utf-8")
+
+        def validate_only(_command, **_kwargs):
+            normalized.write_text(json.dumps(valid_kimi()), encoding="utf-8")
+            return CompletedProcess([], 0, "", "")
+
+        expected = {"schema_version": 1, "task_id": args.task_id}
+        with patch("external_agent_resume.subprocess.run", side_effect=validate_only) as called, \
+                patch("spawn_external_agent.result_manifest", return_value=expected):
+            self.assertEqual(manifest, resume_existing(args, ["validate"], {}))
+        self.assertEqual(1, called.call_count)
+        self.assertEqual(expected, json.loads(manifest.read_text(encoding="utf-8")))
+
+    def test_resume_never_recalls_provider_when_raw_response_is_missing(self) -> None:
+        args, temporary = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        args.resume = True
+        args.output_dir.mkdir()
+        with patch("external_agent_resume.subprocess.run") as called, \
+                self.assertRaisesRegex(ValueError, "raw response"):
+            resume_existing(args, ["validate"], {})
+        called.assert_not_called()
+
     def test_result_manifest_binds_prompt_scope_and_candidate(self) -> None:
         import json
 
@@ -235,6 +351,7 @@ class SpawnExternalAgentTests(unittest.TestCase):
             "provider": "kimi", "request_model": "k3", "model": "k3",
             "content": json.dumps(valid_kimi()), "usage": {"total_tokens": 12},
             "response_id": "response-1", "finish_reason": "stop",
+            **EXECUTION_PROFILE,
         }), encoding="utf-8")
         manifest = result_manifest(args, normalized)
         self.assertEqual("a" * 64, manifest["scope_sha256"])
@@ -244,6 +361,49 @@ class SpawnExternalAgentTests(unittest.TestCase):
         self.assertEqual(str(args.prompt_file.resolve()), manifest["prompt_path"])
         self.assertEqual("response-1", manifest["response_id"])
         self.assertEqual(PROVIDER_REQUEST_PROFILES["kimi"], manifest["request_profile"])
+        args.deadline = 1900.0
+        with self.assertRaisesRegex(ValueError, "execution profile"):
+            result_manifest(args, normalized)
+        args.deadline = 1800.0
+
+        drifted = valid_kimi(2)
+        normalized.write_text(json.dumps(drifted), encoding="utf-8")
+        raw.write_text(json.dumps({
+            "provider": "kimi", "request_model": "k3", "model": "k3",
+            "content": json.dumps(drifted), "usage": {"total_tokens": 12},
+            "response_id": "response-2", "finish_reason": "stop",
+            **EXECUTION_PROFILE,
+        }), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "candidate version"):
+            result_manifest(args, normalized)
+
+    def test_deepseek_result_binds_exact_candidate_and_criteria(self) -> None:
+        from test_validate_contract import valid_deepseek
+
+        args, temporary = self.fixture("deepseek")
+        self.addCleanup(temporary.cleanup)
+        value = valid_deepseek()
+        value["black_box_tests"][0]["requirement"] = "AC-001"
+        value["coverage"] = ["AC-001"]
+        normalized = Path(temporary.name) / "deepseek-normalized.json"
+        normalized.write_text(json.dumps(value), encoding="utf-8")
+        raw = output_paths(args.output_dir, "deepseek")[0]
+        raw.parent.mkdir()
+        raw.write_text(json.dumps({
+            "provider": "deepseek", "request_model": "deepseek-v4-pro",
+            "model": "deepseek-v4-pro", "content": json.dumps(value),
+            "usage": {"total_tokens": 12}, "response_id": "response-1",
+            "finish_reason": "stop",
+            **EXECUTION_PROFILE,
+        }), encoding="utf-8")
+        result_manifest(args, normalized)
+        value["candidate_sha256"] = "c" * 64
+        normalized.write_text(json.dumps(value), encoding="utf-8")
+        raw_value = json.loads(raw.read_text(encoding="utf-8"))
+        raw_value["content"] = json.dumps(value)
+        raw.write_text(json.dumps(raw_value), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "different candidate"):
+            result_manifest(args, normalized)
 
     def test_system_prompt_and_input_bytes_are_fixed_and_bounded(self) -> None:
         args, temporary = self.fixture()

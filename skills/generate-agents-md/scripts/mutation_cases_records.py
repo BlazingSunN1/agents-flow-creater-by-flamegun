@@ -99,8 +99,8 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "automated-review-execution-result-check-disabled", "scripts/delivery_record_validation.py",
-        "if not _review_scope_valid(fields) or not _review_execution_valid(fields, command_manifest_path, root):",
-        "if not _review_scope_valid(fields):",
+        "if (not _review_scope_valid(fields) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(fields, command_manifest_path, root)):",
+        "if (not _review_scope_valid(fields) or not _review_trigger_valid(fields)):",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_unexecuted_automated_review_cannot_claim_pass",
     ),
     (
@@ -279,8 +279,8 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "automated-review-scope-binding-disabled", "scripts/delivery_record_validation.py",
-        "if not _review_scope_valid(fields) or not _review_execution_valid(fields, command_manifest_path, root):",
-        "if not _review_execution_valid(fields, command_manifest_path, root):",
+        "if (not _review_scope_valid(fields) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(fields, command_manifest_path, root)):",
+        "if (not _review_trigger_valid(fields)\n            or not _review_execution_valid(fields, command_manifest_path, root)):",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_review_scope_must_cover_changed_files_and_dependency_surfaces",
     ),
     (
@@ -333,9 +333,9 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "swimlane-flow-trigger-policy-check-disabled", "scripts/agents_delivery_policy_validation.py",
-        'r"only when|immediately only|仅当|只在", r"flow|entry point|handoff|流程|入口|交接", r"update|更新"',
-        'r".*", r".*", r".*"',
-        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_swimlane_updates_use_stage_or_flow_change_triggers",
+        'r"flow_impact=changed|flow_impact.*changed", r"stabili[sz]ed candidate|稳定候选", r"batch|合并|批", r"at most once|至多.*一次", r"first downstream consumer|首次.*下游"',
+        'r".*", r".*", r".*", r".*", r".*"',
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_swimlane_changed_flow_is_batched_per_stabilized_candidate",
     ),
     (
         "swimlane-update-negation-check-disabled", "scripts/agents_delivery_policy_validation.py",
@@ -392,9 +392,9 @@ ADDITIONAL_MUTANT_CASES = (
         "scripts.test_validate_context_manifest.ContextManifestValidatorTests.test_duplicate_module_ids_are_rejected",
     ),
     (
-        "agent-run-id-string-type-check-disabled", "scripts/validate_multi_agent_evidence.py",
-        'run_id = raw_run_id.strip() if isinstance(raw_run_id, str) else ""',
-        'run_id = str(raw_run_id or "").strip()',
+        "agent-run-id-string-type-check-disabled", "scripts/native_gate_agent_validation.py",
+        'identity = value.strip() if isinstance(value, str) else ""',
+        'identity = str(value or "").strip()',
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_agent_run_id_must_be_a_string",
     ),
     (
@@ -404,21 +404,21 @@ ADDITIONAL_MUTANT_CASES = (
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_role_inputs_cannot_bypass_content_reuse_with_whitespace",
     ),
     (
-        "agent-input-allowed-paths-check-disabled", "scripts/validate_multi_agent_evidence.py",
+        "agent-input-allowed-paths-check-disabled", "scripts/multi_agent_input_validation.py",
         "if len(paths) != len(set(paths)) or set(paths) - allowed_paths:",
         "if len(paths) != len(set(paths)):",
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_role_input_rejects_full_chat_or_unrelated_paths",
     ),
     (
-        "agent-input-required-role-artifacts-check-disabled", "scripts/validate_multi_agent_evidence.py",
+        "agent-input-required-role-artifacts-check-disabled", "scripts/multi_agent_input_validation.py",
         "if allowed_paths - set(paths):",
         "if False and allowed_paths - set(paths):",
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_role_input_requires_all_role_specific_artifacts",
     ),
     (
-        "agent-input-artifact-hash-check-disabled", "scripts/validate_multi_agent_evidence.py",
-        "if hashlib.sha256(current.read_bytes()).hexdigest() != expected.casefold():",
-        "if False and hashlib.sha256(current.read_bytes()).hexdigest() != expected.casefold():",
+        "agent-input-artifact-hash-check-disabled", "scripts/multi_agent_input_validation.py",
+        "if hashlib.sha256(current.read_bytes()).hexdigest() != hash_value.casefold():",
+        "if False and hashlib.sha256(current.read_bytes()).hexdigest() != hash_value.casefold():",
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_role_input_artifact_hash_detects_post_capture_drift",
     ),
     (
@@ -464,7 +464,7 @@ ADDITIONAL_MUTANT_CASES = (
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_top_level_and_gate_unknown_or_duplicate_fields_fail_closed",
     ),
     (
-        "agent-input-exclusion-bool-type-check-disabled", "scripts/validate_multi_agent_evidence.py",
+        "agent-input-exclusion-bool-type-check-disabled", "scripts/multi_agent_input_validation.py",
         'or any(type(data.get(field)) is not bool for field in (\n                "includes_full_chat", "includes_other_agent_reasoning",\n                "includes_implementation_self_report",\n            ))',
         'or any(data.get(field) not in (False,) for field in (\n                "includes_full_chat", "includes_other_agent_reasoning",\n                "includes_implementation_self_report",\n            ))',
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_role_input_exclusion_flags_must_be_json_booleans",

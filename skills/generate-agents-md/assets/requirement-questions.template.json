@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "baseline_version": "req-v1",
+  "baseline_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "questions": [
+    {
+      "question_id": "Q-001",
+      "impact_scope": ["REQ-001", "ACCEPTANCE_CASES"],
+      "risk": "standard",
+      "proposed_default": "Preserve the current externally visible behavior.",
+      "safe_fallback": "Use a reversible feature flag and retain the previous path.",
+      "answer_status": "NOT_PROVIDED",
+      "delivery_disposition": "NON_BLOCKING_P2",
+      "assumption": "Backward compatibility is safer than inventing new behavior.",
+      "owner": "product-owner",
+      "review_due": "2026-09-03T10:00:00+08:00"
+    }
+  ],
+  "gate_reruns": []
+}

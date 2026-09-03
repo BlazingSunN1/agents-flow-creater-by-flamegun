@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import test_validate_delivery_bundle as bundle_test_support
-from validate_delivery_bundle import validate_delivery_bundle
+from validate_delivery_bundle import _test_only_validate_delivery_bundle
 
 
 class GoldenWorkflowTests(unittest.TestCase):
@@ -24,16 +24,26 @@ class GoldenWorkflowTests(unittest.TestCase):
     def _codes(self, *, allow_passwords: bool = False) -> set[str]:
         return {
             issue.code
-            for issue in validate_delivery_bundle(
+            for issue in _test_only_validate_delivery_bundle(
                 agents_path=self.fixture.agents,
+                delivery_contract_path=self.fixture.contract,
                 trace_path=self.fixture.trace_fixture.matrix,
                 context_path=self.fixture.context,
                 command_manifest_path=self.fixture.commands,
                 multi_agent_evidence_path=self.fixture.multi_agent,
                 swimlane_evidence_path=self.fixture.swimlane,
                 frontend_evidence_path=self.fixture.frontend,
+                requirement_questions_path=self.fixture.requirement_questions,
+                requirement_questions_sha256=hashlib.sha256(
+                    self.fixture.requirement_questions.read_bytes()
+                ).hexdigest(),
+                requirement_baseline_version="req-v1",
+                requirement_baseline_sha256=hashlib.sha256(
+                    (self.fixture.root / "requirements/baseline.md").read_bytes()
+                ).hexdigest(),
                 project_root=self.fixture.root,
                 allow_passwords=allow_passwords,
+                _test_only_host_attestation_verifier=lambda *_: True,
             )
             if issue.severity == "error"
         }
@@ -81,6 +91,12 @@ class GoldenWorkflowTests(unittest.TestCase):
             output["input_sha256"] = gate["input_sha256"]
             output_path.write_text(json.dumps(output), encoding="utf-8")
             gate["output_sha256"] = hashlib.sha256(output_path.read_bytes()).hexdigest()
+            receipt_path = self.fixture.root / gate["output_receipt"]
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["input_sha256"] = gate["input_sha256"]
+            receipt["output_sha256"] = gate["output_sha256"]
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+            gate["output_receipt_sha256"] = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
         self.fixture.multi_agent.write_text(json.dumps(evidence), encoding="utf-8")
         commands = json.loads(self.fixture.commands.read_text(encoding="utf-8"))
         commands["frontend_applicable"] = False
@@ -92,6 +108,18 @@ class GoldenWorkflowTests(unittest.TestCase):
         for command in commands["commands"]:
             if command["id"] in {"frontend_evidence", "frontend_e2e"}:
                 command["applicability"] = "N/A: no frontend"
+        if "cross-module" in surfaces and not any(
+            command["id"] == "system_delivery_bundle" for command in commands["commands"]
+        ):
+            commands["commands"].append({
+                "id": "system_delivery_bundle",
+                "argv": ["python3", "-m", "unittest"],
+                "source": "commands.txt",
+                "source_selector": "unittest",
+                "source_command": "python3 -m unittest",
+                "working_directory": ".",
+                "applicability": "required",
+            })
         self.fixture.commands.write_text(json.dumps(commands), encoding="utf-8")
         self._refresh_context_dependent_records(f"{risk}; {reason}; no expansion")
 
@@ -120,6 +148,7 @@ class GoldenWorkflowTests(unittest.TestCase):
             f"Review evidence SHA-256: {hashlib.sha256(transcript.read_bytes()).hexdigest()}", review,
         )
         self.fixture.review.write_text(review, encoding="utf-8")
+        self.fixture._write_delivery_contract()
 
     def test_standard_ui_workflow(self) -> None:
         self.assertEqual(set(), self._codes())
@@ -150,7 +179,7 @@ class GoldenWorkflowTests(unittest.TestCase):
 """
         self.fixture.agents.write_text(agents, encoding="utf-8")
         self._refresh_context_dependent_records("standard; user-visible interaction; no expansion")
-        self.assertEqual(set(), self._codes(allow_passwords=True))
+        self.assertEqual(set(), self._codes())
 
 
 if __name__ == "__main__":

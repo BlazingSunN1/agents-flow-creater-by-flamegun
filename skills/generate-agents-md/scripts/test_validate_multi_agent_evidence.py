@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import os
 import sys
@@ -10,7 +11,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import test_validate_traceability as trace_support
-from validate_multi_agent_evidence import _trace_role_paths, _validate_hashed_path, validate_multi_agent_evidence
+from validate_multi_agent_evidence import (
+    _test_only_validate_multi_agent_evidence, _validate_multi_agent_evidence_impl,
+    _trace_role_paths, _validate_hashed_path,
+    validate_multi_agent_evidence,
+)
 from validate_traceability import _parse_metadata
 
 
@@ -27,9 +32,13 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
         self.context = self.root / "context.md"
         self.context.write_text(
             "- Baseline artifact: requirements/baseline.md\n- Requirement IDs: REQ-001\n"
+            "- Modules: module\n"
             "- Changed files: src/module.py\n- Configuration files: N/A: none\n- Input files: N/A: none\n",
             encoding="utf-8",
         )
+        self._write_implementation_receipt()
+        self.questions = self.root / "evidence/requirement-questions.json"
+        self._write_requirement_questions()
         for relative in ("evidence/change-input.md", "evidence/change-output.md"):
             target = self.root / relative
             target.write_text(relative, encoding="utf-8")
@@ -41,10 +50,29 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
         self.fixture.tearDown()
 
     def artifact(self, role: str, run_id: str, input_path: str, output_path: str) -> dict[str, object]:
+        slug = role.casefold().replace("_", "-")
+        receipt_path = f"evidence/{slug}-spawn-receipt.json"
+        output_receipt_path = f"evidence/{slug}-output-result.json"
+        agent_id = f"{slug}-agent-1"
+        self._write_gate_receipt(role, agent_id, run_id, receipt_path)
+        self._write_gate_output_receipt(
+            role, agent_id, run_id, input_path, output_path, output_receipt_path,
+        )
         return {
             "role": role,
             "run_id": run_id,
-            "provider": "independent-agent",
+            "provider": "codex-native-agent",
+            "agent_model": "gpt-5.6-sol",
+            "agent_reasoning_effort": "xhigh",
+            "agent_id": agent_id,
+            "spawn_receipt": receipt_path,
+            "spawn_receipt_sha256": hashlib.sha256(
+                (self.root / receipt_path).read_bytes()
+            ).hexdigest(),
+            "output_receipt": output_receipt_path,
+            "output_receipt_sha256": hashlib.sha256(
+                (self.root / output_receipt_path).read_bytes()
+            ).hexdigest(),
             "focus": f"{role} bounded review",
             "input_manifest": input_path,
             "input_sha256": hashlib.sha256((self.root / input_path).read_bytes()).hexdigest(),
@@ -73,7 +101,17 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "baseline_sha256": metadata["Baseline SHA-256"],
             "code_version": metadata["Code version"],
             "build_id": metadata["Build ID"],
+            "candidate_sha256": "c" * 64,
+            "implementation_agent_title": "ModuleMaintainer",
+            "implementation_agent_provider": "codex-native-agent",
+            "implementation_agent_model": "gpt-5.6-sol",
+            "implementation_agent_reasoning_effort": "high",
+            "implementation_agent_id": "module-maintainer-agent-1",
             "implementation_run_id": metadata["Implementation run ID"],
+            "implementation_spawn_receipt": "evidence/implementation-spawn-receipt.json",
+            "implementation_spawn_receipt_sha256": hashlib.sha256(
+                (self.root / "evidence/implementation-spawn-receipt.json").read_bytes()
+            ).hexdigest(),
             "single_writer_run_id": metadata["Implementation run ID"],
             "gates": gates,
             "open_disagreements": [],
@@ -82,17 +120,206 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
     def codes(self) -> set[str]:
         return {
             issue.code
-            for issue in validate_multi_agent_evidence(
+            for issue in _test_only_validate_multi_agent_evidence(
                 self.path,
                 trace_path=self.fixture.matrix,
                 context_path=self.context,
                 project_root=self.root,
+                _test_only_host_attestation_verifier=lambda *_: True,
+                _test_only_expected_requirement_questions_locator="evidence/requirement-questions.json",
+                _test_only_expected_requirement_questions_sha256=self.questions_sha256,
             )
             if issue.severity == "error"
         }
 
     def test_valid_standard_ui_evidence_passes(self) -> None:
         self.assertEqual(set(), self.codes())
+
+    def test_bound_local_coordination_receipts_do_not_block_delivery(self) -> None:
+        codes = {
+            issue.code for issue in validate_multi_agent_evidence(
+                self.path, trace_path=self.fixture.matrix, context_path=self.context,
+                project_root=self.root,
+            )
+        }
+        self.assertNotIn("implementation-receipt-not-validated", codes)
+        self.assertNotIn("gate-receipt-not-validated", codes)
+        self.assertNotIn("gate-output-receipt-not-validated", codes)
+
+    def test_old_blind_review_input_without_requirement_questions_fails_closed(self) -> None:
+        data = self.valid_data()
+        gate = data["gates"][0]
+        manifest = self.root / str(gate["input_manifest"])
+        value = json.loads(manifest.read_text(encoding="utf-8"))
+        value.pop("requirement_questions_locator")
+        value.pop("requirement_questions_sha256")
+        manifest.write_text(json.dumps(value), encoding="utf-8")
+        gate["input_sha256"] = hashlib.sha256(manifest.read_bytes()).hexdigest()
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("invalid-agent-input", self.codes())
+
+    def test_requirement_questions_hash_drift_fails_closed(self) -> None:
+        self.questions.write_text("{}", encoding="utf-8")
+        self.assertIn("stale-requirement-questions", self.codes())
+
+    def test_requirement_questions_must_match_current_baseline(self) -> None:
+        value = json.loads(self.questions.read_text(encoding="utf-8"))
+        value["baseline_version"] = "stale-baseline"
+        self.questions.write_text(json.dumps(value), encoding="utf-8")
+        self.questions_sha256 = hashlib.sha256(self.questions.read_bytes()).hexdigest()
+        self._write_inputs()
+        self.path.write_text(json.dumps(self.valid_data()), encoding="utf-8")
+        self.assertIn("stale-requirement-questions-baseline", self.codes())
+
+    def test_same_baseline_alternate_questions_cannot_replace_canonical_input(self) -> None:
+        alternate = self.root / "evidence/alternate-requirement-questions.json"
+        value = json.loads(self.questions.read_text(encoding="utf-8"))
+        value["questions"][0]["proposed_default"] = "A different but valid semantic decision."
+        alternate.write_text(json.dumps(value), encoding="utf-8")
+        alternate_sha = hashlib.sha256(alternate.read_bytes()).hexdigest()
+        for manifest in self.root.glob("evidence/*-input.md"):
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            payload["requirement_questions_locator"] = "evidence/alternate-requirement-questions.json"
+            payload["requirement_questions_sha256"] = alternate_sha
+            manifest.write_text(json.dumps(payload), encoding="utf-8")
+        self._write_outputs()
+        self.path.write_text(json.dumps(self.valid_data()), encoding="utf-8")
+        self.assertIn("noncanonical-requirement-questions", self.codes())
+
+    def test_answered_requirement_questions_pass_with_host_verified_rerun(self) -> None:
+        self._write_requirement_questions(answered=True)
+        self._write_inputs()
+        self._write_outputs()
+        self.path.write_text(json.dumps(self.valid_data()), encoding="utf-8")
+        self.assertEqual(set(), self.codes())
+
+    def test_answered_requirement_questions_allow_local_rerun_receipt(self) -> None:
+        self._write_requirement_questions(answered=True)
+        self._write_inputs()
+        self._write_outputs()
+        self.path.write_text(json.dumps(self.valid_data()), encoding="utf-8")
+        codes = {item.code for item in _validate_multi_agent_evidence_impl(
+            self.path, trace_path=self.fixture.matrix, context_path=self.context,
+            project_root=self.root, stage="completion", template=False, verifier=None,
+            expected_requirement_questions_locator="evidence/requirement-questions.json",
+            expected_requirement_questions_sha256=self.questions_sha256,
+        )}
+        self.assertNotIn("questions-question-rerun-receipt-not-validated", codes)
+
+    def test_public_api_cannot_inject_host_verifier(self) -> None:
+        self.assertNotIn("host_attestation_verifier", inspect.signature(validate_multi_agent_evidence).parameters)
+        with self.assertRaises(TypeError):
+            validate_multi_agent_evidence(
+                self.path, trace_path=self.fixture.matrix, context_path=self.context,
+                project_root=self.root, host_attestation_verifier=lambda *_: True,
+            )
+
+    def test_public_api_without_canonical_questions_authority_fails_closed(self) -> None:
+        codes = {item.code for item in validate_multi_agent_evidence(
+            self.path, trace_path=self.fixture.matrix, context_path=self.context,
+            project_root=self.root,
+        )}
+        self.assertIn("missing-canonical-requirement-questions", codes)
+
+    def test_completion_rejects_gate_with_only_spawn_receipt(self) -> None:
+        data = self.valid_data()
+        gate = data["gates"][0]
+        gate.pop("output_receipt")
+        gate.pop("output_receipt_sha256")
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("invalid-gate-fields", self.codes())
+
+    def test_maintainer_cannot_self_review_by_changing_run_id(self) -> None:
+        data = self.valid_data()
+        gate = data["gates"][0]
+        gate["agent_id"] = data["implementation_agent_id"]
+        self._rewrite_gate_receipt(gate)
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("reused-or-missing-agent-id", self.codes())
+
+    def test_independent_gates_require_unique_agent_ids(self) -> None:
+        data = self.valid_data()
+        first, second = data["gates"][:2]
+        second["agent_id"] = first["agent_id"]
+        self._rewrite_gate_receipt(second)
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("reused-or-missing-agent-id", self.codes())
+
+    def test_gate_identity_requires_native_sol(self) -> None:
+        for field, value in (("provider", "independent-agent"), ("agent_model", "gpt-5.6-terra")):
+            with self.subTest(field=field):
+                data = self.valid_data()
+                data["gates"][0][field] = value
+                self.path.write_text(json.dumps(data), encoding="utf-8")
+                self.assertIn("invalid-gate-agent", self.codes())
+        data = self.valid_data()
+        data["gates"][0]["provider"] = "independent-agent"
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        issues = validate_multi_agent_evidence(
+            self.path, trace_path=self.fixture.matrix, context_path=self.context,
+            project_root=self.root,
+        )
+        message = next(issue.message for issue in issues if issue.code == "invalid-gate-agent")
+        self.assertIn("必须声明并绑定", message)
+        self.assertNotIn("必须由宿主验证", message)
+        data = self.valid_data()
+        data["gates"][0]["agent_reasoning_effort"] = "high"
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("invalid-gate-agent-effort", self.codes())
+
+    def test_gate_receipt_is_hash_and_identity_bound(self) -> None:
+        data = self.valid_data()
+        gate = data["gates"][0]
+        gate["spawn_receipt_sha256"] = "0" * 64
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("stale-agent-artifact", self.codes())
+
+        data = self.valid_data()
+        gate = data["gates"][0]
+        receipt = self.root / str(gate["spawn_receipt"])
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        payload["agent_id"] = "different-agent"
+        receipt.write_text(json.dumps(payload), encoding="utf-8")
+        gate["spawn_receipt_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("invalid-gate-spawn-receipt", self.codes())
+
+    def test_gate_output_tamper_fails_after_project_hash_is_recomputed(self) -> None:
+        data = self.valid_data()
+        gate = data["gates"][0]
+        slug = str(gate["role"]).casefold().replace("_", "-")
+        receipt_path = "evidence/ui-ux-output-result.json"
+        receipt = self.root / receipt_path
+        receipt.write_text(json.dumps({
+            "schema_version": 1,
+            "receipt_kind": "codex-native-output-result",
+            "provider": "codex-native-agent",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
+            "requested_reasoning_effort": "xhigh",
+            "recorded_reasoning_effort": "xhigh",
+            "agent_id": gate["agent_id"],
+            "run_id": gate["run_id"],
+            "role": f"{slug}-gate",
+            "module": "module",
+            "maintainer_title": f'{gate["role"]} Gate Reviewer',
+            "input_sha256": gate["input_sha256"],
+            "output_sha256": gate["output_sha256"],
+            "baseline_version": data["baseline_version"],
+            "code_version": data["code_version"],
+            "build_id": data["build_id"],
+            "verdict": gate["verdict"],
+        }), encoding="utf-8")
+        gate["output_receipt"] = receipt_path
+        gate["output_receipt_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+
+        output = self.root / str(gate["output_evidence"])
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        gate["output_sha256"] = hashlib.sha256(output.read_bytes()).hexdigest()
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+
+        self.assertIn("invalid-gate-output-receipt", self.codes())
 
     def test_public_template_structure_passes_and_rejects_nested_gate_bypass(self) -> None:
         self.assertEqual([], validate_multi_agent_evidence(
@@ -123,6 +350,36 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
         self.path.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("invalid-schema-version", self.codes())
 
+    def test_module_maintainer_requires_bound_native_sol_receipt(self) -> None:
+        for field, value in (
+            ("implementation_agent_provider", "external-agent"),
+            ("implementation_agent_model", "gpt-5.6-terra"),
+            ("implementation_agent_reasoning_effort", "xhigh"),
+            ("implementation_agent_id", "spoofed-agent"),
+            ("implementation_spawn_receipt_sha256", "0" * 64),
+        ):
+            with self.subTest(field=field):
+                data = self.valid_data()
+                data[field] = value
+                self.path.write_text(json.dumps(data), encoding="utf-8")
+                self.assertTrue(
+                    {"invalid-implementation-agent", "invalid-implementation-agent-effort", "stale-agent-artifact", "invalid-implementation-spawn-receipt"}
+                    & self.codes()
+                )
+        strict_codes = {
+            issue.code
+            for issue in _test_only_validate_multi_agent_evidence(
+                self.path,
+                trace_path=self.fixture.matrix,
+                context_path=self.context,
+                project_root=self.root,
+                _test_only_host_attestation_verifier=lambda *_: False,
+                _test_only_expected_requirement_questions_locator="evidence/requirement-questions.json",
+                _test_only_expected_requirement_questions_sha256=self.questions_sha256,
+            )
+        }
+        self.assertIn("implementation-receipt-not-validated", strict_codes)
+
     def test_top_level_identity_fields_must_be_nonempty_strings(self) -> None:
         data = self.valid_data()
         data["build_id"] = 456
@@ -130,6 +387,20 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
         data["single_writer_run_id"] = 123
         self.path.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("invalid-agent-evidence-types", self.codes())
+
+    def test_candidate_hash_is_required_and_strict_sha256(self) -> None:
+        for value in (None, "not-a-hash", "a" * 63, True):
+            with self.subTest(value=value):
+                data = self.valid_data()
+                if value is None:
+                    data.pop("candidate_sha256")
+                else:
+                    data["candidate_sha256"] = value
+                self.path.write_text(json.dumps(data), encoding="utf-8")
+                self.assertTrue(
+                    {"missing-field", "invalid-candidate-sha256", "invalid-agent-evidence-fields"}
+                    & self.codes()
+                )
 
     def test_top_level_and_gate_unknown_or_duplicate_fields_fail_closed(self) -> None:
         for target in ("top", "gate"):
@@ -365,7 +636,11 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             with self.subTest(provider=provider):
                 black_box["provider"] = provider
                 self.path.write_text(json.dumps(data), encoding="utf-8")
-                self.assertIn("external-provider-cannot-satisfy-native-gate", self.codes())
+                self.assertIn("invalid-gate-agent", self.codes())
+        data = self.valid_data()
+        next(item for item in data["gates"] if item["role"] == "BLACK_BOX")["agent_reasoning_effort"] = "high"
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("invalid-gate-agent-effort", self.codes())
 
     def _write_outputs(self) -> None:
         metadata = _parse_metadata(self.fixture.matrix.read_text(encoding="utf-8"))
@@ -386,6 +661,89 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             }
             (self.root / relative).write_text(json.dumps(payload), encoding="utf-8")
 
+    def _write_implementation_receipt(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "receipt_kind": "codex-native-spawn-result",
+            "provider": "codex-native-agent",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
+            "requested_reasoning_effort": "high",
+            "recorded_reasoning_effort": "high",
+            "agent_id": "module-maintainer-agent-1",
+            "run_id": "impl-run-1",
+            "role": "module-maintainer",
+            "module": "module",
+            "maintainer_title": "ModuleMaintainer",
+        }
+        (self.root / "evidence/implementation-spawn-receipt.json").write_text(
+            json.dumps(payload), encoding="utf-8",
+        )
+
+    def _write_gate_receipt(
+        self, role: str, agent_id: str, run_id: str, relative: str,
+    ) -> None:
+        payload = {
+            "schema_version": 1,
+            "receipt_kind": "codex-native-spawn-result",
+            "provider": "codex-native-agent",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
+            "requested_reasoning_effort": "xhigh",
+            "recorded_reasoning_effort": "xhigh",
+            "agent_id": agent_id,
+            "run_id": run_id,
+            "role": f"{role.casefold().replace('_', '-')}-gate",
+            "module": "module",
+            "maintainer_title": f"{role} Gate Reviewer",
+        }
+        (self.root / relative).write_text(json.dumps(payload), encoding="utf-8")
+
+    def _rewrite_gate_receipt(self, gate: dict[str, object]) -> None:
+        self._write_gate_receipt(
+            str(gate["role"]), str(gate["agent_id"]), str(gate["run_id"]),
+            str(gate["spawn_receipt"]),
+        )
+        gate["spawn_receipt_sha256"] = hashlib.sha256(
+            (self.root / str(gate["spawn_receipt"])).read_bytes()
+        ).hexdigest()
+        self._write_gate_output_receipt(
+            str(gate["role"]), str(gate["agent_id"]), str(gate["run_id"]),
+            str(gate["input_manifest"]), str(gate["output_evidence"]),
+            str(gate["output_receipt"]),
+        )
+        gate["output_receipt_sha256"] = hashlib.sha256(
+            (self.root / str(gate["output_receipt"])).read_bytes()
+        ).hexdigest()
+
+    def _write_gate_output_receipt(
+        self, role: str, agent_id: str, run_id: str, input_path: str,
+        output_path: str, relative: str,
+    ) -> None:
+        metadata = _parse_metadata(self.fixture.matrix.read_text(encoding="utf-8"))
+        payload = {
+            "schema_version": 1,
+            "receipt_kind": "codex-native-output-result",
+            "provider": "codex-native-agent",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
+            "requested_reasoning_effort": "xhigh",
+            "recorded_reasoning_effort": "xhigh",
+            "agent_id": agent_id,
+            "run_id": run_id,
+            "role": f"{role.casefold().replace('_', '-')}-gate",
+            "module": "module",
+            "maintainer_title": f"{role} Gate Reviewer",
+            "input_sha256": hashlib.sha256((self.root / input_path).read_bytes()).hexdigest(),
+            "output_sha256": hashlib.sha256((self.root / output_path).read_bytes()).hexdigest(),
+            "baseline_version": metadata["Baseline version"],
+            "code_version": metadata["Code version"],
+            "build_id": metadata["Build ID"],
+            "candidate_sha256": "c" * 64,
+            "verdict": "pass",
+        }
+        (self.root / relative).write_text(json.dumps(payload), encoding="utf-8")
+
     def _write_inputs(self) -> None:
         metadata = _parse_metadata(self.fixture.matrix.read_text(encoding="utf-8"))
         roles = {
@@ -399,12 +757,60 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
                 "schema_version": 1, "role": role, "run_id": run_id,
                 "baseline_version": metadata["Baseline version"],
                 "baseline_sha256": metadata["Baseline SHA-256"],
+                "requirement_questions_locator": "evidence/requirement-questions.json",
+                "requirement_questions_sha256": hashlib.sha256(self.questions.read_bytes()).hexdigest(),
                 "requirement_ids": ["REQ-001"],
                 "artifacts": [self._input_artifact(item) for item in paths],
                 "includes_full_chat": False, "includes_other_agent_reasoning": False,
                 "includes_implementation_self_report": False,
             }
             (self.root / relative).write_text(json.dumps(payload), encoding="utf-8")
+
+    def _write_requirement_questions(self, *, answered: bool = False) -> None:
+        metadata = _parse_metadata(self.fixture.matrix.read_text(encoding="utf-8"))
+        question = {
+            "question_id": "Q-001", "impact_scope": ["REQ-001"], "risk": "standard",
+            "proposed_default": "Keep current behavior.", "safe_fallback": "Disable change.",
+            "answer_status": "NOT_PROVIDED", "delivery_disposition": "NON_BLOCKING_P2",
+            "assumption": "Compatibility first.",
+            "owner": "product-owner", "review_due": "2026-09-03T10:00:00+08:00",
+        }
+        payload = {
+            "schema_version": 1, "baseline_version": metadata["Baseline version"],
+            "baseline_sha256": metadata["Baseline SHA-256"], "questions": [question],
+            "gate_reruns": [],
+        }
+        if answered:
+            question.update({
+                "answer_status": "ANSWERED", "human_answer": "Keep current behavior.",
+                "pre_answer_baseline_version": "req-v0", "pre_answer_baseline_sha256": "d" * 64,
+            })
+            answer = {
+                "schema_version": 1, "evidence_kind": "human-requirement-answer",
+                "question_id": "Q-001", "human_answer": "Keep current behavior.",
+                "pre_answer_baseline_version": "req-v0", "pre_answer_baseline_sha256": "d" * 64,
+                "post_answer_baseline_version": metadata["Baseline version"],
+                "post_answer_baseline_sha256": metadata["Baseline SHA-256"],
+            }
+            answer_path = self.root / "evidence/requirement-answer.json"
+            answer_path.write_text(json.dumps(answer, sort_keys=True), encoding="utf-8")
+            question["answer_evidence_locator"] = "evidence/requirement-answer.json"
+            question["answer_evidence_sha256"] = hashlib.sha256(answer_path.read_bytes()).hexdigest()
+            receipt = {
+                "schema_version": 1, "receipt_kind": "requirement-gate-rerun", "question_id": "Q-001",
+                "baseline_version": metadata["Baseline version"], "baseline_sha256": metadata["Baseline SHA-256"],
+                "affected_scope": ["REQ-001"], "status": "COMPLETED",
+            }
+            receipt_path = self.root / "evidence/requirement-rerun.json"
+            receipt_path.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+            payload["gate_reruns"] = [{
+                **receipt, "receipt_locator": "evidence/requirement-rerun.json",
+                "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+            }]
+            payload["gate_reruns"][0].pop("schema_version")
+            payload["gate_reruns"][0].pop("receipt_kind")
+        self.questions.write_text(json.dumps(payload), encoding="utf-8")
+        self.questions_sha256 = hashlib.sha256(self.questions.read_bytes()).hexdigest()
 
     def _input_artifact(self, relative: str) -> dict[str, str]:
         return {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from validate_context_manifest import _cache_key, _parse_metadata, _paths_fingerprint, validate_context_manifest
+from agents_authority_matrix_validation import AUTHORITY_MATRIX_SHA256, EXPECTED_AUTHORITY_MATRIX
 from test_execution_run_support import reusable_execution_run
 from reuse_source_run_validation import _valid_source_context
 
@@ -27,12 +29,20 @@ class ContextManifestValidatorTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(relative, encoding="utf-8")
         (self.root / "commands.json").write_text('{"commands":[]}', encoding="utf-8")
-        (self.root / "AGENTS.md").write_text("# Project instructions\n", encoding="utf-8")
+        self._write_root_agents()
         self.path = self.root / "context.md"
         self.path.write_text(self._valid_manifest(), encoding="utf-8")
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def _write_root_agents(self) -> None:
+        matrix = json.dumps(EXPECTED_AUTHORITY_MATRIX, ensure_ascii=False, separators=(",", ":"))
+        (self.root / "AGENTS.md").write_text(
+            f"authority_matrix_sha256: {AUTHORITY_MATRIX_SHA256}\n\n"
+            f"## Machine-Enforced Authority Matrix\n\n```json\n{matrix}\n```\n",
+            encoding="utf-8",
+        )
 
     def _valid_manifest(self, effective_agents: str = "AGENTS.md") -> str:
         baseline_sha = hashlib.sha256((self.root / "requirements/baseline.md").read_bytes()).hexdigest()
@@ -43,6 +53,8 @@ class ContextManifestValidatorTests(unittest.TestCase):
             "Baseline artifact": "requirements/baseline.md",
             "Baseline version": "req-v1",
             "Baseline SHA-256": baseline_sha,
+            "Authority matrix locator": "AGENTS.md#machine-enforced-authority-matrix",
+            "Authority matrix SHA-256": AUTHORITY_MATRIX_SHA256,
             "Requirement IDs": "REQ-001",
             "Module changed files": "module=src/module.py",
             "Risk / expansion reason": "small; direct module only; no expansion",
@@ -63,7 +75,10 @@ class ContextManifestValidatorTests(unittest.TestCase):
         source_run.parent.mkdir(parents=True, exist_ok=True)
         source_context = source_run.parent / "context-prior-run.md"
         source_context.write_text(
-            f"# Context Workset prior-run\n\n- Run ID: prior-run\n- Evidence cache key: {cache_key}\n",
+            f"# Context Workset prior-run\n\n- Run ID: prior-run\n"
+            f"- Authority matrix locator: AGENTS.md#machine-enforced-authority-matrix\n"
+            f"- Authority matrix SHA-256: {AUTHORITY_MATRIX_SHA256}\n"
+            f"- Evidence cache key: {cache_key}\n",
             encoding="utf-8",
         )
         source_run.write_text(reusable_execution_run(
@@ -94,6 +109,8 @@ class ContextManifestValidatorTests(unittest.TestCase):
 - Baseline artifact: requirements/baseline.md
 - Baseline version: req-v1
 - Baseline SHA-256: {baseline_sha}
+- Authority matrix locator: AGENTS.md#machine-enforced-authority-matrix
+- Authority matrix SHA-256: {AUTHORITY_MATRIX_SHA256}
 - Code version: code-v1
 - Build ID: build-1
 - Risk / expansion reason: small; direct module only; no expansion
@@ -128,13 +145,70 @@ class ContextManifestValidatorTests(unittest.TestCase):
         source = data["source_run_record"]
         path = self.root / source["context_path"]
         path.write_text(
-            f"# Context Workset prior-run\n\n- Run ID: prior-run\n- Evidence cache key: {cache_key}\n",
+            f"# Context Workset prior-run\n\n- Run ID: prior-run\n"
+            f"- Authority matrix locator: AGENTS.md#machine-enforced-authority-matrix\n"
+            f"- Authority matrix SHA-256: {AUTHORITY_MATRIX_SHA256}\n"
+            f"- Evidence cache key: {cache_key}\n",
             encoding="utf-8",
         )
         source["context_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
 
     def test_public_template_structure_passes(self) -> None:
         self.assertEqual([], validate_context_manifest(PUBLIC_TEMPLATE, project_root=SKILL_ROOT, template=True))
+
+    def test_public_template_cannot_drift_from_frozen_authority_binding(self) -> None:
+        text = PUBLIC_TEMPLATE.read_text(encoding="utf-8").replace(AUTHORITY_MATRIX_SHA256, "0" * 64)
+        self.path.write_text(text, encoding="utf-8")
+        codes = {issue.code for issue in validate_context_manifest(
+            self.path, project_root=self.root, template=True,
+        )}
+        self.assertIn("stale-authority-matrix-binding", codes)
+
+    def test_authority_locator_and_sha_are_required(self) -> None:
+        for field in ("Authority matrix locator", "Authority matrix SHA-256"):
+            with self.subTest(field=field):
+                text = "\n".join(
+                    line for line in self._valid_manifest().splitlines()
+                    if not line.startswith(f"- {field}:")
+                ) + "\n"
+                self.path.write_text(text, encoding="utf-8")
+                self.assertIn("missing-field", self.codes())
+
+    def test_authority_locator_and_sha_must_match_frozen_interface(self) -> None:
+        for old, new in (
+            ("AGENTS.md#machine-enforced-authority-matrix", "AGENTS.md#legacy-authority"),
+            (AUTHORITY_MATRIX_SHA256, "0" * 64),
+        ):
+            with self.subTest(new=new):
+                self.path.write_text(self._valid_manifest().replace(old, new), encoding="utf-8")
+                self.assertIn("stale-authority-matrix-binding", self.codes())
+
+    def test_authority_binding_is_part_of_evidence_cache_key(self) -> None:
+        metadata, _ = _parse_metadata(self._valid_manifest())
+        original = _cache_key(metadata)
+        metadata["Authority matrix locator"] = "AGENTS.md#legacy-authority"
+        self.assertNotEqual(original, _cache_key(metadata))
+        metadata["Authority matrix locator"] = "AGENTS.md#machine-enforced-authority-matrix"
+        metadata["Authority matrix SHA-256"] = "0" * 64
+        self.assertNotEqual(original, _cache_key(metadata))
+
+    def test_root_authority_matrix_drift_and_symlink_fail_closed(self) -> None:
+        root_agents = self.root / "AGENTS.md"
+        root_agents.write_text(root_agents.read_text(encoding="utf-8").replace(
+            '"scope_binding":"effective-root-agents"', '"scope_binding":"legacy"',
+        ), encoding="utf-8")
+        self.assertIn("stale-authority-matrix-binding", self.codes())
+        root_agents.unlink()
+        policy = self.root / "authority.md"
+        policy.write_text("linked", encoding="utf-8")
+        root_agents.symlink_to(policy)
+        self.assertIn("unsafe-authority-matrix-path", self.codes())
+
+    def test_effective_agents_hardlink_alias_fails_closed(self) -> None:
+        scoped = self.root / "src/AGENTS.md"
+        os.link(self.root / "AGENTS.md", scoped)
+        self.path.write_text(self._valid_manifest("AGENTS.md, src/AGENTS.md"), encoding="utf-8")
+        self.assertIn("ambiguous-authority-policy-identity", self.codes())
 
     def test_public_reuse_source_context_template_matches_compact_contract(self) -> None:
         cache_key = "a" * 64
@@ -146,6 +220,22 @@ class ContextManifestValidatorTests(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
         source = {"context_path": "source-context.md", "context_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
         self.assertTrue(_valid_source_context(source, self.root, "prior-run", cache_key))
+
+    def test_compact_reuse_context_cannot_omit_or_drift_authority_binding(self) -> None:
+        cache_key = "a" * 64
+        template = (SKILL_ROOT / "assets/reuse-source-context.template.md").read_text(encoding="utf-8")
+        text = template.replace("{{SUCCESSFUL_REUSED_RUN_ID}}", "prior-run").replace(
+            "{{CURRENT_EVIDENCE_CACHE_KEY}}", cache_key,
+        )
+        for old, new in (
+            ("- Authority matrix locator: AGENTS.md#machine-enforced-authority-matrix\n", ""),
+            (AUTHORITY_MATRIX_SHA256, "0" * 64),
+        ):
+            with self.subTest(new=new):
+                path = self.root / "source-context.md"
+                path.write_text(text.replace(old, new), encoding="utf-8")
+                source = {"context_path": "source-context.md", "context_sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                self.assertFalse(_valid_source_context(source, self.root, "prior-run", cache_key))
 
     def test_reuse_record_schema_version_must_be_exact_integer(self) -> None:
         record = self.root / "evidence/reuse-prior-run.json"

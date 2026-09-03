@@ -8,15 +8,19 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+from clarification_validation import validate_clarification_register
+from external_provider_policy import require_external_providers_enabled
+from external_agent_resume import resume_existing as _resume_existing
+from provider_result_validation import validate_raw_result
 from validate_contract import (
     BEHAVIORS,
     DEFECT_FIELDS,
-    PROVIDER_WRAPPER_FIELDS,
     strict_json_loads,
     write_new_private_file,
 )
@@ -30,8 +34,8 @@ PROVIDER_ENV = {
     "deepseek": {"DEEPSEEK_API_KEY", "DEEPSEEK_MODEL"},
 }
 PROVIDER_REQUEST_PROFILES = {
-    "kimi": "kimi-coding-chat-completions-v1",
-    "deepseek": "deepseek-v4-official-chat-completions-v1",
+    "kimi": "kimi-coding-chat-completions-bounded-sse-v2",
+    "deepseek": "deepseek-v4-official-chat-completions-bounded-sse-v2",
 }
 TASK_ROOT_PREFIX = "codex-external-loop."
 MAX_SYSTEM_BYTES = 16_384
@@ -48,7 +52,8 @@ SYSTEM_PROMPTS = {
         "integer. scope_sha256 is the supplied lowercase SHA-256. artifact is one complete "
         "nonempty string. assumptions and known_limits are arrays of strings. "
         "acceptance_criteria_mapping is a nonempty array of objects with exactly criterion, "
-        "satisfaction, evidence, all strings. change_map is an array of objects with exactly "
+        "satisfaction, evidence, all strings. Each criterion value must be exactly one supplied "
+        "acceptance-criterion ID such as AC-001, with no appended title or prose. change_map is an array of objects with exactly "
         "defect_id, change, verification, all strings."
     ),
     "deepseek": (
@@ -70,8 +75,10 @@ SYSTEM_PROMPTS = {
         "black_box_tests is a nonempty array of objects with exactly id, requirement, behavior, "
         "preconditions, steps, expected, evidence_required; behavior is success, rejection, "
         "failure, retry, recovery, permission, or boundary, and the last four fields are nonempty "
-        "arrays of strings; every black-box ID must be a unique BB-* string. coverage and "
-        "uncertainties are arrays of strings. Do not use "
+        "arrays of strings; every black-box ID must be a unique BB-* string. Each requirement "
+        "value must be exactly one supplied acceptance-criterion ID such as AC-001, with no "
+        "appended title or prose. coverage must contain each supplied acceptance-criterion ID "
+        "exactly once and no other string; uncertainties is an array of strings. Do not use "
         "black_box_cases, execution_status, a boolean pass field, prose severity names, or an "
         "object for coverage. If a concern does not prevent acceptance, such as authored tests "
         "being intentionally unexecuted or an implementation-phase value already declared as a "
@@ -89,7 +96,8 @@ PRIVATE_KEY_INPUT = re.compile(r"-----BEGIN [^-]*PRIVATE KEY-----", re.IGNORECAS
 URI_CREDENTIAL_INPUT = re.compile(r"[a-z][a-z0-9+.-]*://[^\s/:@]+:(?P<value>[^\s/@]+)@", re.IGNORECASE)
 PROMPT_FIELDS = {
     "schema_version", "task_id", "provider", "candidate_version", "scope_sha256",
-    "objective", "acceptance_criteria", "context_artifacts", "candidate", "candidate_sha256",
+    "objective", "acceptance_criteria", "context_artifacts", "clarification_register",
+    "candidate", "candidate_sha256",
     "correction_ids", "corrections",
 }
 
@@ -102,9 +110,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--task-id", required=True)
     parser.add_argument("--timeout", type=float, default=180.0)
-    parser.add_argument("--max-tokens", type=int, default=8192)
+    parser.add_argument("--deadline", type=float, default=1800.0)
+    parser.add_argument("--max-tokens", type=int, default=32768)
     parser.add_argument("--retries", type=int, choices=range(0, 4), default=1)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--resume", action="store_true")
     return parser.parse_args()
 
 
@@ -122,6 +132,7 @@ def planned_commands(args: argparse.Namespace) -> tuple[list[str], list[str]]:
         sys.executable, str(SKILL_ROOT / "scripts/call_model.py"), args.provider,
         "--system-file", str(args.system_file), "--prompt-file", str(args.prompt_file),
         "--output", str(raw), "--timeout", str(args.timeout),
+        "--deadline", str(args.deadline),
         "--max-tokens", str(args.max_tokens), "--retries", str(args.retries),
     ]
     validate = [
@@ -217,6 +228,14 @@ def _prompt_artifacts(value: dict[str, object]) -> None:
         raise ValueError("prompt context artifact IDs must be unique")
 
 
+def _prompt_clarifications(value: dict[str, object]) -> None:
+    criteria = {item["id"]: item["text"] for item in value["acceptance_criteria"]}
+    register = value.get("clarification_register")
+    validate_clarification_register(register, allow_open=False, criteria=criteria)
+    if register["resolved_objective"] != value["objective"]:
+        raise ValueError("prompt objective differs from the resolved clarification objective")
+
+
 def _prompt_corrections(value: dict[str, object], provider: str, version: int) -> None:
     identifiers, details = value.get("correction_ids"), value.get("corrections")
     if not isinstance(identifiers, list) or len(identifiers) != len(set(identifiers)) \
@@ -248,6 +267,7 @@ def validate_prompt_manifest(value: object, provider: str, task_id: str) -> dict
         raise ValueError("initial Kimi prompt candidate SHA-256 must be NOT_APPLICABLE")
     _prompt_criteria(value)
     _prompt_artifacts(value)
+    _prompt_clarifications(value)
     _prompt_corrections(value, provider, version)
     if not isinstance(value.get("candidate"), str) or not value["candidate"].strip():
         raise ValueError("prompt candidate must be a non-empty string")
@@ -292,8 +312,9 @@ def validate_external_input_files(
 def validate_inputs(args: argparse.Namespace) -> None:
     if not args.task_id or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for character in args.task_id):
         raise ValueError("task-id must be one stable path segment")
-    if not 1 <= args.max_tokens <= 32768 or not 1 <= args.timeout <= 600:
-        raise ValueError("max-tokens must be 1..32768 and timeout must be 1..600 seconds")
+    if not 1 <= args.max_tokens <= 262_144 or not 1 <= args.timeout <= 600 \
+            or not args.timeout <= args.deadline <= 7200:
+        raise ValueError("max-tokens, idle timeout, or overall deadline is outside its safe range")
     output_root = task_root(args.output_dir)
     for path in (args.system_file, args.prompt_file):
         if task_root(path) != output_root or not path.is_file() or has_symlink_component(path, output_root):
@@ -301,8 +322,10 @@ def validate_inputs(args: argparse.Namespace) -> None:
     validate_external_input_files(args.system_file, args.prompt_file, args.provider, args.task_id)
     if args.output_dir.exists() and args.output_dir.is_symlink():
         raise ValueError("output-dir must not be a symlink")
-    if args.output_dir.exists():
+    if args.output_dir.exists() and not getattr(args, "resume", False):
         raise ValueError("output-dir must be fresh and must not already exist")
+    if getattr(args, "resume", False) and (not args.output_dir.is_dir() or args.output_dir.is_symlink()):
+        raise ValueError("resume output-dir must be an existing regular directory")
     if has_symlink_component(args.output_dir.parent, output_root):
         raise ValueError("output-dir parent chain must not contain symlinks")
 
@@ -312,14 +335,31 @@ def child_environment(provider: str, source: dict[str, str] | os._Environ[str]) 
     return {name: value for name, value in source.items() if name in allowed}
 
 
-def run_command(command: list[str], environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def run_command(
+    command: list[str], environment: dict[str, str], timeout: float,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        command, cwd=SKILL_ROOT, text=True, capture_output=True, check=False, env=environment,
+        command, cwd=SKILL_ROOT, text=True, capture_output=True, check=False,
+        env=environment, timeout=timeout,
     )
 
 
 def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_regular_snapshot(path: Path) -> tuple[bytes, tuple[int, int]]:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        identity = os.fstat(descriptor)
+        if not stat.S_ISREG(identity.st_mode):
+            raise ValueError("provider artifact must be a regular file")
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            payload = stream.read()
+        return payload, (identity.st_dev, identity.st_ino)
+    finally:
+        os.close(descriptor)
 
 
 def validate_usage(usage: object) -> None:
@@ -337,44 +377,48 @@ def validate_usage(usage: object) -> None:
             raise ValueError("raw provider total_tokens cannot be smaller than its components")
 
 
-def result_manifest(args: argparse.Namespace, normalized: Path) -> dict[str, object]:
+def _validate_result_binding(args: argparse.Namespace, value: dict[str, object]) -> None:
+    prompt = strict_json_loads(args.prompt_file.read_text("utf-8"))
+    if value.get("candidate_version") != prompt.get("candidate_version"):
+        raise ValueError("provider candidate version differs from the requested version")
+    if value.get("scope_sha256") != prompt.get("scope_sha256"):
+        raise ValueError("provider scope hash differs from the requested scope")
+    criteria = [item["id"] for item in prompt["acceptance_criteria"]]
+    if args.provider == "kimi":
+        mapped = [item["criterion"] for item in value.get("acceptance_criteria_mapping", [])]
+        if len(mapped) != len(criteria) or set(mapped) != set(criteria):
+            raise ValueError("Kimi criterion mapping differs from the requested criteria")
+        return
+    if value.get("candidate_sha256") != prompt.get("candidate_sha256"):
+        raise ValueError("DeepSeek reviewed a different candidate hash")
+    coverage = value.get("coverage", [])
+    requirements = [item["requirement"] for item in value.get("black_box_tests", [])]
+    if len(coverage) != len(criteria) or set(coverage) != set(criteria) \
+            or any(item not in criteria for item in requirements):
+        raise ValueError("DeepSeek coverage differs from the requested criteria")
+
+
+def result_manifest(
+    args: argparse.Namespace, normalized: Path,
+    raw_snapshot: tuple[bytes, tuple[int, int]] | None = None,
+) -> dict[str, object]:
     payload = normalized.read_bytes()
     value = strict_json_loads(payload.decode("utf-8"))
     raw = output_paths(args.output_dir, args.provider)[0]
-    wrapper = strict_json_loads(raw.read_text("utf-8"))
-    if not isinstance(wrapper, dict) or set(wrapper) != PROVIDER_WRAPPER_FIELDS:
-        raise ValueError("raw provider response wrapper is invalid")
-    if wrapper.get("provider") != args.provider or strict_json_loads(wrapper.get("content", "")) != value:
-        raise ValueError("raw provider response does not produce the normalized contract")
-    if not isinstance(wrapper.get("model"), str) or not wrapper["model"].strip():
-        raise ValueError("raw provider response model is invalid")
-    if not isinstance(wrapper.get("request_model"), str) or not wrapper["request_model"].strip():
-        raise ValueError("raw provider request model is invalid")
-    if args.provider == "deepseek" and wrapper["request_model"] != wrapper["model"]:
-        raise ValueError("DeepSeek response model differs from the requested model")
-    if wrapper.get("finish_reason") != "stop":
-        raise ValueError("raw provider finish_reason must be stop")
-    if not isinstance(wrapper.get("response_id"), str) or not wrapper["response_id"].strip():
-        raise ValueError("raw provider response_id is required")
-    validate_usage(wrapper.get("usage"))
+    _validate_result_binding(args, value)
+    wrapper, raw_payload, execution = validate_raw_result(
+        args, raw, value, raw_snapshot, read_regular_snapshot, validate_usage,
+    )
     return {
-        "schema_version": 1,
-        "task_id": args.task_id,
-        "provider": args.provider,
+        "schema_version": 1, "task_id": args.task_id, "provider": args.provider,
         "role": "solution-and-revision-author" if args.provider == "kimi" else "black-box-author-and-defect-reviewer",
-        "system_sha256": file_sha256(args.system_file),
-        "prompt_sha256": file_sha256(args.prompt_file),
-        "system_path": str(args.system_file.resolve()),
-        "prompt_path": str(args.prompt_file.resolve()),
-        "raw_path": str(raw.resolve()),
-        "raw_sha256": file_sha256(raw),
-        "model": wrapper["model"],
-        "request_model": wrapper["request_model"],
-        "finish_reason": wrapper["finish_reason"],
-        "response_id": wrapper["response_id"],
-        "usage": wrapper["usage"],
-        "request_profile": PROVIDER_REQUEST_PROFILES[args.provider],
-        "candidate_version": value["candidate_version"],
+        "system_sha256": file_sha256(args.system_file), "prompt_sha256": file_sha256(args.prompt_file),
+        "system_path": str(args.system_file.resolve()), "prompt_path": str(args.prompt_file.resolve()),
+        "raw_path": str(raw.resolve()), "raw_sha256": hashlib.sha256(raw_payload).hexdigest(),
+        "model": wrapper["model"], "request_model": wrapper["request_model"],
+        "finish_reason": wrapper["finish_reason"], "response_id": wrapper["response_id"],
+        "usage": wrapper["usage"], "request_profile": PROVIDER_REQUEST_PROFILES[args.provider],
+        **execution, "candidate_version": value["candidate_version"],
         "scope_sha256": value["scope_sha256"],
         "candidate_sha256": (
             hashlib.sha256(
@@ -388,6 +432,14 @@ def result_manifest(args: argparse.Namespace, normalized: Path) -> dict[str, obj
     }
 
 
+def resume_existing(
+    args: argparse.Namespace, validate: list[str], environment: dict[str, str],
+) -> Path:
+    return _resume_existing(
+        args, validate, environment, result_manifest, read_regular_snapshot, SKILL_ROOT,
+    )
+
+
 def main() -> int:
     args = parse_args()
     try:
@@ -398,16 +450,23 @@ def main() -> int:
             print(json.dumps({"provider": args.provider, "task_id": args.task_id,
                               "call": call, "validate": validate}, ensure_ascii=False, indent=2))
             return 0
+        require_external_providers_enabled()
+        environment = child_environment(args.provider, os.environ)
+        if args.resume:
+            print(resume_existing(args, validate, environment))
+            return 0
         args.output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         if args.output_dir.is_symlink() or task_root(args.output_dir) != task_root(args.system_file):
             raise ValueError("output-dir changed identity while it was being created")
         if any(path.exists() for path in (raw, normalized, manifest)):
             raise ValueError("external-agent output already exists; use a fresh task directory")
-        called = run_command(call, child_environment(args.provider, os.environ))
+        called = run_command(
+            call, environment, args.deadline + 30,
+        )
         if called.returncode:
             print(called.stderr.strip() or "external provider call failed", file=sys.stderr)
             return called.returncode
-        checked = run_command(validate, child_environment(args.provider, os.environ))
+        checked = run_command(validate, environment, 60)
         if checked.returncode:
             print(checked.stderr.strip() or "external response contract invalid", file=sys.stderr)
             return checked.returncode
@@ -418,7 +477,10 @@ def main() -> int:
         )
         print(manifest)
         return 0
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, ValueError) as error:
+    except (
+        OSError, UnicodeError, json.JSONDecodeError, KeyError, ValueError,
+        subprocess.TimeoutExpired,
+    ) as error:
         print(f"spawn_external_agent failed: {error}", file=sys.stderr)
         return 1
 

@@ -208,7 +208,8 @@ def _validate_review_record(
          "Code fingerprint": context.get("Code fingerprint", ""),
          "Command manifest fingerprint": context.get("Command manifest fingerprint", ""),
          "Changed files": context.get("Changed files", "")},
-        ("Code fingerprint", "Command manifest fingerprint", "Scope", "Review command ID", "Review command argv SHA-256", "Review exit code",
+        ("Code fingerprint", "Command manifest fingerprint", "Review trigger", "Human trigger reference",
+         "Scope", "Review command ID", "Review command argv SHA-256", "Review exit code",
          "Review evidence path", "Review evidence SHA-256", "Findings",
          "Rerun command IDs", "Rerun exit codes", "Verdict"),
         {"pass"}, "Findings",
@@ -217,12 +218,20 @@ def _validate_review_record(
         return issues
     _, payload = _read_record(path, root, "automated-review")
     fields, _, _, _ = _record_fields(payload)
-    if not _review_scope_valid(fields) or not _review_execution_valid(fields, command_manifest_path, root):
+    if (not _review_scope_valid(fields) or not _review_trigger_valid(fields)
+            or not _review_execution_valid(fields, command_manifest_path, root)):
         return [Issue(
             "error", "bundle-automated-review-unexecuted",
             "自动审查命令和重跑结果必须明确执行成功", path,
         )]
     return []
+
+
+def _review_trigger_valid(fields: dict[str, str]) -> bool:
+    trigger = fields.get("review trigger", "")
+    reference = fields.get("human trigger reference", "").strip()
+    return ((trigger == "module_closure_candidate" and reference == "N/A")
+            or (trigger == "human_requested" and bool(reference) and reference.casefold() != "n/a"))
 
 
 def _review_scope_valid(fields: dict[str, str]) -> bool:
@@ -294,6 +303,8 @@ def _artifact_matches(fields: dict[str, str], root: Path) -> bool:
         "code_version": fields.get("code version"), "command_id": fields.get("review command id"),
         "code_fingerprint": fields.get("code fingerprint"),
         "command_manifest_fingerprint": fields.get("command manifest fingerprint"),
+        "review_trigger": fields.get("review trigger"),
+        "human_trigger_reference": fields.get("human trigger reference"),
         "changed_files": sorted(item.strip() for item in fields.get("changed files", "").split(",") if item.strip()),
         "argv_sha256": fields.get("review command argv sha-256"), "exit_code": 0,
         "findings": [], "reruns": rerun_results,
@@ -305,7 +316,8 @@ def _review_transcript_matches(data: object, expected: dict[str, object]) -> boo
     required_keys = {*expected, "started_at", "ended_at"}
     if not isinstance(data, dict) or set(data) != required_keys:
         return False
-    string_fields = ("implementation_run_id", "code_version", "code_fingerprint", "command_manifest_fingerprint", "command_id", "argv_sha256")
+    string_fields = ("implementation_run_id", "code_version", "code_fingerprint", "command_manifest_fingerprint",
+                     "review_trigger", "human_trigger_reference", "command_id", "argv_sha256")
     if any(type(data.get(field)) is not str for field in string_fields):
         return False
     if type(data.get("schema_version")) is not int or type(data.get("exit_code")) is not int:

@@ -1,4 +1,4 @@
 interface:
   display_name: "Agents Flow Creater by FlameGun"
   short_description: "生成含追踪、独立验收、前端闭环和泳道同步的 AGENTS.md"
-  default_prompt: "使用 $generate-agents-md 基于项目事实生成或审查 AGENTS.md，加入计划进度、需求追踪、真实命令、自动审查、按风险独立 Agent、本地 HTTP(S) 预览上的前端浏览器与 Playwright/Cypress 闭环，以及阶段完成或流程变化触发的泳道同步和一键失败关闭验证。"
+  default_prompt: "使用 $generate-agents-md 基于项目事实生成或审查 AGENTS.md，加入计划进度、需求追踪、真实命令、模块闭环候选或人工主动触发的审查、按风险独立 Agent、本地 HTTP(S) 预览上的前端浏览器与 Playwright/Cypress 闭环，以及阶段完成或流程变化触发的泳道同步和一键失败关闭验证。"

@@ -8,9 +8,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from mutation_cases_records import ADDITIONAL_MUTANT_CASES
+from mutation_cases_module_closure import MODULE_CLOSURE_MUTANT_CASES
 from mutation_cases_review_fixes import REVIEW_FIX_MUTANT_CASES
+from mutation_cases_review_trigger import REVIEW_TRIGGER_MUTANT_CASES
 from mutation_cases_strict import STRICT_MUTANT_CASES
 from mutation_cases_stability import STABILITY_MUTANT_CASES
+from mutation_cases_authority_binding import AUTHORITY_BINDING_MUTANT_CASES
+from mutation_cases_native_review import NATIVE_REVIEW_MUTANT_CASES
+from mutation_cases_requirement_questions import REQUIREMENT_QUESTION_MUTANT_CASES
+from mutation_cases_delivery_questions import DELIVERY_QUESTION_MUTANT_CASES
+from mutation_cases_delivery_contract_bundle import DELIVERY_CONTRACT_BUNDLE_MUTANT_CASES
+from mutation_cases_write_authority import WRITE_AUTHORITY_MUTANT_CASES
+from mutation_cases_local_trust import LOCAL_TRUST_MUTANT_CASES
+from mutation_cases_module_lease import MODULE_LEASE_MUTANT_CASES
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -43,7 +53,7 @@ CORE_MUTANTS = (
     Mutant(
         "machine-policy-yaml-entry-parser-narrowed",
         "scripts/agents_policy_validation.py",
-        'match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*)\\s*:\\s*([A-Za-z0-9_-]+)", stripped)',
+        'match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*)\\s*:\\s*([A-Za-z0-9_./#-]+)", stripped)',
         'match = re.fullmatch(r"([a-z][a-z0-9_]*)\\s*:\\s*([a-z0-9_]+)", stripped)',
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_machine_policy_rejects_unknown_override_keys",
     ),
@@ -167,17 +177,10 @@ CORE_MUTANTS = (
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_agents_content_drift_breaks_bundle_binding",
     ),
     Mutant(
-        "password-endpoint-path-binding-disabled",
-        "scripts/agents_policy_validation.py",
-        'return f"{parsed.scheme.casefold()}://{authority}{parsed.path or \'/\'}"',
-        'return f"{parsed.scheme.casefold()}://{authority}/"',
-        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_password_authorization_is_bound_to_scheme_port_and_path",
-    ),
-    Mutant(
         "atomic-root-identity-check-disabled",
         "scripts/update_project_record.py",
-        "root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)\n    opened_root = os.fstat(root_fd)\n    if (opened_root.st_dev, opened_root.st_ino) != (expected_root.st_dev, expected_root.st_ino):",
-        "root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)\n    opened_root = os.fstat(root_fd)\n    if False:",
+        "    root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)\n    try:\n        opened_root = os.fstat(root_fd)\n        if (opened_root.st_dev, opened_root.st_ino) != (expected_root.st_dev, expected_root.st_ino):",
+        "    root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)\n    try:\n        opened_root = os.fstat(root_fd)\n        if False:",
         "scripts.test_update_project_record.AtomicProjectRecordTests.test_project_root_swap_cannot_redirect_write_outside_project",
     ),
     Mutant(
@@ -356,25 +359,77 @@ CORE_MUTANTS = (
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_mobile_browser_must_bind_independent_black_box_run",
     ),
     Mutant(
+        "password-document-authorization-auto-detection-disabled",
+        "scripts/validate_agents_md.py",
+        "        allow_passwords=document_authorized,\n",
+        "        allow_passwords=allow_passwords and mode == \"project\",\n",
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_valid_document_authorization_needs_no_cli_allowance",
+    ),
+    Mutant(
         "password-endpoint-scheme-binding-disabled",
-        "scripts/agents_policy_validation.py",
-        'return f"{parsed.scheme.casefold()}://{authority}{parsed.path or \'/\'}"',
-        'return f"{authority}{parsed.path or \'/\'}"',
+        "scripts/password_authorization_validation.py",
+        "    if rule.scheme != endpoint.scheme:\n        return False\n",
+        "    if False:\n        return False\n",
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_password_authorization_rejects_scheme_mismatch",
     ),
     Mutant(
         "password-endpoint-port-binding-disabled",
-        "scripts/agents_policy_validation.py",
-        "if port is not None:\n        authority = f\"{authority}:{port}\"",
-        "if False:\n        authority = f\"{authority}:{port}\"",
+        "scripts/password_authorization_validation.py",
+        "    if (rule.host, rule.port) != (endpoint.host, endpoint.port):\n",
+        "    if rule.host != endpoint.host:\n",
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_password_authorization_rejects_explicit_port_mismatch",
+    ),
+    Mutant(
+        "password-endpoint-path-boundary-disabled",
+        "scripts/password_authorization_validation.py",
+        '    return rule.path == "/" or endpoint.path == rule.path or endpoint.path.startswith(f"{rule.path}/")\n',
+        "    return True\n",
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_password_authorization_path_prefix_rejects_sibling",
+    ),
+    Mutant(
+        "password-default-port-normalization-disabled",
+        "scripts/password_authorization_validation.py",
+        "    effective_port = port if port is not None else DEFAULT_PORTS.get(scheme)\n",
+        "    effective_port = port\n",
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_password_authorization_normalizes_default_port",
+    ),
+    Mutant(
+        "password-query-path-binding-disabled",
+        "scripts/password_authorization_validation.py",
+        "    if not allow_userinfo and (parsed.query or parsed.fragment):\n",
+        "    if parsed.query or parsed.fragment:\n",
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_password_authorization_path_binding_survives_query_string",
+    ),
+    Mutant(
+        "malformed-password-uri-fail-closed-disabled",
+        "scripts/password_authorization_validation.py",
+        "    if any(scope is None for scope in actual):\n",
+        "    if False:\n",
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_malformed_password_uri_endpoint_fails_closed",
+    ),
+    Mutant(
+        "encoded-password-path-check-disabled",
+        "scripts/password_authorization_validation.py",
+        '    if "\\\\" in parsed.path or re.search(r"%(?:2e|2f|5c)", parsed.path, re.IGNORECASE):\n',
+        "    if False:\n",
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_encoded_password_uri_path_fails_closed",
     ),
 )
 
 MUTANTS = (
     *CORE_MUTANTS,
     *(Mutant(*case) for case in (
-        *ADDITIONAL_MUTANT_CASES, *STRICT_MUTANT_CASES, *REVIEW_FIX_MUTANT_CASES, *STABILITY_MUTANT_CASES,
+        *ADDITIONAL_MUTANT_CASES, *STRICT_MUTANT_CASES, *REVIEW_FIX_MUTANT_CASES,
+        *STABILITY_MUTANT_CASES, *MODULE_CLOSURE_MUTANT_CASES,
+        *AUTHORITY_BINDING_MUTANT_CASES,
+        *NATIVE_REVIEW_MUTANT_CASES,
+        *REVIEW_TRIGGER_MUTANT_CASES,
+        *REQUIREMENT_QUESTION_MUTANT_CASES,
+        *DELIVERY_QUESTION_MUTANT_CASES,
+        *DELIVERY_CONTRACT_BUNDLE_MUTANT_CASES,
+        *WRITE_AUTHORITY_MUTANT_CASES,
+        *LOCAL_TRUST_MUTANT_CASES,
+        *MODULE_LEASE_MUTANT_CASES,
     )),
 )
 

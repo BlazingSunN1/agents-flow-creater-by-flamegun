@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/generate-agents-md/local-controlled-module-lease-envelope.schema.json",
+  "title": "Explicit Same-User Module Lease Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trust_mode", "payload_path", "payload_sha256", "signature_path", "signature_sha256", "public_key_path", "public_key_fingerprint_sha256"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "trust_mode": {"const": "local_controlled_same_user"},
+    "payload_path": {"type": "string", "pattern": "^/"},
+    "payload_sha256": {"$ref": "#/$defs/sha256"},
+    "signature_path": {"type": "string", "pattern": "^/"},
+    "signature_sha256": {"$ref": "#/$defs/sha256"},
+    "public_key_path": {"type": "string", "pattern": "^/"},
+    "public_key_fingerprint_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

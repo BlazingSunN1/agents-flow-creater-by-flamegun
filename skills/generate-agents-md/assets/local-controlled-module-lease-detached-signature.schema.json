@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/generate-agents-md/local-controlled-module-lease-detached-signature.schema.json",
+  "title": "Local Controlled Module Lease Detached Ed25519 Signature",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["algorithm", "canonicalization", "domain", "key_id", "payload_canonical_sha256", "signature_base64url"],
+  "properties": {
+    "algorithm": {"const": "Ed25519"},
+    "canonicalization": {"const": "sorted-compact-json-v1"},
+    "domain": {"const": "generate-agents-md/local-controlled-module-write-lease/v1"},
+    "key_id": {"type": "string", "pattern": "^[A-Za-z0-9/][A-Za-z0-9/._:-]{1,255}$"},
+    "payload_canonical_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "signature_base64url": {"type": "string", "pattern": "^[A-Za-z0-9_-]{85}[AQgw]$"}
+  }
+}

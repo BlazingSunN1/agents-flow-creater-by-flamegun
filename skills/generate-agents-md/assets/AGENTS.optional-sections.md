@@ -81,4 +81,4 @@
 - Module diagram directory: `{{MODULE_SWIMLANE_DIRECTORY}}`.
 - Keep stable module identifiers between the overview and module diagrams so overview cards can open the correct module flow.
 - Each module diagram must show actors or components as lane headers, ordered steps, decisions, cross-lane handoffs, asynchronous events, exception recovery, and final outcomes when present in code.
-- For interactive HTML, verify desktop viewport behavior with `{{SWIMLANE_BROWSER_TEST_COMMAND}}`; manually click the affected module path from overview to detail and back. Add mobile viewport verification only when mobile, touch, or responsive behavior is in the approved scope.
+- For interactive HTML, verify desktop viewport behavior with `{{SWIMLANE_BROWSER_TEST_COMMAND}}`; manually click the affected module path from overview to detail and back. Add mobile browser viewport verification only when mobile Web, touch, or responsive browser behavior is in the approved scope. Native mobile uses the registered native test command instead.

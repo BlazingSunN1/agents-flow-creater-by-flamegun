@@ -8,8 +8,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from agents_policy_validation import (
     REQUIRED_MACHINE_POLICY,
-    _validate_password_authorization,
     _validate_root_policies,
+)
+from password_authorization_validation import (
+    plaintext_password_present,
+    validate_password_authorization,
 )
 
 
@@ -97,20 +100,27 @@ def validate_text(
     scope: str = "root",
 ) -> list[Issue]:
     issues = _validate_mode_scope(mode, scope, allow_passwords)
-    effective_allow_passwords = allow_passwords and mode == "project"
     safe_allow_patterns = _validated_allow_patterns(allow_patterns, issues)
     issues.extend(_validate_file_format(text))
     lines = text.splitlines()
     issues.extend(_validate_headings(lines))
-    scan_issues, authorized_password_present = _scan_document_lines(
+    has_plaintext_password = plaintext_password_present(text)
+    authorization_issues = (
+        validate_password_authorization(text)
+        if mode == "project" and has_plaintext_password
+        else []
+    )
+    document_authorized = (
+        mode == "project" and has_plaintext_password and not authorization_issues
+    )
+    scan_issues, _ = _scan_document_lines(
         lines,
         mode=mode,
         allow_patterns=safe_allow_patterns,
-        allow_passwords=effective_allow_passwords,
+        allow_passwords=document_authorized,
     )
     issues.extend(scan_issues)
-    if authorized_password_present:
-        issues.extend(_validate_password_authorization(text))
+    issues.extend(authorization_issues)
     if scope == "root":
         issues.extend(_validate_root_policies(text, mode))
     return _deduplicate(issues)
@@ -122,7 +132,6 @@ def _validate_mode_scope(mode: str, scope: str, allow_passwords: bool) -> list[I
         issues.append(Issue("error", "invalid-mode", "mode 必须是 project 或 public-template"))
     if scope not in {"root", "scoped"}:
         issues.append(Issue("error", "invalid-scope", "scope 必须是 root 或 scoped"))
-    effective_allow_passwords = allow_passwords and mode == "project"
     if allow_passwords and mode != "project":
         issues.append(
             Issue(
@@ -254,7 +263,7 @@ def _scan_line_secrets(
         for match in URI_CREDENTIAL_DETAIL_RE.finditer(line)
     )
     if plaintext_uri and not allow_passwords:
-        issues.append(Issue("error", "uri-credential", "连接地址疑似包含内嵌凭据；仅在用户明确授权后使用 --allow-passwords 放行", line_number))
+        issues.append(Issue("error", "uri-credential", "连接地址疑似包含内嵌凭据；仅允许由本文档中的有效密码授权章节放行", line_number))
     return issues, authorized_password
 
 
@@ -349,7 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-passwords",
         action="store_true",
-        help="允许项目文件包含密码；仅在用户明确授权时使用",
+        help="已弃用的兼容参数；有效授权自动从项目文档读取，参数本身不能放行",
     )
     parser.add_argument(
         "--allow-pattern",

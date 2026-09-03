@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/generate-agents-md/local-controlled-module-lease-registry.schema.json",
+  "title": "Local Controlled Module Lease Event Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_type", "registry_path", "events"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "registry_type": {"const": "local_controlled_module_write_lease_registry"},
+    "registry_path": {"type": "string", "pattern": "^/"},
+    "events": {"type": "array", "items": {"$ref": "#/$defs/event"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9/][A-Za-z0-9/._:-]{1,255}$"},
+    "utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "event": {"type": "object", "additionalProperties": false, "required": ["sequence", "event_type", "previous_event_sha256", "event_sha256", "lease_id", "receipt_id", "nonce", "project_root", "module_key", "agent_handle", "run_id", "target_path", "pre_sha256", "post_sha256", "occurred_at", "expires_at", "complete"], "properties": {"sequence": {"type": "integer", "minimum": 1}, "event_type": {"enum": ["activated", "applied"]}, "previous_event_sha256": {"$ref": "#/$defs/sha256"}, "event_sha256": {"$ref": "#/$defs/sha256"}, "lease_id": {"$ref": "#/$defs/id"}, "receipt_id": {"$ref": "#/$defs/id"}, "nonce": {"$ref": "#/$defs/sha256"}, "project_root": {"type": "string", "pattern": "^/"}, "module_key": {"$ref": "#/$defs/id"}, "agent_handle": {"$ref": "#/$defs/id"}, "run_id": {"$ref": "#/$defs/id"}, "target_path": {"type": "string"}, "pre_sha256": {"$ref": "#/$defs/sha256"}, "post_sha256": {"$ref": "#/$defs/sha256"}, "occurred_at": {"$ref": "#/$defs/utc"}, "expires_at": {"$ref": "#/$defs/utc"}, "complete": {"type": "boolean"}}}
+  }
+}

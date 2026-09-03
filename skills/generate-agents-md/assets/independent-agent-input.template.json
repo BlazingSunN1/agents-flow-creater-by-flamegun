@@ -4,6 +4,8 @@
   "run_id": "{{INDEPENDENT_AGENT_RUN_ID}}",
   "baseline_version": "{{BASELINE_VERSION}}",
   "baseline_sha256": "{{BASELINE_SHA256}}",
+  "requirement_questions_locator": "{{REQUIREMENT_QUESTIONS_PATH}}",
+  "requirement_questions_sha256": "{{REQUIREMENT_QUESTIONS_SHA256}}",
   "requirement_ids": ["{{AFFECTED_REQUIREMENT_ID}}"],
   "artifacts": [
     {

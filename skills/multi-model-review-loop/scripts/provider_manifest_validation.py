@@ -20,7 +20,9 @@ MANIFEST_FIELDS = {
     "schema_version", "task_id", "provider", "role", "system_sha256", "prompt_sha256",
     "system_path", "prompt_path", "raw_path", "raw_sha256", "request_model", "model",
     "response_id", "finish_reason", "usage", "request_profile", "candidate_version",
-    "scope_sha256", "candidate_sha256", "normalized_path", "normalized_sha256", "verdict",
+    "transport", "idle_timeout_seconds", "deadline_seconds", "max_output_tokens",
+    "retry_limit", "scope_sha256", "candidate_sha256", "normalized_path",
+    "normalized_sha256", "verdict",
 }
 
 
@@ -66,6 +68,16 @@ def _validate_response_fields(manifest: dict[str, Any], provider: str) -> None:
         raise ValueError("DeepSeek spawn response model differs from its request")
     if manifest.get("finish_reason") != "stop":
         raise ValueError("spawn result finish_reason must be stop")
+    if manifest.get("transport") != "bounded-sse-v1":
+        raise ValueError("spawn result transport is not the reviewed bounded stream")
+    idle, deadline = manifest.get("idle_timeout_seconds"), manifest.get("deadline_seconds")
+    tokens, retries = manifest.get("max_output_tokens"), manifest.get("retry_limit")
+    if type(idle) not in (int, float) or type(deadline) not in (int, float) \
+            or not 1 <= idle <= 600 or not idle <= deadline <= 7200:
+        raise ValueError("spawn result timeout/deadline execution profile is invalid")
+    if type(tokens) is not int or not 1 <= tokens <= 262_144 \
+            or type(retries) is not int or not 0 <= retries <= 3:
+        raise ValueError("spawn result token/retry execution profile is invalid")
     validate_usage(manifest.get("usage"))
 
 
@@ -81,6 +93,7 @@ def _validate_prompt(manifest: dict[str, Any], provider: str, scope: dict[str, A
         raise ValueError("spawn prompt is stale for the immutable scope")
     if (prompt["acceptance_criteria"] != scope["acceptance_criteria"]
             or prompt["context_artifacts"] != scope["context_artifacts"]
+            or prompt["clarification_register"] != scope["clarification_register"]
             or prompt["candidate_version"] != contract["candidate_version"]):
         raise ValueError("spawn prompt criteria or candidate version mismatch")
     if expected_prompt_candidate and (prompt["candidate"], prompt["candidate_sha256"]) != expected_prompt_candidate:
@@ -118,6 +131,9 @@ def validate_spawn_manifest(
              ("response_id", manifest["response_id"]), ("usage", manifest["usage"]))
     if any(wrapper.get(field) != expected for field, expected in pairs):
         raise ValueError("spawn raw response provenance differs from its manifest")
+    execution = ("transport", "idle_timeout_seconds", "deadline_seconds", "max_output_tokens", "retry_limit")
+    if any(wrapper.get(field) != manifest.get(field) for field in execution):
+        raise ValueError("spawn raw response execution profile differs from its manifest")
     if strict_json_loads(wrapper.get("content", "")) != contract:
         raise ValueError("spawn normalized contract is not derived from the raw provider response")
     if raw_path.stat().st_ino == path.stat().st_ino and raw_path.stat().st_dev == path.stat().st_dev:

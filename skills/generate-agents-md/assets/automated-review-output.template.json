@@ -4,6 +4,8 @@
   "code_version": "{{CODE_VERSION}}",
   "code_fingerprint": "{{CONTEXT_CODE_FINGERPRINT}}",
   "command_manifest_fingerprint": "{{CONTEXT_COMMAND_MANIFEST_FINGERPRINT}}",
+  "review_trigger": "module_closure_candidate",
+  "human_trigger_reference": "N/A",
   "changed_files": ["{{NORMALIZED_CHANGED_FILE_PATH}}"],
   "command_id": "automated_review",
   "argv_sha256": "{{NULL_SEPARATED_ARGV_SHA256}}",

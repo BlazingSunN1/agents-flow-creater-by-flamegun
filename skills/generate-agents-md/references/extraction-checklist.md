@@ -57,6 +57,8 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 - 现有开发计划、路线图、任务记录、变更日志和完成进度文件。
 - 现有系统总览、模块泳道图、交互入口、图文件生成脚本和浏览器验证命令。
 - 现有执行日志索引、模块键、当前摘要、单次日志、执行编号和代码版本来源。
+- 现有调度入口、稳定模块边界、模块拥有路径、长期维护 Agent 标题和跨模块共享边界。
+- 现有 thread/session ID 登记位置；区分稳定所有权标题与只能进入运行时证据的易变标识。
 
 ## 3. 公共与专属规则分类
 
@@ -102,6 +104,10 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 - **前端交互验证**：规定桌面 PC 视口、应用内浏览器、Playwright/Cypress、人工式点击闭环和无 Bug 完成门禁；移动端仅在需求或支持范围明确涉及时加入。
 - **需求追踪与交付门禁**：规定需求基线、稳定编号、风险等级、独立 UI/UX 与验收职责、变更控制和黑盒完成门禁。
 - **自动代码审查**：规定每次模块修改后的自动命令、真实影响面、发现格式、修复回路、证据路径和失败关闭条件。
+- **模块 Agent 所有权与调度**：规定 Dispatcher 用户入口、模块到稳定维护 Agent 与拥有边界的映射、层级中立的唯一活动模块协调租约、唯一实现写者、最小充分上下文交接、独立全流程验证和新模块先建 Agent 后实现。默认本地协调；严格模式才追加宿主证明。
+- **本机受控授权**：默认宿主路径不变；只有 `project` 模式、本轮显式用户授权并选择 `authorization-mode=local-controlled-same-user` 时启用，绝不 fallback。bootstrap v1 保持旧义；v2 仅绑定并更新既有 `AGENTS.md` 与 `docs/agents/module-agent-governance.md`，签名两 target 的 pre/post hash+size、M11 registration、pre/post policy+authority hash 与 bootstrap candidate，缺失 owned leaf 只做最近祖先/case/symlink/overlap 验证且不创建。普通模块租约使用独立签名域、固定外部 registry、精确 identity/owned paths/targets/baseline/policy/authority/candidate/code/build、15 分钟 TTL，只代表同用户边界内授权与完整性，不证明 runtime、host-native、host-attested 或不可伪造。
+- **租约 registry 与 guarded apply**：registry closed schema、no-follow lock、可重算 hash chain；receipt/nonce/lease ID 分别全局唯一，`(project,module)` 唯一 active，Agent/run 不跨模块 active，换 registry 在创建前失败。每次单文件 apply 重验签名/expiry/active/policy/authority/ownership/pre-post hash/fd-inode-parent，禁止 review/acceptance/black-box/aggregate/close。业务文件成功而 registry 失败必须 `PARTIAL/incomplete`，不得声称原子或成功。v1 无撤销字段，依靠不续签、唯一 active 与最短 TTL。
+- **唯一 replay ledger**：签名 payload 闭集必须固定一个 canonical 外部 `replay_state_path`；CLI 参数和实际 guard 路径必须在任何 lock/ledger 创建或修改前精确匹配，禁止同一 envelope 换 ledger 再消费。
 
 考虑创建子目录 `AGENTS.md` 的情况：
 
@@ -158,10 +164,12 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 → 完整验收用例 → 代码实现与持续规范检查 → 独立黑盒验收 → 差异回写
 ```
 
-- 需求基线至少包含目标、范围、非目标、约束和可量化验收标准；未解决歧义必须阻断实现并退回基线。
+- 需求基线至少包含目标、范围、非目标、约束和可量化验收标准。使用 `assets/requirement-questions.template.json` 记录机器可验证疑问：`question_id`、`impact_scope`、`risk`、`proposed_default`、`safe_fallback`、`answer_status=ANSWERED|NOT_PROVIDED`、`delivery_disposition=NON_BLOCKING_P2`、`assumption`、`owner`、`review_due`。所有人工未答项均作为 `P2 pending`，采用显式、可逆、最小影响且有回退的默认假设继续。`ANSWERED` 绑定人工答案、回答前后基线及影响范围重跑 receipt；默认验证结构和哈希，严格模式再宿主校验。
 - 使用稳定的 `REQ-*`、`FLOW-*`、`FEAT-*`、`UI-*`、`UT-*`、`AT-*`、`MOD-*`、`BB-*` 编号，把每个下游产物追溯到原始需求。不适用项写明可验证理由，不能留空。同一产物可服务多项需求并复用编号，但同一编号不得映射到不同路径。
-- 每项变更记录小型、标准或高风险等级及原因。标准和高风险走完整流程；小型变更仅能跳过与行为无关的原型或独立设计门禁，但仍必须完成追踪、相关测试、泳道同步和最终验证。
-- 风险由变更面设置最低等级：行为、用户可见、UI、API 至少为标准；公共 API、认证、安全、隐私、迁移、持久化、异步、跨模块、数据结构为高风险；未知变更面先按高风险，直到有证据排除。
+- 稳定交付是流程复杂度的唯一目的。新增 Agent、产物、门禁、上下文扩展或记录前，必须记录已核实风险/失败模式、事实证据、受影响验收点、预期可观测信号和停用条件；缺任一映射则不得启用。假设性担忧、通用“最佳实践”或无法复现的一次性经历不足以建立长期硬门禁。
+- 所有任务先闭合最小可靠链：目标/范围/非目标/可量化验收 → 最小实现 → 受影响测试和现有相关静态检查 → 对照验收点记录当前证据。不适用环节只记可验证 `N/A` 理由，不生成空产物。
+- 每项变更记录小型、标准或高风险等级及事实依据。小型变更必须影响面已知、不改变外部可观测行为/契约/流程且有目标验证；不创建新 Agent、原型、泳道或完整多产物链。标准任务只增加与改变行为直接映射的门禁。高风险、并发大模块或明确独立性/合规要求才启用完整多 Agent 治理。
+- 风险由变更面设置最低等级：行为、用户可见、UI、API、移动 Web、原生移动至少为标准；公共 API、认证、安全、隐私、迁移、持久化、异步、跨模块、数据结构为高风险；未知变更面暂按高风险，但先做最小事实调查尽快收敛，不得长期以“未知”理由加载全部门禁。移动 Web 使用浏览器与 Playwright/Cypress，原生移动使用登记的原生测试命令；遗留 `mobile` 由 `frontend_applicable` 显式区分。
 - 涉及 UI 时，由独立 UI/UX Agent 基于已批准需求、方案、泳道和功能点制作或审查原型；不得自行增加产品行为，也不得修改实现代码。
 - 在实现前定义测试点和适用单元用例；由另一个独立验收 Agent 基于已批准基线编写完整的成功、拒绝、失败、重试、恢复、权限和边界用例。
 - 实现只能覆盖已批准的 `REQ-*` 与 `FEAT-*`。新增或改变行为必须先更新编号、方案、泳道、UI、测试和验收产物，禁止“先写代码后补需求”。
@@ -169,14 +177,14 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 - 实现完成后，由独立黑盒 Agent 使用已批准验收用例和类发布接口执行验收；不得修改代码或接受实现 Agent 的自报结果。
 - 仅适用的独立门禁才要求 Agent。非 UI、非用户可见任务的 UI_UX 门禁使用 `N/A: 可验证原因`、空 run ID 和 `not_applicable`，不得为节省 Token 启动无关 Agent；UI 或用户可见任务不得跳过。其他适用 Agent 无法启动时标记为 `blocked`，不得由实现 Agent 自证。
 - 所有适用的独立门禁必须使用互不相同且不等于实现 Agent 的 `run_id`，并各自保存最小输入清单（逐工件绑定当前路径和 SHA-256）和输出证据；黑盒证据必须绑定当前需求基线 SHA、代码版本、构建编号、环境和验证时间。
-- 实现 Agent 是代码与共享记录的唯一写者。其他 Agent 对代码和共享记录均只读，不接收完整聊天、其他 Agent 推理或实现自报作为证明；实现阶段不启动黑盒，完成阶段才要求黑盒。小型任务只启用验收用例和阶段适用的黑盒，标准任务增加变更审查，高风险任务再增加需求一致性和领域专项审查；无升级理由不得启动额外角色。不得以多数票处理冲突，任何分歧或开放问题均阻断。
+- 只在多 Agent 确有风险映射时，持有匹配 module、Agent/run、owned paths 唯一活动协调租约的当前实现 Agent 才是模块代码与共享记录的唯一写者；主、父、子层级不授予固有写权，其他 Agent 只读。小型任务不启动额外 Agent；标准任务仅为改变的外部行为启动独立验收或黑盒；高风险任务才按独立风险映射增加角色。不得以多数票处理冲突；开放缺陷或门禁分歧阻断，机器疑问清单中的未答项一律 `P2 pending` 且不阻断。
 - 用 `assets/multi-agent-evidence.template.json` 保存每个适用角色的 provider、focus、唯一 run ID、最小输入与输出路径/哈希和只读边界，并用 `scripts/validate_multi_agent_evidence.py` 校验。
 - 失败先分类再回流：`implementation_defect` 返回实现，`requirement_ambiguity` 返回需求基线，`acceptance_case_defect` 返回验收用例，`environment_blocker` 阻断，`approved_requirement_change` 才建立新基线；不得用改需求掩盖实现缺陷。
-- 新建结构时使用 `assets/requirement-traceability.template.md`；实现交接前运行 `python3 scripts/validate_traceability.py <matrix> --project-root <root> --stage implementation`，完成前改用 `--stage completion`；同阶段还要运行 `scripts/validate_delivery_bundle.py`，确认 AGENTS、追踪矩阵、工作集、真实命令、多 Agent 证据和适用前端证据绑定相同需求基线、代码版本与实现 run。失败、跨文件漂移或命令不可用即阻断。
+- 新建结构时使用 `assets/requirement-traceability.template.md`；实现交接前运行 `python3 scripts/validate_traceability.py <matrix> --project-root <root> --stage implementation`，完成前改用 `--stage completion`；同阶段还要运行 `scripts/validate_delivery_bundle.py`，确认 AGENTS、追踪矩阵、工作集、真实命令、多 Agent 证据和适用前端证据绑定相同需求基线、代码版本与实现 run。跨模块任务必须逐模块生成 `assets/module-delivery-bundle.template.json`，再由独立 `SYSTEM_AGGREGATION` Sol 写者生成系统清单，Dispatcher 只读调用 `scripts/validate_system_delivery_bundle.py`。默认本地协调模式验证封闭结构、路径与哈希，不因缺少宿主校验器阻断；只有明确选择严格模式时，缺少不可由项目文件开启的宿主可信校验器才阻断。集合不全、跨文件漂移或命令不可用在两种模式下均阻断。
 
 ## 8. 自动代码审查
 
-- 每次代码模块修改并完成目标测试后、进入黑盒验收前，自动运行从项目配置核实的审查命令；命令缺失、失败或不可用时将门禁标记为 `blocked`。
+- 仅在模块形成闭环候选或人工主动触发时，自动运行确定性规划器选中的审查命令；普通代码增量只累计证据。命令缺失、被标为不适用、失败或不可用时将对应门禁标记为 `blocked`。
 - 审查当前真实变更文件，并沿调用关系覆盖受影响调用方、被调用方、公共接口、配置、持久化/异步边界、测试、需求追踪和泳道图；禁止仅依据 diff 摘要或实现 Agent 自报下结论。
 - 每项可执行发现记录严重度、精确文件和行号、触发条件、影响、复现或验证命令。需求歧义与实现缺陷分开分类。
 - 实现缺陷返回实现；适用时先补失败回归测试，再做最小根因修复，自动重跑目标测试、代码规范、追踪校验、泳道校验和自动审查。
@@ -200,7 +208,7 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 - 完成可验证工作后，进度记录日期、交付结果、验证证据和剩余事项。
 - 只有实际执行并通过相应验证的工作才能标记为完成。
 - 计划与进度是持续变化的项目状态，应保存在专用记录中；AGENTS.md 只规定维护方式，不复制当前任务快照。
-- 共享计划、进度、追踪、工作集和证据索引必须通过 `scripts/update_project_record.py` 使用文件锁、期望当前 SHA-256 和原子替换更新；过期写入失败后必须重读，禁止多个 Agent 并发覆盖。
+- 共享计划、进度、追踪、工作集和证据索引必须通过 `scripts/update_project_record.py` 更新，并绑定根 AGENTS.md 的 canonical ownership、固定 `docs/governance/module-writer-registry.json` 中唯一活动维护 Agent/run、精确 target/owned paths、当前 AGENTS/authority-matrix SHA-256 和租约。默认 `delivery-first-local-coordination`；高风险、合规或人工明确要求才选 `strict-security` 宿主校验。Dispatcher/审查者身份、重复 module/Agent/run/lease 或 registry 漂移失败关闭；两者仍使用全局授权锁、目标锁、期望当前 SHA-256 和原子替换。
 
 ## 11. 模块化执行日志
 
@@ -219,15 +227,16 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 
 ## 12. 泳道图同步
 
-根级 AGENTS.md 必须规定：在阶段性任务或里程碑完成、准备交接或验收时，同步生成缺失的受影响模块泳道图或更新已有模块图；阶段中间仅当修改改变入口、流程、分支、交接、外部依赖、持久化、异步/恢复路径或最终输出时立即更新。普通流程无关内部修改不逐次重画，但阶段完成前必须复核、同步并验证，不得以“文档后补”绕过。
+根级 AGENTS.md 必须规定：每次代码模块修改后只判定 `swimlane_applicable=true|false` 与 `flow_impact=none|changed|uncertain` 并写入现有审查或运行证据，不因单个文件、提交或时间间隔逐次写图。无适用泳道时不创建空图且不运行泳道门禁；有适用泳道时，`changed` 以模块、阶段、稳定候选为批次，在首次依赖该图的下游步骤或阶段/里程碑交接前（取较早者）更新；每个模块、每个阶段、每个稳定候选至多写图一次。阶段结束只对适用泳道做一致性与新鲜度检查，不无条件重画。
 
 提取与生成时：
 
 - 搜索 `docs/flows/`、`diagrams/`、`*.html`、`*.puml`、`*.bpmn`、`*.mmd` 以及包含 `swimlane`、`泳道`、`流程图` 的文件，核实现有入口和模块映射。
 - 同时审查实现代码、入口、调用链、接口、配置和测试；文档只能作为补充证据。
 - 没有既有位置时，为项目选择稳定路径，例如 `docs/flows/system-swimlanes.html` 与 `docs/flows/modules/`，并在项目模式中写成真实路径。
-- 模块增删、入口、跨模块调用、系统边界、外部依赖、持久化、异步事件或最终结果发生变化时，先更新完整系统总览，再更新受影响模块图。
-- 仅修改模块内部实现且流程拓扑不变时，不逐次修改图文件；在阶段完成时对照代码统一复核并更新验证记录，发现图中实现事实变化时再修改图文件。
+- `swimlane_applicable=false` 不创建空图、不运行 `swimlane_evidence` 或 `swimlane_freshness`；适用泳道的 `none` 不改写图文件并保留内容与 SHA-256，阶段结束在原有证据中记录复核结果；`uncertain` 先做入口、调用链、接口、配置和测试的最小调查，必须收敛为 `none` 或 `changed`，不得为保险起见重画。
+- 只有系统/跨模块边界、模块归属、顶层入口/出口、跨模块交接或外部依赖确认变化时才先更新完整系统总览；模块内部语义流程变化只更新受影响模块图。仅为设计、交接、运维或验收依赖的稳定流程生成缺失图，不为 helper、临时切片或纯测试模块建图。
+- 下游在阶段结束前需要依赖泳道，或过期泳道会误导正在进行的安全、权限、不可逆操作或公共契约工作时，必须在该使用点前提前完成本批次更新；否则延迟到稳定候选，禁止按文件、提交次数或固定时钟重画。
 - 交互式 HTML 必须在浏览器中实际打开，通过人工式点击从总览进入受影响模块并返回；确认泳道头、连线、分支、模块内容和导航闭环可见且无错误。
 - 交互式 HTML 的服务、入口身份、点击闭环和证据绑定按 `references/browser-validation-policy.md` 执行，完成后停止临时服务。
 - 完成进度必须记录受影响模块、总览或模块图路径、代码审查依据、执行的验证方式与结果。
@@ -253,13 +262,21 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 - [ ] 已指定需求追踪矩阵，并闭合 `REQ/FLOW/FEAT/UI/UT/AT/MOD/BB` 编号关系。
 - [ ] 已规定风险分级、小型任务的跳过条件，以及标准/高风险任务的完整流程。
 - [ ] 已分离 UI/UX、验收用例和黑盒 Agent 职责；禁止自行扩需求、修改实现或由实现 Agent 自证。
-- [ ] 已规定实现 Agent 单写者、独立 Agent 只读及按风险触发的最少角色，并机器校验证据哈希与分歧关闭。
+- [ ] 已规定主、父、子层级无固有写权，唯一实现写者必须持有匹配 module、Agent/run、owned paths 的唯一活动协调租约；独立 Agent 只读，并机器校验证据哈希与分歧关闭；严格模式才追加宿主证明。
+- [ ] 已明确模块键、稳定维护 Agent 标题和拥有路径/边界的一一映射，且长期 AGENTS.md 不含 thread/session ID。
+- [ ] 已限制 Dispatcher 角色始终只读，只做入口、路由、上下文传递、验证编排和新模块 Agent 创建，禁止写业务代码与共享记录；需要实现时使用不同的 implementation Agent/run，且不得复用 Dispatcher 的 Agent ID 或 run ID；严格模式才追加宿主证明。
+- [ ] 系统清单由独立 `SYSTEM_AGGREGATION` 写者生成；其 run 与 Dispatcher、模块实现及门禁审查 run 均不同，默认本地模式绑定封闭 receipt，严格模式才由宿主可信运行时复核。
+- [ ] 上下文交接包覆盖目标、批准需求/约束、模块边界、输入输出、依赖风险、验证验收和证据；不传完整聊天、无关历史或其他 Agent 推理。
+- [ ] 稳定新模块在实现前已建立唯一键、非重叠 ownership 和独立长期维护 Agent/会话。
+- [ ] 若启用本机受控治理 bootstrap，已有 project 模式、显式 authorization-mode 与风险接受；v1 未被解释为 v2；v2 精确绑定两份既有治理 target、M11 registration、pre/post policy+authority 与 bootstrap candidate，missing owned leaf 仅验证不创建，完成后只接受本机受控 module lease。
+- [ ] 若启用本机受控普通模块租约，独立 domain/closed schema、固定外部 registry、15 分钟 TTL、全局独立 ID、唯一 active、跨模块 Agent/run 排斥、严格角色 deny、每次 apply 的 policy/authority/ownership/hash/path-race 重验与 PARTIAL 报告测试均通过；未虚构撤销。
+- [ ] canonical matrix 中只有 `system-governance-bootstrap/bootstrap_system_governance/system-governance` 为 `external-explicit-only`；其他 bootstrap/actor 行固定 deny，普通角色分离、单 writer、review/acceptance/black-box 独立门禁没有降低。
 - [ ] 已要求代码规范在实现前和实现中持续执行，新增行为先更新追踪产物。
 - [ ] 已指定小型索引、模块日志和系统级日志路径。
 - [ ] 已区分 `run_id` 与 `code_version`，并规定单次日志必填字段。
 - [ ] 已要求完成后更新 `latest.md` 和索引，默认不扫描全部历史。
 - [ ] 已建立最小工作集、证据指纹和缓存失效规则；独立 Agent 使用角色输入清单，原始输出只引用路径。
-- [ ] 已规定阶段任务完成时统一同步模块泳道图、阶段中仅流程变化时立即更新；普通内部修改不逐次重画，阶段未同步不得标记完成。
+- [ ] 已规定每次代码变更先判定泳道适用性再判定三态影响；不适用时无图无门禁，适用时 `none` 保留图哈希、`uncertain` 先收敛、`changed` 每模块/阶段/稳定候选批量写图一次，并在首次下游依赖或阶段交接前完成。
 - [ ] 已写明系统总览的更新触发条件、图路径、代码审查依据和浏览器点击闭环。
 - [ ] 完成进度要求记录受影响模块、泳道图路径和验证证据。
 - [ ] 前端项目已规定桌面 PC、应用内浏览器、Playwright/Cypress、人工式点击闭环和无 Bug 门禁；移动端只在明确适用时启用。

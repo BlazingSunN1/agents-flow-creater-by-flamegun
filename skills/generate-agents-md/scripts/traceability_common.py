@@ -24,13 +24,14 @@ GATE_COLUMNS = (
 )
 FINDING_COLUMNS = ("Finding", "Class", "Status", "Route", "Evidence")
 REQUIRED_METADATA = (
-    "Baseline artifact", "Baseline version", "Baseline SHA-256", "Code version",
+    "Baseline artifact", "Baseline version", "Baseline SHA-256",
+    "Authority matrix locator", "Authority matrix SHA-256", "Code version",
     "Build ID", "Acceptance environment", "Verified at", "Risk level",
     "Risk reason", "Change surfaces", "Implementation run ID",
 )
 RISK_ORDER = {"small": 0, "standard": 1, "high-risk": 2}
-STANDARD_SURFACES = {"user-visible", "ui", "api", "behavior-change"}
-CONDITIONAL_FRONTEND_SURFACES = {"mobile", "touch", "responsive"}
+STANDARD_SURFACES = {"user-visible", "ui", "api", "behavior-change", "mobile", "mobile-web", "native-mobile"}
+CONDITIONAL_FRONTEND_SURFACES = {"touch", "responsive"}
 HIGH_RISK_SURFACES = {
     "auth", "security", "privacy", "migration", "persistence", "async",
     "cross-module", "data-schema", "public-api",

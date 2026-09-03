@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "receipt_kind": "codex-native-output-result",
+  "provider": "codex-native-agent",
+  "requested_model": "gpt-5.6-sol",
+  "recorded_model": "gpt-5.6-sol",
+  "agent_id": "{{AGGREGATION_AGENT_ID}}",
+  "run_id": "{{AGGREGATION_RUN_ID}}",
+  "role": "system-aggregation",
+  "module": "system",
+  "maintainer_title": "System Aggregation Writer",
+  "candidate_payload_sha256": "{{SYSTEM_CANDIDATE_PAYLOAD_SHA256}}",
+  "authority_binding": {
+    "locator": "AGENTS.md#machine-enforced-authority-matrix",
+    "sha256": "aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643",
+    "required_rows": [
+      {"role": "system-aggregation", "action": "write_system_manifest", "policy": "allow"},
+      {"role": "dispatcher", "action": "orchestrate_read_validate", "policy": "allow"}
+    ]
+  }
+}

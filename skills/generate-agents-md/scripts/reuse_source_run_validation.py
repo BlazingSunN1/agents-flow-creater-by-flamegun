@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 
 from delivery_record_io import RECORD_SCHEMAS, _read_record, _record_fields, _validate_record, split_record_paths
+from authority_binding_validation import AUTHORITY_MATRIX_LOCATOR
+from agents_authority_matrix_validation import AUTHORITY_MATRIX_SHA256
 
 
 def valid_reuse_source_run(
@@ -84,11 +86,25 @@ def _valid_source_context(source: dict[str, object], root: Path, run_id: str, ca
         return False
     if hashlib.sha256(payload).hexdigest() != expected_hash.casefold():
         return False
-    lines = [line for line in text.splitlines() if line.strip()]
-    if not lines or lines[0] != f"# Context Workset {run_id}" or len(lines) != 3:
+    raw_lines = [line for line in text.splitlines() if line.strip()]
+    if not raw_lines or raw_lines[0] != f"# Context Workset {run_id}":
         return False
-    pairs = [re.fullmatch(r"- (Run ID|Evidence cache key):\s*(.+)", line) for line in lines[1:]]
+    pairs = [re.fullmatch(
+        r"- (Run ID|Authority matrix locator|Authority matrix SHA-256|Evidence cache key):\s*(.+)",
+        line,
+    ) for line in raw_lines[1:]]
     if any(match is None for match in pairs):
         return False
     fields = {match.group(1): match.group(2) for match in pairs if match is not None}
-    return len(fields) == 2 and fields == {"Run ID": run_id, "Evidence cache key": cache_key}
+    expected = {
+        "Run ID": run_id,
+        "Authority matrix locator": AUTHORITY_MATRIX_LOCATOR,
+        "Authority matrix SHA-256": AUTHORITY_MATRIX_SHA256,
+        "Evidence cache key": cache_key,
+    }
+    lines = [raw_lines[0], f"declared={len(pairs)}", f"unique={len(fields)}"]
+    if len(pairs) != len(fields):
+        lines.append("duplicate")
+    if not lines or lines[0] != f"# Context Workset {run_id}" or len(lines) != 3:
+        return False
+    return fields == expected

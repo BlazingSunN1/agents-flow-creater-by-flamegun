@@ -1,4 +1,6 @@
 interface:
-  display_name: "Kimi DeepSeek V4 GPT 闭环审查"
-  short_description: "Kimi 修订、DeepSeek V4 子 Agent 黑盒审查、GPT 复核"
-  default_prompt: "Use $multi-model-review-loop so Kimi owns complete designs and revisions, the isolated official DeepSeek V4 sub-Agent authors black-box cases and reviews defects, and Codex GPT independently verifies the exact same hash-bound candidate before acceptance."
+  display_name: "Kimi DeepSeek V4 GPT 闭环审查（已暂停）"
+  short_description: "外部 Kimi/DeepSeek 调用已暂停；Codex GPT 不受影响"
+  default_prompt: "External Kimi and DeepSeek provider calls are paused. Do not execute or resume this legacy loop. Use $native-gpt-review-loop for two read-only Codex-native gpt-5.6-sol children. Keep the Dispatcher read-only; a parent GPT may write only when it is already the registered maintenance Agent for the current module."
+policy:
+  allow_implicit_invocation: false

@@ -14,6 +14,7 @@ from browser_url_validation import is_http_browser_url
 
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
 REQUIRED_COMMANDS = {
+    "delivery_contract",
     "targeted_tests",
     "full_test_or_build",
     "code_standards",
@@ -22,6 +23,8 @@ REQUIRED_COMMANDS = {
     "context_manifest",
     "multi_agent_evidence",
     "swimlane_evidence",
+    "swimlane_freshness",
+    "native_mobile_tests",
     "atomic_record_update",
     "delivery_bundle",
 }
@@ -179,7 +182,7 @@ def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) 
     command_id = str(item.get("id", "")).strip()
     applicability = str(item.get("applicability", "")).strip()
     if applicability != "required":
-        if command_id not in CONDITIONAL_FRONTEND_COMMANDS or not re.fullmatch(r"N/A:\s*\S.+", applicability, re.IGNORECASE):
+        if not re.fullmatch(r"N/A:\s*\S.+", applicability, re.IGNORECASE):
             issues.append(Issue("error", "invalid-command-applicability", f"{command_id} 的 applicability 非法"))
         return
     argv = item.get("argv")

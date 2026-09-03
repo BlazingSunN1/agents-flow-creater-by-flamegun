@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "contract_id": "{{DELIVERY_RUN_ID}}",
+  "stage": "{{PLANNING_IMPLEMENTATION_CLOSURE_CANDIDATE_OR_COMPLETION}}",
+  "status": "{{PENDING_IN_PROGRESS_CLOSURE_CANDIDATE_OR_COMPLETED}}",
+  "baseline": {
+    "version": "{{BASELINE_VERSION}}",
+    "path": "{{BASELINE_ARTIFACT_PATH}}",
+    "sha256": "{{BASELINE_SHA256}}"
+  },
+  "artifacts": {
+    "traceability": {"path": "{{TRACEABILITY_PATH}}", "sha256": "{{TRACEABILITY_SHA256}}"},
+    "questions": {"path": "{{REQUIREMENT_QUESTIONS_PATH}}", "sha256": "{{REQUIREMENT_QUESTIONS_SHA256}}"},
+    "development_plan": {"path": "{{DEVELOPMENT_PLAN_PATH}}", "sha256": "{{DEVELOPMENT_PLAN_SHA256}}"},
+    "progress": {"path": "{{PROGRESS_PATH}}", "sha256": "{{PROGRESS_SHA256}}"},
+    "command_manifest": {"path": "{{PROJECT_COMMANDS_PATH}}", "sha256": "{{PROJECT_COMMANDS_SHA256}}"}
+  },
+  "identity": {
+    "code_version": "{{CODE_VERSION}}",
+    "build_id": "{{BUILD_ID}}",
+    "environment_id": "{{ENVIRONMENT_ID}}"
+  },
+  "change": {
+    "requirement_ids": ["{{REQ_ID}}"],
+    "modules": ["{{MODULE_ID}}"],
+    "changed_files": ["{{PROJECT_RELATIVE_CHANGED_FILE}}"],
+    "configuration_files": [],
+    "input_files": [],
+    "direct_dependency_boundaries": "{{DIRECT_CALLERS_CALLEES_INTERFACES_CONFIG_AND_DATA_BOUNDARIES}}",
+    "risk_level": "{{SMALL_STANDARD_OR_HIGH_RISK}}",
+    "risk_reason": "{{FACTUAL_RISK_REASON}}",
+    "surfaces": ["{{ALLOWED_CHANGE_SURFACE}}"],
+    "flow_impact": "{{NONE_CHANGED_OR_UNCERTAIN}}",
+    "frontend_applicable": false,
+    "swimlane_applicable": false,
+    "cross_module": false,
+    "human_review_triggered": false
+  },
+  "repair_policy": {
+    "max_rounds": 3,
+    "same_failure_limit": 2,
+    "regression_test_before_fix": true,
+    "on_exhaustion": "block_completion_and_record_open_defect"
+  },
+  "gate_plan": {
+    "schema_version": 1,
+    "planner_version": "delivery-gates-v2",
+    "validation_tier": "{{QUICK_AFFECTED_OR_FULL}}",
+    "required_command_ids": ["{{PLANNER_OUTPUT_COMMAND_ID}}"],
+    "aggregate_command_ids": ["{{FINAL_AGGREGATE_COMMAND_ID_WITHOUT_RECEIPT}}"],
+    "independent_roles": ["{{PLANNER_OUTPUT_ROLE_OR_EMPTY}}"],
+    "impact_fingerprint_sha256": "{{PLANNER_OUTPUT_IMPACT_SHA256}}",
+    "gate_input_fingerprints": {"{{COMMAND_ID}}": "{{GATE_INPUT_SHA256}}"},
+    "invalidation_policy": ["{{PLANNER_OUTPUT_INVALIDATION_RULE}}"],
+    "reasons": ["{{PLANNER_OUTPUT_REASON}}"],
+    "plan_sha256": "{{PLANNER_OUTPUT_PLAN_SHA256}}"
+  },
+  "gate_receipts": {
+    "{{COMMAND_ID}}": {
+      "path": "{{PROJECT_RELATIVE_GATE_RECEIPT_PATH}}",
+      "sha256": "{{GATE_RECEIPT_SHA256}}"
+    }
+  }
+}

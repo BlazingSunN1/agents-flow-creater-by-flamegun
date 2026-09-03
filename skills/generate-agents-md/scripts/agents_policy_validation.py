@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlsplit
 
 from agents_policy_common import (
     AUTOMATED_REVIEW_HEADING_RE,
@@ -9,10 +8,7 @@ from agents_policy_common import (
     DEVELOPMENT_PLAN_HEADING_RE,
     Issue,
     MACHINE_POLICY_HEADING_RE,
-    PASSWORD_AUTHORIZATION_HEADING_RE,
-    PLACEHOLDER_RE,
     REQUIRED_MACHINE_POLICY,
-    URI_CREDENTIAL_DETAIL_RE,
     document_path_pattern as _document_path_pattern,
     extract_heading_section as _extract_heading_section,
     section_has_contradiction as _section_has_contradiction,
@@ -25,12 +21,16 @@ from agents_delivery_policy_validation import (
     _validate_swimlane_policy,
     _validate_traceability_policy,
 )
+from agents_dispatcher_policy_validation import validate_dispatcher_ownership_policy
+from agents_authority_matrix_validation import validate_authority_matrix
 
 
 def _validate_root_policies(text: str, mode: str) -> list[Issue]:
     issues: list[Issue] = []
     issues.extend(_validate_global_policy_contradictions(text))
     issues.extend(_validate_machine_policy(text))
+    issues.extend(validate_authority_matrix(text))
+    issues.extend(validate_dispatcher_ownership_policy(text, mode=mode))
     issues.extend(_validate_development_plan_policy(text, mode=mode))
     issues.extend(_validate_traceability_policy(text, mode=mode))
     issues.extend(_validate_automated_review_policy(text, mode=mode))
@@ -50,6 +50,8 @@ def _validate_global_policy_contradictions(text: str) -> list[Issue]:
         r"(?:browser|e2e|前端|浏览器).{0,100}(?:checks?|verification|验证|检查).{0,50}(?:optional|可选).{0,100}(?:complete|completed|完成).{0,60}(?:without|无需|不需要)",
         r"(?:all|every|全部|所有).{0,40}(?:validators?|gates?|checks?|验证器|门禁|检查).{0,80}(?:discretionary|optional|need\s+not|not\s+required|可选|无需|不必)",
         r"(?:completion|complete|完成).{0,60}(?:allowed|permitted|可以|允许).{0,60}(?:no|without|未|无).{0,30}(?:validation|validator|verification|验证|检查)",
+        r"(?:module|模块).{0,40}(?:closure|闭环).{0,60}(?:optional|advisory|skippable|obsolete|可选|可跳过|过时)",
+        r"(?:every affected module|所有受影响模块|每个受影响模块).{0,80}(?:optional|advisory|skippable|not required|可选|可跳过|非必需)",
     )
     flattened = " ".join(line.strip() for line in text.splitlines())
     if any(re.search(pattern, flattened, re.IGNORECASE) for pattern in patterns):
@@ -73,11 +75,11 @@ def _validate_execution_evidence_policy(text: str, *, mode: str) -> list[Issue]:
             "缺少实现 Agent 单写者及独立 Agent 只读隔离边界",
         ),
         (
-            _section_has_line(text, (r"small|小型", r"acceptance-case|验收用例", r"black-box|黑盒"))
-            and _section_has_line(text, (r"standard|标准", r"change-review|变更审查"))
-            and _section_has_line(text, (r"high-risk|高风险", r"requirement-consistency|需求一致", r"domain-specialist|领域专项")),
+            _section_has_line(text, (r"small|小型", r"no extra Agent|starts no extra Agent|不启动额外 Agent"))
+            and _section_has_line(text, (r"standard|标准", r"independent acceptance|black-box|独立验收|黑盒", r"risk mapping|风险映射"))
+            and _section_has_line(text, (r"high-risk|高风险", r"change-review|变更审查", r"requirement-consistency|需求一致", r"domain-specialist|领域专项", r"mapping|映射")),
             "missing-risk-triggered-agent-roles",
-            "缺少按风险触发的独立多 Agent 角色规则",
+            "缺少小型零额外 Agent、标准映射验收与高风险按证据增加角色的规则",
         ),
         (
             _section_has_line(text, (r"multi-Agent evidence|多 Agent.*证据", path_pattern, r"validat|校验"))
@@ -118,7 +120,7 @@ def _validate_machine_policy(text: str) -> list[Issue]:
             continue
         if not in_yaml or not stripped or stripped.startswith("#"):
             continue
-        match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*)\s*:\s*([A-Za-z0-9_-]+)", stripped)
+        match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*)\s*:\s*([A-Za-z0-9_./#-]+)", stripped)
         if not match:
             issues.append(Issue("error", "invalid-machine-policy-entry", "机器策略条目格式无效", line_number))
             continue
@@ -204,12 +206,45 @@ def _validate_automated_review_policy(text: str, *, mode: str) -> list[Issue]:
         return [Issue("error", "missing-automated-review-section", "缺少自动代码审查根级规则章节")]
     path_pattern = _document_path_pattern(mode)
     issues = _automated_review_contradictions(section)
-    checks = (
+    if _has_forbidden_per_change_review_trigger(section):
+        issues.append(Issue(
+            "error", "forbidden-per-change-review-trigger",
+            "普通代码增量不得逐次触发完整审查",
+        ))
+    checks = (*_automated_review_trigger_checks(section), *_automated_review_quality_checks(section, path_pattern))
+    return [*issues, *(Issue("error", code, message) for matched, code, message in checks if not matched)]
+
+
+def _automated_review_trigger_checks(section: str) -> tuple[tuple[bool, str, str], ...]:
+    return (
         (
-            _section_has_line(section, (r"after every|每次", r"code module|代码模块", r"automatically|自动", r"`[^`]+`")),
+            _section_has_line(section, (
+                r"module.{0,30}closure candidate|模块闭环候选", r"human.{0,20}(?:request|trigger)|人工.{0,20}(?:主动|触发)",
+                r"automatically|自动", r"`[^`]+`",
+            )),
             "missing-automated-review-command",
-            "缺少每次代码模块修改后自动运行的审查命令",
+            "缺少模块闭环候选或人工主动触发时运行的审查命令",
         ),
+        (
+            _section_has_line(section, (
+                r"intermediate|增量|中间", r"accumulate|累计", r"do not start|不启动|不触发", r"review|审查",
+            )),
+            "missing-review-trigger-suppression",
+            "缺少普通增量只累计证据且不启动审查的规则",
+        ),
+        (
+            _section_has_line(section, (
+                r"after.{0,30}(?:review|审查)|审查后", r"change|变化|修改", r"stale|失效|过期",
+                r"next.{0,20}(?:closure candidate|闭环候选)|下一.{0,20}闭环候选", r"fingerprint|指纹",
+            )),
+            "missing-review-trigger-freshness",
+            "缺少审查后变更失效及闭环候选重审规则",
+        ),
+    )
+
+
+def _automated_review_quality_checks(section: str, path_pattern: str) -> tuple[tuple[bool, str, str], ...]:
+    return (
         (
             _section_has_line(section, (r"missing|cannot run|缺失|无法运行", r"blocked|阻断", r"skip|跳过")),
             "missing-automated-review-fail-closed",
@@ -241,7 +276,12 @@ def _validate_automated_review_policy(text: str, *, mode: str) -> list[Issue]:
             "缺少未解决发现或审查阻断时禁止黑盒验收与完成的门禁",
         ),
     )
-    return [*issues, *(Issue("error", code, message) for matched, code, message in checks if not matched)]
+def _has_forbidden_per_change_review_trigger(section: str) -> bool:
+    return bool(re.search(
+        r"(?i)(?:after every\s+(?:code\s+)?module change.{0,80}automatically\s+run|"
+        r"每次代码模块修改后.{0,80}自动(?:运行|执行))",
+        section,
+    ))
 
 
 def _automated_review_contradictions(section: str) -> list[Issue]:
@@ -320,104 +360,3 @@ def _context_budget_contradictions(section: str) -> list[Issue]:
         "contradictory-context-workset-policy",
         "上下文章节包含禁止维护当前工作集的反向规则",
     )]
-
-
-def _validate_password_authorization(text: str) -> list[Issue]:
-    section = _extract_heading_section(text, PASSWORD_AUTHORIZATION_HEADING_RE)
-    if section is None:
-        return [
-            Issue(
-                "error",
-                "missing-password-authorization",
-                "获准记录密码时必须包含 Password Authorization 章节",
-            )
-        ]
-    fields: dict[str, str] = {}
-    duplicates: list[str] = []
-    for line in section.splitlines():
-        match = re.match(r"^-\s+([^:：]+)[:：]\s*(.*?)\s*$", line)
-        if not match:
-            continue
-        key, value = match.group(1).strip().casefold(), match.group(2).strip()
-        if key in fields:
-            duplicates.append(key)
-        else:
-            fields[key] = value
-    if duplicates:
-        return [Issue(
-            "error", "duplicate-password-authorization-field",
-            f"密码授权字段不得重复：{', '.join(sorted(set(duplicates)))}",
-        )]
-    aliases = {
-        "scope": ("scope", "作用域"),
-        "purpose": ("purpose", "用途"),
-        "update method": ("update method", "更新方式"),
-        "access boundary": ("access boundary", "访问边界"),
-    }
-    boundary_issue = _password_boundary_issue(fields, aliases)
-    if boundary_issue:
-        return [boundary_issue]
-    return _password_endpoint_issues(text, fields)
-
-
-def _password_boundary_issue(
-    fields: dict[str, str], aliases: dict[str, tuple[str, str]],
-) -> Issue | None:
-    missing = [label for label, names in aliases.items() if not any(
-        fields.get(name.casefold(), "").strip() for name in names
-    )]
-    if missing:
-        return Issue(
-            "error", "invalid-password-authorization",
-            f"密码授权缺少非空边界字段：{', '.join(missing)}",
-        )
-    invalid_value = re.compile(
-        r"^(?:tbd|todo|later|unknown|everyone|anyone|all|待定|以后|所有人|任意)$",
-        re.IGNORECASE,
-    )
-    values = [
-        next(fields[name.casefold()] for name in names if fields.get(name.casefold(), "").strip())
-        for names in aliases.values()
-    ]
-    if any(PLACEHOLDER_RE.search(value) or invalid_value.fullmatch(value.strip()) for value in values):
-        return Issue(
-            "error", "invalid-password-authorization",
-            "密码授权字段不得使用占位符、待定值或无限制访问边界",
-        )
-    return None
-
-
-def _password_endpoint_issues(text: str, fields: dict[str, str]) -> list[Issue]:
-    uri_endpoints = {
-        endpoint
-        for match in URI_CREDENTIAL_DETAIL_RE.finditer(text)
-        if (endpoint := _normalized_password_endpoint(match.group("uri"))) is not None
-    }
-    if uri_endpoints:
-        endpoints = fields.get("authorized endpoints", fields.get("授权端点", ""))
-        authorized = {
-            endpoint
-            for item in endpoints.split(",")
-            if (endpoint := _normalized_password_endpoint(item)) is not None
-        }
-        if not authorized or not uri_endpoints <= authorized:
-            return [Issue("error", "unauthorized-password-endpoint", "每个 URI 内嵌密码端点必须逐项列入 Authorized endpoints")]
-    return []
-
-
-def _normalized_password_endpoint(raw_value: str) -> str | None:
-    value = raw_value.strip().strip("`'\".,;")
-    try:
-        parsed = urlsplit(value)
-        host = parsed.hostname
-        port = parsed.port
-    except ValueError:
-        return None
-    if not parsed.scheme or not host:
-        return None
-    authority = host.casefold()
-    if ":" in authority and not authority.startswith("["):
-        authority = f"[{authority}]"
-    if port is not None:
-        authority = f"{authority}:{port}"
-    return f"{parsed.scheme.casefold()}://{authority}{parsed.path or '/'}"

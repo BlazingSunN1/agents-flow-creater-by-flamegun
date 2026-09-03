@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from validate_contract import validate_common, validate_kimi, validate_review, write_new_private_file
+
+
+EXECUTION_PROFILE = {
+    "transport": "bounded-sse-v1", "idle_timeout_seconds": 180.0,
+    "deadline_seconds": 1800.0, "max_output_tokens": 32768, "retry_limit": 1,
+}
 
 
 def valid_kimi(version: int = 1) -> dict[str, object]:
@@ -152,6 +160,7 @@ class DeepSeekContractTests(unittest.TestCase):
                 "provider": "deepseek", "request_model": "deepseek-v4-pro",
                 "model": "deepseek-v4-pro", "content": json.dumps(value),
                 "usage": None, "response_id": "r", "finish_reason": "stop",
+                **EXECUTION_PROFILE,
             }), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "active Codex"):
                 load_contract(path, "gpt")
@@ -167,6 +176,15 @@ class DeepSeekContractTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 write_new_private_file(output, "replacement")
             self.assertEqual("preserved", victim.read_text(encoding="utf-8"))
+
+    def test_private_output_is_not_published_when_durability_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output.json"
+            with patch("validate_contract.os.fsync", side_effect=OSError("synthetic fsync failure")):
+                with self.assertRaisesRegex(OSError, "synthetic"):
+                    write_new_private_file(output, "complete payload")
+            self.assertFalse(output.exists())
+            self.assertEqual([], list(Path(temporary).iterdir()))
 
 
 if __name__ == "__main__":

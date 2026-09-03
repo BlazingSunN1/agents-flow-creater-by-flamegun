@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import http.client
 import json
 import os
 import ssl
@@ -13,7 +14,10 @@ import sys
 import time
 import urllib.error
 import urllib.request
+
+from external_provider_policy import require_external_providers_enabled
 from pathlib import Path
+from collections.abc import Iterable
 from typing import Any
 
 from spawn_external_agent import (
@@ -42,6 +46,8 @@ PROVIDERS = {
 }
 DEEPSEEK_OFFICIAL_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_V4_MODELS = {"deepseek-v4-pro", "deepseek-v4-flash"}
+MAX_OUTPUT_TOKENS = 262_144
+MAX_STREAM_BYTES = 64 * 1024 * 1024
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,7 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prompt-file", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--timeout", type=float, default=180.0)
-    parser.add_argument("--max-tokens", type=int, default=8192)
+    parser.add_argument("--deadline", type=float, default=1800.0)
+    parser.add_argument("--max-tokens", type=int, default=32768)
     parser.add_argument("--retries", type=int, choices=range(0, 4), default=1)
     return parser.parse_args()
 
@@ -124,8 +131,9 @@ def validate_call_paths(args: argparse.Namespace) -> None:
 
 
 def build_request(args: argparse.Namespace) -> tuple[urllib.request.Request, str]:
-    if not 1 <= args.max_tokens <= 32768 or not 1 <= args.timeout <= 600:
-        raise ValueError("max-tokens must be 1..32768 and timeout must be 1..600 seconds")
+    if not 1 <= args.max_tokens <= MAX_OUTPUT_TOKENS or not 1 <= args.timeout <= 600 \
+            or not args.timeout <= args.deadline <= 7200:
+        raise ValueError("max-tokens, idle timeout, or overall deadline is outside its safe range")
     config = PROVIDERS[args.provider]
     api_key = provider_secret(config)
     model = configured_value(config["model_env"], config["model_default"])
@@ -137,7 +145,8 @@ def build_request(args: argparse.Namespace) -> tuple[urllib.request.Request, str
             {"role": "system", "content": args.system_file.read_text("utf-8")},
             {"role": "user", "content": args.prompt_file.read_text("utf-8")},
         ],
-        "stream": False,
+        "stream": True,
+        "stream_options": {"include_usage": True},
     }
     if args.provider == "kimi":
         payload["max_completion_tokens"] = args.max_tokens
@@ -167,16 +176,108 @@ def retryable(error: Exception) -> bool:
     return isinstance(error, (urllib.error.URLError, TimeoutError))
 
 
-def post(request: urllib.request.Request, timeout: float, retries: int) -> dict[str, Any]:
+def _stream_identity(chunk: dict[str, Any], state: dict[str, Any]) -> None:
+    for name in ("id", "model"):
+        value = chunk.get(name)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value.strip() or state[name] not in (None, value):
+            raise ValueError(f"provider stream {name} is invalid or drifted")
+        state[name] = value
+
+
+def _stream_choice(chunk: dict[str, Any], state: dict[str, Any]) -> None:
+    choices = chunk.get("choices", [])
+    if not isinstance(choices, list) or len(choices) > 1:
+        raise ValueError("provider stream choices are invalid")
+    if not choices:
+        return
+    choice = choices[0]
+    if not isinstance(choice, dict) or choice.get("index") not in (None, 0):
+        raise ValueError("provider stream choice is invalid")
+    delta = choice.get("delta", {})
+    if not isinstance(delta, dict):
+        raise ValueError("provider stream delta is invalid")
+    piece = delta.get("content")
+    if piece is not None:
+        if not isinstance(piece, str):
+            raise ValueError("provider stream content is invalid")
+        state["content"].append(piece)
+    finish = choice.get("finish_reason")
+    if finish is not None:
+        if not isinstance(finish, str) or state["finish"] not in (None, finish):
+            raise ValueError("provider stream finish_reason drifted")
+        state["finish"] = finish
+
+
+def parse_provider_stream(
+    lines: Iterable[bytes], deadline_at: float | None = None,
+) -> dict[str, Any]:
+    state: dict[str, Any] = {
+        "id": None, "model": None, "usage": None, "finish": None,
+        "content": [], "done": False, "bytes": 0, "events": 0,
+    }
+    try:
+        for raw in lines:
+            if deadline_at is not None and time.monotonic() >= deadline_at:
+                raise ValueError("provider stream exceeded the overall deadline")
+            state["bytes"] += len(raw)
+            if state["bytes"] > MAX_STREAM_BYTES:
+                raise ValueError("provider stream exceeds the bounded byte budget")
+            line = raw.decode("utf-8").strip()
+            if not line or line.startswith(":") or line.startswith("event:"):
+                continue
+            if state["done"] or not line.startswith("data:"):
+                raise ValueError("provider stream contains an invalid SSE record")
+            payload = line[5:].strip()
+            if payload == "[DONE]":
+                state["done"] = True
+                continue
+            chunk = strict_json_loads(payload)
+            if not isinstance(chunk, dict):
+                raise ValueError("provider stream chunk must be an object")
+            state["events"] += 1
+            _stream_identity(chunk, state)
+            if chunk.get("usage") is not None:
+                state["usage"] = chunk["usage"]
+            _stream_choice(chunk, state)
+    except (OSError, TimeoutError, http.client.HTTPException) as error:
+        if state["bytes"]:
+            raise ValueError("provider stream disconnected after output began") from error
+        raise
+    if not state["done"]:
+        raise ValueError("provider stream is missing the completion marker")
+    if not state["events"] or state["id"] is None or state["model"] is None:
+        raise ValueError("provider stream has no response identity")
+    return {
+        "id": state["id"], "model": state["model"], "usage": state["usage"],
+        "choices": [{"message": {"content": "".join(state["content"])},
+                     "finish_reason": state["finish"]}],
+    }
+
+
+def post(
+    request: urllib.request.Request, timeout: float, retries: int, provider: str,
+    deadline: float,
+) -> dict[str, Any]:
     context = ssl.create_default_context()
+    deadline_at = time.monotonic() + deadline
     for attempt in range(retries + 1):
+        remaining = deadline_at - time.monotonic()
+        if remaining <= 0:
+            raise ValueError("provider call exceeded the overall deadline")
         try:
-            with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
-                return json.loads(response.read().decode("utf-8"))
+            with urllib.request.urlopen(
+                request, timeout=min(timeout, remaining), context=context,
+            ) as response:
+                return parse_provider_stream(response, deadline_at)
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as error:
             if attempt >= retries or not retryable(error):
                 raise
-            time.sleep(2**attempt)
+            delay = 2**attempt
+            if time.monotonic() + delay >= deadline_at:
+                raise ValueError("provider retry would exceed the overall deadline") from error
+            time.sleep(delay)
     raise RuntimeError("unreachable retry state")
 
 
@@ -218,9 +319,16 @@ def safe_error(error: Exception) -> str:
 def main() -> int:
     args = parse_args()
     try:
+        require_external_providers_enabled()
         validate_call_paths(args)
         request, model = build_request(args)
-        result = extract_result(post(request, args.timeout, args.retries), args.provider, model)
+        response = post(request, args.timeout, args.retries, args.provider, args.deadline)
+        result = extract_result(response, args.provider, model)
+        result.update({
+            "transport": "bounded-sse-v1", "idle_timeout_seconds": args.timeout,
+            "deadline_seconds": args.deadline, "max_output_tokens": args.max_tokens,
+            "retry_limit": args.retries,
+        })
         output = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
         validate_call_paths(args)
         args.output.parent.mkdir(parents=True, exist_ok=True)

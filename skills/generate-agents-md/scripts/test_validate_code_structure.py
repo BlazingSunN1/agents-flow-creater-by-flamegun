@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+import ast
 from pathlib import Path
 
 
@@ -24,6 +25,14 @@ class CodeStructureTests(unittest.TestCase):
             (root / "b.py").write_text("import a\n", encoding="utf-8")
             codes = {issue.code for issue in validate_scripts(root)}
         self.assertEqual({"function-too-long", "circular-import"}, codes)
+
+    def test_delivery_bundle_orchestrator_stays_within_function_limit(self) -> None:
+        source = (SCRIPT_DIR / "validate_delivery_bundle.py").read_text(encoding="utf-8")
+        function = next(
+            node for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.FunctionDef) and node.name == "_validate_delivery_bundle_impl"
+        )
+        self.assertLessEqual((function.end_lineno or function.lineno) - function.lineno + 1, 50)
 
 
 if __name__ == "__main__":

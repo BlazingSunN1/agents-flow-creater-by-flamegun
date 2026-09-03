@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -12,13 +13,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_validate_agents_md import project_root_fixture
 import test_validate_traceability as trace_test_support
-from validate_context_manifest import _cache_key, _paths_fingerprint
+from validate_context_manifest import (
+    _cache_key, _parse_metadata as parse_context_metadata, _paths_fingerprint,
+    _split_paths,
+)
 from delivery_record_validation import _module_changed_files
-from validate_delivery_bundle import _frontend_applicable, _metadata_binding_issues, validate_delivery_bundle
+from delivery_gate_planner import (
+    build_gate_plan, compute_command_fingerprints, compute_impact_fingerprint,
+)
+from validate_delivery_bundle import (
+    _frontend_applicable, _metadata_binding_issues,
+    _test_only_validate_delivery_bundle, validate_delivery_bundle,
+)
 from validate_project_commands import REQUIRED_COMMANDS
+from validate_delivery_contract import validate_delivery_contract
+from validate_traceability import _parse_metadata as parse_trace_metadata
 from test_http_server import ProjectHttpServer
 from test_execution_run_support import reusable_execution_run
 from test_image_support import png_bytes
+from authority_binding_validation import AUTHORITY_MATRIX_LOCATOR
+from agents_authority_matrix_validation import AUTHORITY_MATRIX_SHA256
 
 
 class DeliveryBundleValidatorTests(unittest.TestCase):
@@ -32,6 +46,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         self.agents = self.root / "AGENTS.md"
         self.agents.write_text(project_root_fixture(), encoding="utf-8")
         baseline_sha = hashlib.sha256((self.root / "requirements/baseline.md").read_bytes()).hexdigest()
+        self.requirement_questions = self.root / "requirement-questions.json"
+        self._write_requirement_questions(self._requirement_questions_payload(baseline_sha))
         docs = self.root / "docs"
         docs.mkdir()
         self.plan = docs / "development_plan_path.md"
@@ -79,6 +95,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "schema_version": 1, "implementation_run_id": "impl-run-1", "code_version": "code-v1",
             "code_fingerprint": code_fingerprint, "changed_files": ["src/module.py"],
             "command_manifest_fingerprint": command_manifest_fingerprint,
+            "review_trigger": "module_closure_candidate", "human_trigger_reference": "N/A",
             "command_id": "automated_review", "argv_sha256": review_argv_sha, "exit_code": 0,
             "started_at": "2026-08-14T11:00:00+08:00", "ended_at": "2026-08-14T11:01:00+08:00",
             "findings": [], "reruns": {
@@ -94,6 +111,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
 - Code version: code-v1
 - Code fingerprint: {code_fingerprint}
 - Command manifest fingerprint: {command_manifest_fingerprint}
+- Review trigger: module_closure_candidate
+- Human trigger reference: N/A
 - Scope: src/module.py; callers; callees; interfaces; configuration; tests; traceability; swimlanes
 - Changed files: src/module.py
 - Review command ID: automated_review
@@ -117,6 +136,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         for relative in ("evidence/change-input.md", "evidence/change-output.md"):
             (self.root / relative).write_text(relative, encoding="utf-8")
         self.multi_agent = self.root / "multi-agent.json"
+        self._write_implementation_receipt()
         self._write_agent_inputs()
         self._write_agent_outputs()
         self.multi_agent.write_text(json.dumps(self._multi_agent_evidence()), encoding="utf-8")
@@ -183,6 +203,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         (self.root / "evidence/swimlane-browser.json").write_text(json.dumps(transcript), encoding="utf-8")
         self.swimlane = self.root / "swimlane.json"
         self.swimlane.write_text(json.dumps(self._swimlane_evidence()), encoding="utf-8")
+        self.contract = self.root / "docs/delivery-contract.json"
+        self._write_delivery_contract()
 
     def tearDown(self) -> None:
         self.http.close()
@@ -201,6 +223,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "Baseline artifact": "requirements/baseline.md",
             "Baseline version": "req-v1",
             "Baseline SHA-256": baseline_sha,
+            "Authority matrix locator": AUTHORITY_MATRIX_LOCATOR,
+            "Authority matrix SHA-256": AUTHORITY_MATRIX_SHA256,
             "Requirement IDs": "REQ-001",
             "Module changed files": "module=src/module.py",
             "Risk / expansion reason": risk_reason,
@@ -221,7 +245,11 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         source_run.parent.mkdir(parents=True, exist_ok=True)
         source_context = source_run.parent / "context-prior-run.md"
         source_context.write_text(
-            f"# Context Workset prior-run\n\n- Run ID: prior-run\n- Evidence cache key: {cache_key}\n",
+            f"# Context Workset prior-run\n\n"
+            "- Run ID: prior-run\n"
+            f"- Authority matrix locator: {AUTHORITY_MATRIX_LOCATOR}\n"
+            f"- Authority matrix SHA-256: {AUTHORITY_MATRIX_SHA256}\n"
+            f"- Evidence cache key: {cache_key}\n",
             encoding="utf-8",
         )
         source_run.write_text(reusable_execution_run(
@@ -254,6 +282,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
 - Baseline artifact: requirements/baseline.md
 - Baseline version: req-v1
 - Baseline SHA-256: {baseline_sha}
+- Authority matrix locator: {AUTHORITY_MATRIX_LOCATOR}
+- Authority matrix SHA-256: {AUTHORITY_MATRIX_SHA256}
 - Code version: {code_version}
 - Build ID: build-1
 - Risk / expansion reason: {risk_reason}
@@ -429,15 +459,50 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         return re.sub(r"^\| BLACK_BOX \|.*$", row, text, flags=re.MULTILINE)
 
     def _agent_gate(self, role: str, run_id: str, source: str, output: str) -> dict[str, object]:
+        slug = role.casefold().replace("_", "-")
+        receipt = f"evidence/{slug}-spawn-receipt.json"
+        output_receipt = f"evidence/{slug}-output-result.json"
+        payload = {
+            "schema_version": 1, "receipt_kind": "codex-native-spawn-result",
+            "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol", "agent_id": f"{slug}-agent-1",
+            "requested_reasoning_effort": "xhigh", "recorded_reasoning_effort": "xhigh",
+            "run_id": run_id, "role": f"{slug}-gate", "module": "module",
+            "maintainer_title": f"{role} Gate Reviewer",
+        }
+        (self.root / receipt).write_text(json.dumps(payload), encoding="utf-8")
+        input_sha256 = hashlib.sha256((self.root / source).read_bytes()).hexdigest()
+        output_sha256 = hashlib.sha256((self.root / output).read_bytes()).hexdigest()
+        output_result = {
+            **payload,
+            "receipt_kind": "codex-native-output-result",
+            "input_sha256": input_sha256,
+            "output_sha256": output_sha256,
+            "baseline_version": "req-v1",
+            "code_version": "code-v1",
+            "build_id": "build-1",
+            "candidate_sha256": hashlib.sha256(b"module-candidate").hexdigest(),
+            "verdict": "pass",
+        }
+        (self.root / output_receipt).write_text(json.dumps(output_result), encoding="utf-8")
         return {
             "role": role,
             "run_id": run_id,
-            "provider": "independent-agent",
+            "provider": "codex-native-agent",
+            "agent_model": "gpt-5.6-sol",
+            "agent_reasoning_effort": "xhigh",
+            "agent_id": f"{slug}-agent-1",
+            "spawn_receipt": receipt,
+            "spawn_receipt_sha256": hashlib.sha256((self.root / receipt).read_bytes()).hexdigest(),
+            "output_receipt": output_receipt,
+            "output_receipt_sha256": hashlib.sha256(
+                (self.root / output_receipt).read_bytes()
+            ).hexdigest(),
             "focus": f"{role} bounded review",
             "input_manifest": source,
-            "input_sha256": hashlib.sha256((self.root / source).read_bytes()).hexdigest(),
+            "input_sha256": input_sha256,
             "output_evidence": output,
-            "output_sha256": hashlib.sha256((self.root / output).read_bytes()).hexdigest(),
+            "output_sha256": output_sha256,
             "may_modify_code": False,
             "may_modify_shared_records": False,
             "received_full_chat": False,
@@ -473,6 +538,12 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         payload = {
             "schema_version": 1, "role": role, "run_id": run_id,
             "baseline_version": "req-v1", "baseline_sha256": baseline_sha,
+            "requirement_questions_locator": self.requirement_questions.relative_to(
+                self.root
+            ).as_posix(),
+            "requirement_questions_sha256": hashlib.sha256(
+                self.requirement_questions.read_bytes()
+            ).hexdigest(),
             "requirement_ids": ["REQ-001"],
             "artifacts": [
                 {
@@ -498,6 +569,25 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         }
         (self.root / relative).write_text(json.dumps(payload), encoding="utf-8")
 
+    def _write_implementation_receipt(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "receipt_kind": "codex-native-spawn-result",
+            "provider": "codex-native-agent",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
+            "requested_reasoning_effort": "high",
+            "recorded_reasoning_effort": "high",
+            "agent_id": "module-maintainer-agent-1",
+            "run_id": "impl-run-1",
+            "role": "module-maintainer",
+            "module": "module",
+            "maintainer_title": "ModuleMaintainer",
+        }
+        (self.root / "evidence/implementation-spawn-receipt.json").write_text(
+            json.dumps(payload), encoding="utf-8",
+        )
+
     def _multi_agent_evidence(self) -> dict[str, object]:
         baseline_sha = hashlib.sha256((self.root / "requirements/baseline.md").read_bytes()).hexdigest()
         return {
@@ -507,7 +597,17 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "baseline_sha256": baseline_sha,
             "code_version": "code-v1",
             "build_id": "build-1",
+            "candidate_sha256": hashlib.sha256(b"module-candidate").hexdigest(),
+            "implementation_agent_title": "ModuleMaintainer",
+            "implementation_agent_provider": "codex-native-agent",
+            "implementation_agent_model": "gpt-5.6-sol",
+            "implementation_agent_reasoning_effort": "high",
+            "implementation_agent_id": "module-maintainer-agent-1",
             "implementation_run_id": "impl-run-1",
+            "implementation_spawn_receipt": "evidence/implementation-spawn-receipt.json",
+            "implementation_spawn_receipt_sha256": hashlib.sha256(
+                (self.root / "evidence/implementation-spawn-receipt.json").read_bytes()
+            ).hexdigest(),
             "single_writer_run_id": "impl-run-1",
             "gates": [
                 self._agent_gate("UI_UX", "ui-run-1", "evidence/ui-input.md", "evidence/ui-output.md"),
@@ -518,10 +618,11 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "open_disagreements": [],
         }
 
-    def codes(self) -> set[str]:
+    def codes(self, verifier=lambda *_: True) -> set[str]:
         return {
             issue.code
-            for issue in validate_delivery_bundle(
+            for issue in _test_only_validate_delivery_bundle(
+                delivery_contract_path=self.contract,
                 agents_path=self.agents,
                 trace_path=self.trace_fixture.matrix,
                 context_path=self.context,
@@ -529,13 +630,359 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
                 multi_agent_evidence_path=self.multi_agent,
                 swimlane_evidence_path=self.swimlane,
                 frontend_evidence_path=self.frontend,
+                requirement_questions_path=self.requirement_questions,
+                requirement_questions_sha256=self.requirement_questions_sha256,
+                requirement_baseline_version="req-v1",
+                requirement_baseline_sha256=hashlib.sha256(
+                    (self.root / "requirements/baseline.md").read_bytes()
+                ).hexdigest(),
                 project_root=self.root,
+                _test_only_host_attestation_verifier=verifier,
             )
             if issue.severity == "error"
         }
 
+    def _requirement_questions_payload(self, baseline_sha: str) -> dict[str, object]:
+        return {
+            "schema_version": 1, "baseline_version": "req-v1",
+            "baseline_sha256": baseline_sha,
+            "questions": [{
+                "question_id": "Q-001", "impact_scope": ["REQ-001"],
+                "risk": "standard", "proposed_default": "Keep current behavior.",
+                "safe_fallback": "Disable the additive change.",
+                "answer_status": "NOT_PROVIDED", "delivery_disposition": "NON_BLOCKING_P2",
+                "assumption": "Compatibility is required.",
+                "owner": "product-owner", "review_due": "2026-09-03T10:00:00+08:00",
+            }],
+            "gate_reruns": [],
+        }
+
+    def _write_requirement_questions(self, payload: dict[str, object]) -> None:
+        self.requirement_questions.write_text(json.dumps(payload), encoding="utf-8")
+        self.requirement_questions_sha256 = hashlib.sha256(self.requirement_questions.read_bytes()).hexdigest()
+        if hasattr(self, "multi_agent") and self.multi_agent.exists():
+            self._write_agent_inputs()
+            self._write_agent_outputs()
+            self.multi_agent.write_text(
+                json.dumps(self._multi_agent_evidence()), encoding="utf-8",
+            )
+        if hasattr(self, "contract"):
+            self._write_delivery_contract()
+
+    def _contract_ref(self, path: Path) -> dict[str, str]:
+        return {
+            "path": path.relative_to(self.root).as_posix(),
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+
+    def _write_delivery_contract(self, *, stage: str = "completion") -> None:
+        trace = parse_trace_metadata(self.trace_fixture.matrix.read_text(encoding="utf-8"))
+        context, _ = parse_context_metadata(self.context.read_text(encoding="utf-8"))
+        commands = json.loads(self.commands.read_text(encoding="utf-8"))
+        surfaces = [
+            item.strip().casefold()
+            for item in trace.get("Change surfaces", "").split(",")
+            if item.strip()
+        ]
+        modules = [item.strip() for item in context.get("Modules", "").split(",") if item.strip()]
+        data: dict[str, object] = {
+            "schema_version": 1,
+            "contract_id": "impl-run-1",
+            "stage": stage,
+            "status": "completed" if stage == "completion" else "in_progress",
+            "baseline": {
+                "version": "req-v1",
+                **self._contract_ref(self.root / "requirements/baseline.md"),
+            },
+            "artifacts": {
+                "traceability": self._contract_ref(self.trace_fixture.matrix),
+                "questions": self._contract_ref(self.requirement_questions),
+                "development_plan": self._contract_ref(self.plan),
+                "progress": self._contract_ref(self.progress),
+                "command_manifest": self._contract_ref(self.commands),
+            },
+            "identity": {
+                "code_version": trace.get("Code version"),
+                "build_id": trace.get("Build ID"),
+                "environment_id": trace.get("Acceptance environment"),
+            },
+            "change": {
+                "requirement_ids": [item.strip() for item in context.get("Requirement IDs", "").split(",") if item.strip()],
+                "modules": modules,
+                "changed_files": _split_paths(context.get("Changed files", "")),
+                "configuration_files": _split_paths(context.get("Configuration files", "")),
+                "input_files": _split_paths(context.get("Input files", "")),
+                "direct_dependency_boundaries": context.get("Direct dependency boundaries"),
+                "risk_level": trace.get("Risk level"),
+                "risk_reason": trace.get("Risk reason"),
+                "surfaces": surfaces,
+                "flow_impact": "changed",
+                "frontend_applicable": isinstance(commands, dict) and commands.get("frontend_applicable") is True,
+                "swimlane_applicable": True,
+                "cross_module": len(modules) > 1 or "cross-module" in surfaces,
+                "human_review_triggered": False,
+            },
+            "repair_policy": {
+                "max_rounds": 3,
+                "same_failure_limit": 2,
+                "regression_test_before_fix": True,
+                "on_exhaustion": "block_completion_and_record_open_defect",
+            },
+            "gate_plan": {},
+            "gate_receipts": {},
+        }
+        self._bind_contract_gate_plan(data, stage)
+        self.contract.write_text(json.dumps(data), encoding="utf-8")
+
+    def _bind_contract_gate_plan(self, data: dict[str, object], stage: str) -> None:
+        impact = compute_impact_fingerprint(data, self.root)
+        data["gate_plan"] = build_gate_plan(
+            data["change"], stage=stage, impact_fingerprint=impact,
+            command_fingerprints=compute_command_fingerprints(data, self.root),
+        )
+        receipts = {}
+        for command_id, fingerprint in data["gate_plan"]["gate_input_fingerprints"].items():
+            output = self.root / f"evidence/contract-gate-{command_id}.txt"
+            output.write_text(f"passed {command_id}", encoding="utf-8")
+            receipt = self.root / f"evidence/contract-gate-{command_id}.json"
+            receipt.write_text(json.dumps({
+                "schema_version": 1,
+                "command_id": command_id,
+                "gate_input_fingerprint": fingerprint,
+                "verdict": "pass",
+                "run_id": f"run-{command_id}",
+                "output_path": output.relative_to(self.root).as_posix(),
+                "output_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+            }), encoding="utf-8")
+            receipts[command_id] = self._contract_ref(receipt)
+        data["gate_receipts"] = receipts
+
+    def _rewrite_contract_change(self, field: str, value: object) -> None:
+        data = json.loads(self.contract.read_text(encoding="utf-8"))
+        data["change"][field] = value
+        self._bind_contract_gate_plan(data, str(data["stage"]))
+        self.contract.write_text(json.dumps(data), encoding="utf-8")
+
+    def _assert_valid_contract_change_drift_is_rejected(self, field: str, value: object) -> None:
+        self._rewrite_contract_change(field, value)
+        standalone = {
+            item.code for item in validate_delivery_contract(self.contract, project_root=self.root)
+            if item.severity == "error"
+        }
+        self.assertEqual(set(), standalone)
+        self.assertIn("contract-change-identity-mismatch", self.codes())
+
+    def _rebind_gate_inputs_to_questions(self, questions: Path) -> None:
+        evidence = json.loads(self.multi_agent.read_text(encoding="utf-8"))
+        locator = questions.relative_to(self.root).as_posix()
+        questions_sha = hashlib.sha256(questions.read_bytes()).hexdigest()
+        for gate in evidence["gates"]:
+            input_path = self.root / gate["input_manifest"]
+            gate_input = json.loads(input_path.read_text(encoding="utf-8"))
+            gate_input["requirement_questions_locator"] = locator
+            gate_input["requirement_questions_sha256"] = questions_sha
+            input_path.write_text(json.dumps(gate_input), encoding="utf-8")
+            gate["input_sha256"] = hashlib.sha256(input_path.read_bytes()).hexdigest()
+
+            output_path = self.root / gate["output_evidence"]
+            gate_output = json.loads(output_path.read_text(encoding="utf-8"))
+            gate_output["input_sha256"] = gate["input_sha256"]
+            output_path.write_text(json.dumps(gate_output), encoding="utf-8")
+            gate["output_sha256"] = hashlib.sha256(output_path.read_bytes()).hexdigest()
+
+            receipt_path = self.root / gate["output_receipt"]
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["input_sha256"] = gate["input_sha256"]
+            receipt["output_sha256"] = gate["output_sha256"]
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+            gate["output_receipt_sha256"] = hashlib.sha256(
+                receipt_path.read_bytes()
+            ).hexdigest()
+        self.multi_agent.write_text(json.dumps(evidence), encoding="utf-8")
+
+    def _answered_requirement_questions(self) -> dict[str, object]:
+        baseline_sha = hashlib.sha256((self.root / "requirements/baseline.md").read_bytes()).hexdigest()
+        payload = self._requirement_questions_payload(baseline_sha)
+        question = payload["questions"][0]
+        question.update({
+            "answer_status": "ANSWERED", "human_answer": "Keep current behavior.",
+            "pre_answer_baseline_version": "req-v0", "pre_answer_baseline_sha256": "c" * 64,
+        })
+        answer = {
+            "schema_version": 1, "evidence_kind": "human-requirement-answer",
+            "question_id": "Q-001", "human_answer": "Keep current behavior.",
+            "pre_answer_baseline_version": "req-v0", "pre_answer_baseline_sha256": "c" * 64,
+            "post_answer_baseline_version": "req-v1", "post_answer_baseline_sha256": baseline_sha,
+        }
+        answer_path = self.root / "evidence/requirement-answer.json"
+        answer_path.write_text(json.dumps(answer, sort_keys=True), encoding="utf-8")
+        question["answer_evidence_locator"] = "evidence/requirement-answer.json"
+        question["answer_evidence_sha256"] = hashlib.sha256(answer_path.read_bytes()).hexdigest()
+        receipt = {
+            "schema_version": 1, "receipt_kind": "requirement-gate-rerun",
+            "question_id": "Q-001", "baseline_version": "req-v1",
+            "baseline_sha256": baseline_sha, "affected_scope": ["REQ-001"],
+            "status": "COMPLETED",
+        }
+        receipt_path = self.root / "evidence/requirement-rerun.json"
+        receipt_path.write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+        payload["gate_reruns"] = [{
+            "question_id": "Q-001", "baseline_version": "req-v1",
+            "baseline_sha256": baseline_sha, "affected_scope": ["REQ-001"],
+            "status": "COMPLETED", "receipt_locator": "evidence/requirement-rerun.json",
+            "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+        }]
+        return payload
+
+    def test_requirement_questions_are_required_and_hash_bound(self) -> None:
+        self.requirement_questions.unlink()
+        self.assertIn("questions-artifact-invalid", self.codes())
+
+    def test_requirement_questions_hash_drift_fails(self) -> None:
+        expected = hashlib.sha256(self.requirement_questions.read_bytes()).hexdigest()
+        self.requirement_questions.write_text("{}", encoding="utf-8")
+        issues = _test_only_validate_delivery_bundle(
+            agents_path=self.agents, trace_path=self.trace_fixture.matrix,
+            context_path=self.context, command_manifest_path=self.commands,
+            multi_agent_evidence_path=self.multi_agent, swimlane_evidence_path=self.swimlane,
+            frontend_evidence_path=self.frontend, requirement_questions_path=self.requirement_questions,
+            requirement_questions_sha256=expected, requirement_baseline_version="req-v1",
+            requirement_baseline_sha256=hashlib.sha256((self.root / "requirements/baseline.md").read_bytes()).hexdigest(),
+            project_root=self.root, _test_only_host_attestation_verifier=lambda *_: True,
+        )
+        self.assertIn("questions-artifact-invalid", {item.code for item in issues})
+
+    def test_requirement_questions_never_block_delivery(self) -> None:
+        payload = json.loads(self.requirement_questions.read_text(encoding="utf-8"))
+        payload["questions"][0]["risk"] = "security"
+        self._write_requirement_questions(payload)
+        self.assertNotIn("questions-unanswered-question-blocked", self.codes())
+
+    def test_requirement_questions_baseline_must_match_delivery_and_trace(self) -> None:
+        payload = json.loads(self.requirement_questions.read_text(encoding="utf-8"))
+        payload["baseline_version"] = "req-old"
+        self._write_requirement_questions(payload)
+        self.assertIn("questions-baseline-mismatch", self.codes())
+
+    def test_answered_questions_require_bound_evidence_and_validated_receipt(self) -> None:
+        payload = self._answered_requirement_questions()
+        self._write_requirement_questions(payload)
+        self.assertEqual(set(), self.codes())
+        self.assertIn(
+            "questions-question-rerun-receipt-not-validated",
+            self.codes(verifier=lambda *_: False),
+        )
+        payload["questions"][0]["human_answer"] = "forged answer"
+        self._write_requirement_questions(payload)
+        self.assertIn("questions-invalid-answer-evidence", self.codes())
+
+    def test_answered_questions_reject_pre_post_or_impact_drift(self) -> None:
+        payload = self._answered_requirement_questions()
+        payload["questions"][0]["pre_answer_baseline_version"] = "req-v1"
+        payload["questions"][0]["pre_answer_baseline_sha256"] = payload["baseline_sha256"]
+        self._write_requirement_questions(payload)
+        self.assertIn("questions-answered-question-baseline-not-updated", self.codes())
+        payload = self._answered_requirement_questions()
+        payload["gate_reruns"][0]["affected_scope"] = ["REQ-X"]
+        self._write_requirement_questions(payload)
+        self.assertIn("questions-answered-question-rerun-required", self.codes())
+
+    def test_answered_questions_allow_local_rerun_receipt_without_host_verifier(self) -> None:
+        self._write_requirement_questions(self._answered_requirement_questions())
+        issues = validate_delivery_bundle(
+            agents_path=self.agents, trace_path=self.trace_fixture.matrix,
+            context_path=self.context, command_manifest_path=self.commands,
+            multi_agent_evidence_path=self.multi_agent, swimlane_evidence_path=self.swimlane,
+            frontend_evidence_path=self.frontend, requirement_questions_path=self.requirement_questions,
+            requirement_questions_sha256=self.requirement_questions_sha256,
+            requirement_baseline_version="req-v1",
+            requirement_baseline_sha256=hashlib.sha256((self.root / "requirements/baseline.md").read_bytes()).hexdigest(),
+            project_root=self.root,
+        )
+        self.assertNotIn("questions-question-rerun-receipt-not-validated", {item.code for item in issues})
+
     def test_valid_delivery_bundle_passes(self) -> None:
         self.assertEqual(set(), self.codes())
+
+    def test_gate_inputs_cannot_rebind_to_noncanonical_questions(self) -> None:
+        alternate = self.root / "alternate-requirement-questions.json"
+        alternate.write_bytes(self.requirement_questions.read_bytes())
+        self._rebind_gate_inputs_to_questions(alternate)
+        self.assertIn(
+            "agents-evidence-noncanonical-requirement-questions", self.codes(),
+        )
+
+    def test_public_delivery_api_rejects_host_verifier_injection(self) -> None:
+        self.assertNotIn("host_attestation_verifier", inspect.signature(validate_delivery_bundle).parameters)
+        with self.assertRaises(TypeError):
+            validate_delivery_bundle(
+                agents_path=self.agents, trace_path=self.trace_fixture.matrix,
+                context_path=self.context, command_manifest_path=self.commands,
+                multi_agent_evidence_path=self.multi_agent,
+                swimlane_evidence_path=self.swimlane, frontend_evidence_path=self.frontend,
+                project_root=self.root, host_attestation_verifier=lambda *_: True,
+            )
+
+    def test_public_delivery_accepts_bound_local_coordination_receipts(self) -> None:
+        issues = validate_delivery_bundle(
+            agents_path=self.agents, trace_path=self.trace_fixture.matrix,
+            context_path=self.context, command_manifest_path=self.commands,
+            multi_agent_evidence_path=self.multi_agent,
+            swimlane_evidence_path=self.swimlane, frontend_evidence_path=self.frontend,
+            project_root=self.root,
+        )
+        self.assertNotIn(
+            "agents-evidence-implementation-receipt-not-validated",
+            {issue.code for issue in issues},
+        )
+
+    def test_context_module_must_exist_in_canonical_ownership_map(self) -> None:
+        text = self.context.read_text(encoding="utf-8")
+        text = text.replace("Modules: module", "Modules: fake-module")
+        text = text.replace("Module changed files: module=", "Module changed files: fake-module=")
+        self.context.write_text(text, encoding="utf-8")
+        self.assertIn("bundle-unknown-canonical-module", self.codes())
+
+    def test_changed_file_must_be_owned_by_declared_module(self) -> None:
+        self.agents.write_text(
+            project_root_fixture().replace("`src/` | ModuleMaintainer", "`lib/` | ModuleMaintainer"),
+            encoding="utf-8",
+        )
+        self.assertIn("bundle-changed-file-owner-mismatch", self.codes())
+
+    def test_implementation_title_must_match_registered_module_maintainer(self) -> None:
+        data = self._multi_agent_evidence()
+        data["implementation_agent_title"] = "AnotherAgent"
+        self.multi_agent.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("bundle-maintainer-title-mismatch", self.codes())
+
+    def test_implementation_model_must_be_machine_verified_sol(self) -> None:
+        data = self._multi_agent_evidence()
+        data["implementation_agent_model"] = "gpt-5.6-terra"
+        self.multi_agent.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("agents-evidence-invalid-implementation-agent", self.codes())
+
+    def test_non_path_ownership_cannot_disable_runtime_binding(self) -> None:
+        self.agents.write_text(
+            project_root_fixture().replace("`src/` | ModuleMaintainer", "shared protocol API | ModuleMaintainer"),
+            encoding="utf-8",
+        )
+        data = self._multi_agent_evidence()
+        data["implementation_agent_title"] = "SpoofedMaintainer"
+        self.multi_agent.write_text(json.dumps(data), encoding="utf-8")
+        codes = self.codes()
+        self.assertIn("agents-invalid-module-agent-boundary-path", codes)
+        self.assertIn("bundle-module-ownership-invalid", codes)
+
+    def test_cross_module_system_bundle_requires_individual_module_closures(self) -> None:
+        text = self.context.read_text(encoding="utf-8")
+        text = text.replace("Modules: module", "Modules: module, module2")
+        text = text.replace(
+            "Module changed files: module=src/module.py",
+            "Module changed files: module=src/module.py; module2=src/module.py",
+        )
+        self.context.write_text(text, encoding="utf-8")
+        self.assertIn("cross-module-bundle-requires-module-closures", self.codes())
 
     def test_missing_swimlane_evidence_blocks_delivery(self) -> None:
         issues = validate_delivery_bundle(
@@ -544,6 +991,25 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             swimlane_evidence_path=None, frontend_evidence_path=self.frontend, project_root=self.root,
         )
         self.assertIn("missing-swimlane-evidence", {item.code for item in issues})
+
+    def test_non_applicable_swimlane_does_not_require_evidence(self) -> None:
+        self._rewrite_contract_change("flow_impact", "none")
+        self._rewrite_contract_change("swimlane_applicable", False)
+        issues = _test_only_validate_delivery_bundle(
+            delivery_contract_path=self.contract,
+            agents_path=self.agents, trace_path=self.trace_fixture.matrix,
+            context_path=self.context, command_manifest_path=self.commands,
+            multi_agent_evidence_path=self.multi_agent, swimlane_evidence_path=None,
+            frontend_evidence_path=self.frontend,
+            requirement_questions_path=self.requirement_questions,
+            requirement_questions_sha256=self.requirement_questions_sha256,
+            requirement_baseline_version="req-v1",
+            requirement_baseline_sha256=hashlib.sha256(
+                (self.root / "requirements/baseline.md").read_bytes()
+            ).hexdigest(),
+            project_root=self.root, _test_only_host_attestation_verifier=lambda *_: True,
+        )
+        self.assertNotIn("missing-swimlane-evidence", {item.code for item in issues})
 
     def test_frontend_browser_must_bind_independent_black_box_run(self) -> None:
         data = json.loads(self.frontend.read_text(encoding="utf-8"))
@@ -679,6 +1145,38 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         )
         self.review.write_text(text, encoding="utf-8")
         self.assertIn("bundle-automated-review-unexecuted", self.codes())
+
+    def test_review_trigger_must_be_closure_candidate_or_bound_human_request(self) -> None:
+        transcript = self.root / "evidence/automated-review.json"
+        data = json.loads(transcript.read_text(encoding="utf-8"))
+        data["review_trigger"] = "after_each_code_change"
+        transcript.write_text(json.dumps(data), encoding="utf-8")
+        transcript_hash = hashlib.sha256(transcript.read_bytes()).hexdigest()
+        text = self.review.read_text(encoding="utf-8").replace(
+            "Review trigger: module_closure_candidate", "Review trigger: after_each_code_change",
+        )
+        text = re.sub(
+            r"Review evidence SHA-256: [0-9a-f]{64}",
+            f"Review evidence SHA-256: {transcript_hash}", text,
+        )
+        self.review.write_text(text, encoding="utf-8")
+        self.assertIn("bundle-automated-review-unexecuted", self.codes())
+
+        data["review_trigger"] = "human_requested"
+        data["human_trigger_reference"] = "user-message:review-1"
+        transcript.write_text(json.dumps(data), encoding="utf-8")
+        transcript_hash = hashlib.sha256(transcript.read_bytes()).hexdigest()
+        text = self.review.read_text(encoding="utf-8").replace(
+            "Review trigger: after_each_code_change", "Review trigger: human_requested",
+        ).replace(
+            "Human trigger reference: N/A", "Human trigger reference: user-message:review-1",
+        )
+        text = re.sub(
+            r"Review evidence SHA-256: [0-9a-f]{64}",
+            f"Review evidence SHA-256: {transcript_hash}", text,
+        )
+        self.review.write_text(text, encoding="utf-8")
+        self.assertNotIn("bundle-automated-review-unexecuted", self.codes())
 
     def test_review_command_hash_must_bind_command_manifest(self) -> None:
         transcript = self.root / "evidence/automated-review.json"
@@ -1065,6 +1563,71 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         self.commands.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("frontend-applicability-mismatch", self.codes())
 
+    def test_mobile_web_trace_cannot_disable_frontend_applicability(self) -> None:
+        data = json.loads(self.commands.read_text(encoding="utf-8"))
+        data["frontend_applicable"] = False
+        self.commands.write_text(json.dumps(data), encoding="utf-8")
+        trace_text = self.trace_fixture.matrix.read_text(encoding="utf-8").replace(
+            "Change surfaces: ui,user-visible", "Change surfaces: mobile-web",
+        )
+        self.trace_fixture.matrix.write_text(trace_text, encoding="utf-8")
+        issues = []
+        self.assertTrue(
+            _frontend_applicable(
+                self.commands, self.trace_fixture.matrix, "implementation", issues,
+            )
+        )
+        self.assertIn("frontend-applicability-mismatch", {item.code for item in issues})
+
+    def test_delivery_contract_artifacts_must_match_bundle_inputs(self) -> None:
+        alternate = self.root / "docs/alternate-trace.md"
+        alternate.write_bytes(self.trace_fixture.matrix.read_bytes())
+        contract = self.root / "docs/delivery-contract.json"
+        contract.write_text(json.dumps({
+            "artifacts": {
+                "traceability": {
+                    "path": alternate.relative_to(self.root).as_posix(),
+                    "sha256": hashlib.sha256(alternate.read_bytes()).hexdigest(),
+                },
+                "command_manifest": {
+                    "path": self.commands.relative_to(self.root).as_posix(),
+                    "sha256": hashlib.sha256(self.commands.read_bytes()).hexdigest(),
+                },
+            },
+        }), encoding="utf-8")
+        issues = _test_only_validate_delivery_bundle(
+            delivery_contract_path=contract,
+            agents_path=self.agents, trace_path=self.trace_fixture.matrix,
+            context_path=self.context, command_manifest_path=self.commands,
+            multi_agent_evidence_path=self.multi_agent,
+            swimlane_evidence_path=self.swimlane,
+            frontend_evidence_path=self.frontend,
+            requirement_questions_path=self.requirement_questions,
+            requirement_questions_sha256=self.requirement_questions_sha256,
+            requirement_baseline_version="req-v1",
+            requirement_baseline_sha256=hashlib.sha256(
+                (self.root / "requirements/baseline.md").read_bytes()
+            ).hexdigest(),
+            project_root=self.root,
+            _test_only_host_attestation_verifier=lambda *_: True,
+        )
+        self.assertIn("contract-artifact-path-mismatch", {item.code for item in issues})
+
+    def test_delivery_contract_configuration_files_must_match_context(self) -> None:
+        self._assert_valid_contract_change_drift_is_rejected(
+            "configuration_files", ["commands.txt"],
+        )
+
+    def test_delivery_contract_input_files_must_match_context(self) -> None:
+        self._assert_valid_contract_change_drift_is_rejected(
+            "input_files", ["index.html"],
+        )
+
+    def test_delivery_contract_dependency_boundaries_must_match_context(self) -> None:
+        self._assert_valid_contract_change_drift_is_rejected(
+            "direct_dependency_boundaries", "unrelated dependency boundary",
+        )
+
     def test_nonfrontend_user_visible_change_does_not_require_browser_evidence(self) -> None:
         data = json.loads(self.commands.read_text(encoding="utf-8"))
         data["frontend_applicable"] = False
@@ -1106,12 +1669,21 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         self.progress.write_text(progress, encoding="utf-8")
         implementation_run = self._module_run_record(status="in_progress")
         self.module_run.write_text(implementation_run, encoding="utf-8")
-        issues = validate_delivery_bundle(
+        self._write_delivery_contract(stage="implementation")
+        issues = _test_only_validate_delivery_bundle(
+            delivery_contract_path=self.contract,
             agents_path=self.agents, trace_path=self.trace_fixture.matrix, context_path=self.context,
             command_manifest_path=self.commands, multi_agent_evidence_path=self.multi_agent,
             swimlane_evidence_path=self.swimlane,
             frontend_evidence_path=self.frontend,
+            requirement_questions_path=self.requirement_questions,
+            requirement_questions_sha256=self.requirement_questions_sha256,
+            requirement_baseline_version="req-v1",
+            requirement_baseline_sha256=hashlib.sha256(
+                (self.root / "requirements/baseline.md").read_bytes()
+            ).hexdigest(),
             project_root=self.root, stage="implementation",
+            _test_only_host_attestation_verifier=lambda *_: True,
         )
         self.assertEqual(set(), {issue.code for issue in issues if issue.severity == "error"})
 

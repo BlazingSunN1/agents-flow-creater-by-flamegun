@@ -7,6 +7,9 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from authority_binding_validation import authority_binding_issues, authority_metadata_issues
+from context_cache_validation import _cache_key_from_requirement_ids
+
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
 SHA256_RE = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
 REQUIREMENT_ID_RE = re.compile(r"REQ-\d+")
@@ -16,6 +19,8 @@ REQUIRED_FIELDS = (
     "Baseline artifact",
     "Baseline version",
     "Baseline SHA-256",
+    "Authority matrix locator",
+    "Authority matrix SHA-256",
     "Code version",
     "Build ID",
     "Risk / expansion reason",
@@ -52,6 +57,25 @@ FINGERPRINT_FIELDS = (
     "Evidence fingerprint",
 )
 
+
+def _cache_key(metadata: dict[str, str]) -> str:
+    requirement_ids = ",".join(sorted(
+        item.strip().casefold()
+        for item in metadata.get("Requirement IDs", "").split(",")
+        if item.strip()
+    ))
+    cache_scope = (
+        metadata.get("Baseline artifact", ""),
+        metadata.get("Baseline version", ""),
+        metadata.get("Baseline SHA-256", "").casefold(),
+        _canonical_module_file_map(metadata.get("Module changed files", "")),
+        metadata.get("Risk / expansion reason", ""),
+        metadata.get("Direct dependency boundaries", ""),
+        metadata.get("Code version", ""),
+        metadata.get("Build ID", ""),
+    )
+    return _cache_key_from_requirement_ids(metadata, requirement_ids, cache_scope)
+
 @dataclass(frozen=True)
 class Issue:
     severity: str
@@ -72,11 +96,18 @@ def validate_context_manifest(
     issues = read_issues + _validate_manifest_structure(text, metadata, duplicate_fields, template)
     if template:
         issues.extend(_validate_template_values(metadata))
+        issues.extend(Issue("error", code, message) for code, message in authority_metadata_issues(metadata))
         return _deduplicate(issues)
     if issues:
         return _deduplicate(issues)
     root = project_root.resolve()
     _validate_baseline(metadata, root, issues)
+    issues.extend(
+        Issue("error", code, message)
+        for code, message in authority_binding_issues(
+            metadata, root, effective_agents=_split_paths(metadata["Effective AGENTS files"]),
+        )
+    )
     _validate_fingerprints(metadata, root, issues)
     _validate_reuse(metadata, root, issues)
     return _deduplicate(issues)
@@ -114,7 +145,6 @@ def _safe_template_path(raw: str) -> bool:
     parts = raw.split("/")
     return bool(parts) and all(part not in {"", ".", ".."} for part in parts)
 
-
 def _read_manifest(path: Path) -> tuple[str | None, list[Issue]]:
     try:
         payload = path.read_bytes()
@@ -126,7 +156,6 @@ def _read_manifest(path: Path) -> tuple[str | None, list[Issue]]:
         return payload.decode("utf-8"), []
     except UnicodeDecodeError as error:
         return None, [Issue("error", "invalid-utf8", f"工作集清单不是有效 UTF-8：{error.start}")]
-
 
 def _validate_manifest_structure(
     text: str,
@@ -145,7 +174,6 @@ def _validate_manifest_structure(
         issues.append(Issue("error", "placeholder", "项目工作集清单包含未解析占位符"))
     return issues
 
-
 def _validate_baseline(metadata: dict[str, str], root: Path, issues: list[Issue]) -> None:
     baseline = _resolve_path(metadata["Baseline artifact"], root, issues, "baseline-artifact")
     expected_baseline_sha = metadata["Baseline SHA-256"].casefold()
@@ -155,7 +183,6 @@ def _validate_baseline(metadata: dict[str, str], root: Path, issues: list[Issue]
         actual = hashlib.sha256(baseline.read_bytes()).hexdigest()
         if actual != expected_baseline_sha:
             issues.append(Issue("error", "stale-baseline-hash", "需求基线哈希已经失效"))
-
 
 def _validate_fingerprints(metadata: dict[str, str], root: Path, issues: list[Issue]) -> None:
     for field in FINGERPRINT_FIELDS:
@@ -301,34 +328,6 @@ def _validate_reuse_source_run(
     from reuse_source_run_validation import valid_reuse_source_run
     if not valid_reuse_source_run(raw_path, root, run_id, cache_key, evidence_paths, metadata, source):
         issues.append(Issue("error", "stale-reuse-source-run", "复用源 run 必须为当前缓存键下已完成且证据集合一致的记录"))
-
-
-def _cache_key(metadata: dict[str, str]) -> str:
-    requirement_ids = ",".join(sorted(
-        item.strip().casefold()
-        for item in metadata.get("Requirement IDs", "").split(",")
-        if item.strip()
-    ))
-    values = (
-        metadata.get("Baseline artifact", ""),
-        metadata.get("Baseline version", ""),
-        metadata.get("Baseline SHA-256", "").casefold(),
-        requirement_ids,
-        _canonical_module_file_map(metadata.get("Module changed files", "")),
-        metadata.get("Risk / expansion reason", ""),
-        metadata.get("Direct dependency boundaries", ""),
-        metadata.get("Code version", ""),
-        metadata.get("Build ID", ""),
-        metadata.get("Code fingerprint", "").casefold(),
-        metadata.get("Command fingerprint", "").casefold(),
-        metadata.get("Effective AGENTS fingerprint", "").casefold(),
-        metadata.get("Command manifest fingerprint", "").casefold(),
-        metadata.get("Configuration fingerprint", "").casefold(),
-        metadata.get("Environment ID", ""),
-        metadata.get("Input fingerprint", "").casefold(),
-        metadata.get("Evidence fingerprint", "").casefold(),
-    )
-    return hashlib.sha256("\0".join(values).encode("utf-8")).hexdigest()
 
 
 def _parse_module_file_map(value: str) -> dict[str, set[str]]:

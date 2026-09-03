@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "draft_objective": "{{CURRENT_INTERPRETATION_OF_THE_USER_OBJECTIVE}}",
+  "resolved_objective": "{{OBJECTIVE_AFTER_THE_RECOMMENDED_DEFAULTS_OR_HUMAN_ANSWERS}}",
+  "no_questions_reason": "NOT_APPLICABLE",
+  "questions": [
+    {
+      "id": "Q-001",
+      "priority": "P0",
+      "topic": "{{SCOPE_OR_ACCEPTANCE_TOPIC}}",
+      "question": "{{ONE_MATERIAL_QUESTION_FOR_THE_HUMAN}}",
+      "why_needed": "{{HOW_THE_ANSWER_CHANGES_IMPLEMENTATION_OR_ACCEPTANCE}}",
+      "proposed_default": "{{SAFE_REVERSIBLE_DEFAULT_USED_WHEN_NO_ANSWER_ARRIVES}}",
+      "risk_if_wrong": "{{VISIBLE_COST_OF_THIS_DEFAULT_BEING_WRONG}}",
+      "human_answer": "PENDING",
+      "resolution_source": "PENDING",
+      "status": "open",
+      "objective_update": "NO_CHANGE",
+      "criterion_updates": [
+        {
+          "criterion_id": "AC-001",
+          "final_text": "{{EXACT_FINAL_CRITERION_TEXT_UNDER_THE_DEFAULT}}"
+        }
+      ]
+    }
+  ]
+}

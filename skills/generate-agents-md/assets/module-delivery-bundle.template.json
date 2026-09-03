@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "module": "{{MODULE_KEY}}",
+  "authority_binding": {
+    "locator": "AGENTS.md#machine-enforced-authority-matrix",
+    "sha256": "aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643",
+    "required_rows": [
+      {"role": "module-maintainer", "action": "write_module_artifacts", "policy": "allow"},
+      {"role": "module-maintainer", "action": "record_completion_after_verified_gates", "policy": "independent-only"},
+      {"role": "independent-reviewer", "action": "issue_independent_verdict", "policy": "allow"}
+    ]
+  },
+  "requirement_ids": ["{{MODULE_REQUIREMENT_ID}}"],
+  "requirement_baseline_version": "{{BASELINE_VERSION}}",
+  "requirement_baseline_sha256": "{{BASELINE_SHA256}}",
+  "code_version": "{{CODE_VERSION}}",
+  "build_id": "{{BUILD_ID}}",
+  "maintainer_title": "{{MODULE_AGENT_TITLE}}",
+  "maintainer_provider": "codex-native-agent",
+  "maintainer_model": "gpt-5.6-sol",
+  "maintainer_reasoning_effort": "high",
+  "maintainer_agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
+  "maintainer_spawn_receipt": "{{IMPLEMENTATION_SPAWN_RECEIPT_PATH}}",
+  "maintainer_spawn_receipt_sha256": "{{IMPLEMENTATION_SPAWN_RECEIPT_SHA256}}",
+  "implementation_run_id": "{{IMPLEMENTATION_RUN_ID}}",
+  "stage": "completion",
+  "open_findings": [],
+  "artifacts": {
+    "agents": "AGENTS.md",
+    "trace": "{{TRACEABILITY_PATH}}",
+    "requirement_questions": "{{REQUIREMENT_QUESTIONS_PATH}}",
+    "requirement_questions_sha256": "{{REQUIREMENT_QUESTIONS_SHA256}}",
+    "context": "{{MODULE_CONTEXT_PATH}}",
+    "command_manifest": "{{COMMAND_MANIFEST_PATH}}",
+    "multi_agent_evidence": "{{MODULE_MULTI_AGENT_EVIDENCE_PATH}}",
+    "swimlane_evidence": "{{MODULE_SWIMLANE_EVIDENCE_PATH}}",
+    "frontend_evidence": null
+  }
+}

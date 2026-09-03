@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from validate_traceability import validate_traceability
+from agents_authority_matrix_validation import AUTHORITY_MATRIX_SHA256, EXPECTED_AUTHORITY_MATRIX
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -46,6 +48,12 @@ class TraceabilityValidatorTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(relative, encoding="utf-8")
         self.matrix = self.root / "traceability.md"
+        matrix = json.dumps(EXPECTED_AUTHORITY_MATRIX, ensure_ascii=False, separators=(",", ":"))
+        (self.root / "AGENTS.md").write_text(
+            f"authority_matrix_sha256: {AUTHORITY_MATRIX_SHA256}\n\n"
+            f"## Machine-Enforced Authority Matrix\n\n```json\n{matrix}\n```\n",
+            encoding="utf-8",
+        )
         self.matrix.write_text(self._valid_matrix(), encoding="utf-8")
 
     def tearDown(self) -> None:
@@ -88,6 +96,8 @@ class TraceabilityValidatorTests(unittest.TestCase):
 - Baseline artifact: requirements/baseline.md
 - Baseline version: req-v1
 - Baseline SHA-256: {digest}
+- Authority matrix locator: AGENTS.md#machine-enforced-authority-matrix
+- Authority matrix SHA-256: {AUTHORITY_MATRIX_SHA256}
 - Code version: code-v1
 - Build ID: build-1
 - Acceptance environment: local-release
@@ -121,6 +131,36 @@ class TraceabilityValidatorTests(unittest.TestCase):
 
     def test_public_template_structure_passes(self) -> None:
         self.assertEqual([], validate_traceability(PUBLIC_TEMPLATE, project_root=SKILL_ROOT, template=True))
+
+    def test_public_template_cannot_drift_from_frozen_authority_binding(self) -> None:
+        text = PUBLIC_TEMPLATE.read_text(encoding="utf-8").replace(AUTHORITY_MATRIX_SHA256, "0" * 64)
+        self.matrix.write_text(text, encoding="utf-8")
+        codes = {issue.code for issue in validate_traceability(
+            self.matrix, project_root=self.root, template=True,
+        )}
+        self.assertIn("stale-authority-matrix-binding", codes)
+
+    def test_authority_binding_is_required_and_exact(self) -> None:
+        for old, new, expected in (
+            ("- Authority matrix locator: AGENTS.md#machine-enforced-authority-matrix\n", "", "missing-metadata"),
+            ("AGENTS.md#machine-enforced-authority-matrix", "AGENTS.md#legacy-authority", "stale-authority-matrix-binding"),
+            (AUTHORITY_MATRIX_SHA256, "0" * 64, "stale-authority-matrix-binding"),
+        ):
+            with self.subTest(new=new):
+                self.matrix.write_text(self._valid_matrix().replace(old, new, 1), encoding="utf-8")
+                self.assertIn(expected, issue_codes(self.matrix, self.root))
+
+    def test_root_authority_matrix_drift_and_symlink_fail_closed(self) -> None:
+        root_agents = self.root / "AGENTS.md"
+        root_agents.write_text(root_agents.read_text(encoding="utf-8").replace(
+            '"scope_binding":"effective-root-agents"', '"scope_binding":"legacy"',
+        ), encoding="utf-8")
+        self.assertIn("stale-authority-matrix-binding", issue_codes(self.matrix, self.root))
+        root_agents.unlink()
+        linked = self.root / "linked-policy.md"
+        linked.write_text("linked", encoding="utf-8")
+        root_agents.symlink_to(linked)
+        self.assertIn("unsafe-authority-matrix-path", issue_codes(self.matrix, self.root))
 
     def test_distinct_role_paths_cannot_copy_identical_artifact_content(self) -> None:
         payload = (self.root / "requirements/baseline.md").read_bytes()

@@ -11,9 +11,9 @@ Use this profile only for the isolated DeepSeek reviewer process. It does not re
 - Thinking: `{"type":"enabled"}`
 - Reasoning effort: `max`
 - Response format: `{"type":"json_object"}`
-- Streaming: disabled so the complete contract can be hashed and validated atomically
+- Streaming: enabled with `stream_options.include_usage=true`; accept only one bounded UTF-8 SSE stream that ends with `data: [DONE]`
 
-The system prompt already contains the word `JSON` and the exact required object schema. Keep `max_tokens` bounded by the Skill even though the provider supports larger outputs.
+The system prompt already contains the word `JSON` and the exact required object schema. The default output budget is 32K tokens and the explicit hard cap is 262,144 tokens. Do not raise it merely because a task is long; first reduce unrelated context. The stream parser rejects identity drift, multiple choices, malformed JSON, a missing completion marker, non-`stop` termination, oversized streams, and a disconnect after output begins. A partial stream is never automatically retried as the same completed review.
 
 Reject retired `deepseek-chat` and `deepseek-reasoner` aliases. Reject custom or compatibility base URLs for this official profile. Do not include user privacy data in provider identifiers or prompts.
 

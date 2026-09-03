@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "receipt_kind": "codex-native-spawn-result",
+  "provider": "codex-native-agent",
+  "requested_model": "gpt-5.6-sol",
+  "recorded_model": "gpt-5.6-sol",
+  "requested_reasoning_effort": "high",
+  "recorded_reasoning_effort": "high",
+  "agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
+  "run_id": "{{IMPLEMENTATION_RUN_ID}}",
+  "role": "module-maintainer",
+  "module": "{{MODULE_KEY}}",
+  "maintainer_title": "{{MODULE_AGENT_TITLE}}"
+}

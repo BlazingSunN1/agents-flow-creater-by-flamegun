@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import secrets
 import sys
 from pathlib import Path
 from typing import Any
@@ -51,7 +52,8 @@ HASH_FIELDS = {
 }
 PROVIDER_WRAPPER_FIELDS = {
     "provider", "request_model", "model", "content", "usage", "response_id",
-    "finish_reason",
+    "finish_reason", "transport", "idle_timeout_seconds", "deadline_seconds",
+    "max_output_tokens", "retry_limit",
 }
 
 
@@ -89,16 +91,37 @@ def write_new_private_file(path: Path, payload: str) -> None:
     if hasattr(os, "O_DIRECTORY"):
         directory_flags |= os.O_DIRECTORY
     parent = os.open(path.parent, directory_flags)
+    temporary = f".{path.name}.{secrets.token_hex(8)}.tmp"
+    published = False
     try:
-        descriptor = os.open(path.name, flags, 0o600, dir_fd=parent)
+        descriptor = os.open(temporary, flags, 0o600, dir_fd=parent)
         try:
             data = payload.encode("utf-8")
-            with os.fdopen(descriptor, "wb", closefd=False) as stream:
+            with os.fdopen(descriptor, "wb") as stream:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
-        finally:
-            os.close(descriptor)
+        except Exception:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            raise
+        os.link(
+            temporary, path.name, src_dir_fd=parent, dst_dir_fd=parent,
+            follow_symlinks=False,
+        )
+        published = True
+        os.unlink(temporary, dir_fd=parent)
+        os.fsync(parent)
+    except Exception:
+        cleanup = ([path.name] if published else []) + [temporary]
+        for name in cleanup:
+            try:
+                os.unlink(name, dir_fd=parent)
+            except FileNotFoundError:
+                pass
+        raise
     finally:
         os.close(parent)
 
