@@ -1,9 +1,9 @@
 # 原生 GPT Sol 并列评审策略
 
-Kimi/DeepSeek 外部 provider 保持暂停，不得调用或恢复 `$multi-model-review-loop`。需要并列评审时使用 `$native-gpt-review-loop`。
+Kimi/DeepSeek 外部 provider 保持暂停，不得调用或恢复 `$multi-model-review-loop`。标准任务不启动并列多角色循环；仅已映射高风险、独立/合规要求或人工明确要求时使用 `$native-gpt-review-loop`。
 
 - 普通代码增量不启动并列评审；只累计当前 run 的变更与证据。仅在模块闭环候选形成或人工主动触发时审查当前候选；人工触发的快照不能自行关闭模块，审查后发生代码或配置变化则结论失效，下一闭环候选必须重审当前指纹。
-- 方案与黑盒审查子 Agent、只读 coordinator/adjudicator 及独立验收 Agent 都通过 Codex 原生调度显式指定 `model=gpt-5.6-sol`、`reasoning_effort=xhigh`；实际实现/维护 Agent 显式指定同一模型与 `reasoning_effort=high`。不支持精确模型或推理强度时失败关闭，不替换或降级。
+- 标准任务只调度一个实现/维护 Agent 和一个只读 `BLACK_BOX` Agent：前者显式指定 `model=gpt-5.6-sol`、`reasoning_effort=high`，后者用同一模型与 `reasoning_effort=xhigh` 合并变更审查、验收用例复核和真实黑盒。高风险循环新增的方案与 coordinator/adjudicator 角色同样为 `xhigh` 且只读。不支持精确模型或推理强度时失败关闭，不替换或降级。
 - 方案角色返回首版完整候选和每轮完整修订；黑盒角色对同一候选哈希独立编写成功、拒绝、失败、重试、恢复、权限和边界用例并审查缺陷。未执行用例不得标为通过。
 - 两个方案/审查子 Agent 对 workspace 与共享记录只读。主、父、子层级不授予固有写权；裁决者只裁决并路由门禁，不得执行或自证独立 review、black-box、accept 与 completion。只有匹配 module、Agent/run、owned paths 和唯一活动协调租约的当前模块维护/实现 Agent 是唯一写者；Dispatcher 始终只读。真实黑盒由不同 Agent/run 对同一 candidate/code/build 执行；默认用封闭本地 receipt 绑定，严格模式再宿主证明，不得以多数票关闭分歧。
 - 范围、最小输入、角色、模型、推理强度、Agent/run ID、候选版本/哈希、输入输出路径/哈希和原生 spawn 结果必须逐轮绑定；子 Agent 自报模型或推理强度不算机器证据。

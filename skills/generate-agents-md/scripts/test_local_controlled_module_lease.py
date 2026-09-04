@@ -73,6 +73,7 @@ class LocalControlledModuleLeaseContractTests(unittest.TestCase):
             (root / "references/module-agent-governance.md").read_text(encoding="utf-8"),
             (root / "references/strict-security-governance.md").read_text(encoding="utf-8"),
             (root / "references/extraction-checklist.md").read_text(encoding="utf-8"),
+            (root.parent / "strict-delivery-security/SKILL.md").read_text(encoding="utf-8"),
         ))
         for phrase in (
             "local_controlled_module_write_lease",

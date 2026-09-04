@@ -610,9 +610,6 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             ).hexdigest(),
             "single_writer_run_id": "impl-run-1",
             "gates": [
-                self._agent_gate("UI_UX", "ui-run-1", "evidence/ui-input.md", "evidence/ui-output.md"),
-                self._agent_gate("ACCEPTANCE_CASES", "at-run-1", "evidence/at-input.md", "evidence/at-output.md"),
-                self._agent_gate("CHANGE_REVIEW", "change-run-1", "evidence/change-input.md", "evidence/change-output.md"),
                 self._agent_gate("BLACK_BOX", "bb-run-1", "evidence/bb-input.md", "evidence/bb-output.md"),
             ],
             "open_disagreements": [],

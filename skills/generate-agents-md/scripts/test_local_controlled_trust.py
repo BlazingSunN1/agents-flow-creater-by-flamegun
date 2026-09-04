@@ -880,6 +880,7 @@ class SystemGovernanceAuthorityMatrixTests(unittest.TestCase):
             (root / "references/strict-security-governance.md").read_text(encoding="utf-8"),
             (root / "references/extraction-checklist.md").read_text(encoding="utf-8"),
             (root / "assets/AGENTS.template.md").read_text(encoding="utf-8"),
+            (root.parent / "strict-delivery-security/SKILL.md").read_text(encoding="utf-8"),
         ))
         for required in (
             "local_controlled_same_user",

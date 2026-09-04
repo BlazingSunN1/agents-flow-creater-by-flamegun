@@ -35,14 +35,14 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "delivery-automated-review-policy-binding-disabled", "scripts/agents_delivery_policy_validation.py",
-        'r"automated-review|自动审查", r"module run|模块.*run", r"latest\\.md",',
-        'r"module run|模块.*run", r"latest\\.md",',
+        'r"baseline/code/build", r"review/frontend",',
+        'r"baseline/code/build", r"frontend",',
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_delivery_bundle_must_bind_automated_review_record",
     ),
     (
         "delivery-module-log-policy-binding-disabled", "scripts/agents_delivery_policy_validation.py",
-        'r"automated-review|自动审查", r"module run|模块.*run", r"latest\\.md",',
-        'r"automated-review|自动审查",',
+        'r"contract", r"trace", r"plan/progress", r"current run",',
+        'r"contract", r"trace", r"plan/progress",',
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_delivery_bundle_must_bind_module_run_and_latest",
     ),
     (
@@ -333,7 +333,7 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "swimlane-flow-trigger-policy-check-disabled", "scripts/agents_delivery_policy_validation.py",
-        'r"flow_impact=changed|flow_impact.*changed", r"stabili[sz]ed candidate|稳定候选", r"batch|合并|批", r"at most once|至多.*一次", r"first downstream consumer|首次.*下游"',
+        'r"(?:flow_impact=|if )`?changed|flow_impact.*changed", r"stabili[sz]ed candidate|稳定候选", r"batch|合并|批", r"at most once|至多.*一次", r"first downstream consumer|首次.*下游"',
         'r".*", r".*", r".*", r".*", r".*"',
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_swimlane_changed_flow_is_batched_per_stabilized_candidate",
     ),

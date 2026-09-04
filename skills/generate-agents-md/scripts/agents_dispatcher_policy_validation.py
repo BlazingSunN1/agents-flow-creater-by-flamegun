@@ -82,7 +82,7 @@ def _module_identity_checks(section: str) -> tuple[tuple[bool, str, str], ...]:
                 r"targeted tests?|定向测试",
                 r"independent black-box acceptance|独立.*黑盒.*验收",
                 r"evidence|log|swimlane|证据|日志|泳道",
-                r"before.*completed|完成前|闭环",
+                r"before.*complet|完成前|闭环",
             )),
             "missing-major-module-closed-loop",
             "缺少每个大功能模块由独立长期维护 Agent 负责的需求到验收与维护闭环",
@@ -107,7 +107,7 @@ def _module_acceptance_checks(section: str) -> tuple[tuple[bool, str, str], ...]
         (
             section_has_line(section, (
                 r"cross-module|system completion|跨模块|系统完成",
-                r"every affected module|每个.*受影响模块",
+                r"every affected module|each module|每个.*受影响模块",
                 r"requirement IDs?|需求 ID",
                 r"code/build|代码.*构建",
                 r"targeted tests?|定向测试",
@@ -138,7 +138,7 @@ def _dispatcher_role_checks(section: str) -> tuple[tuple[bool, str, str], ...]:
         (
             section_has_line(section, (
                 r"Dispatcher",
-                r"must not|不得|禁止",
+                r"must not|excludes|不得|禁止|排除",
                 r"business code|业务代码",
                 r"shared.*records?|共享.*记录",
             )),
@@ -176,12 +176,9 @@ def _handoff_lifecycle_checks(section: str) -> tuple[tuple[bool, str, str], ...]
             "缺少 Dispatcher 向模块 Agent 传递最小充分上下文的完整字段",
         ),
         (
-            section_has_line(section, (
-                r"need not|无需|不必",
-                r"repeat|重复",
-                r"child|sub.*session|module.*session|模块.*会话|子会话",
-            )) and section_has_line(section, (
-                r"must not|不得|禁止",
+            section_has_line(section, (r"need not|无需|不必", r"repeat|重复", r"request|请求"))
+            and section_has_line(section, (
+                r"must not|excludes|不得|禁止|排除",
                 r"full chat|完整聊天",
                 r"unrelated|无关",
                 r"reasoning|推理",
@@ -194,10 +191,9 @@ def _handoff_lifecycle_checks(section: str) -> tuple[tuple[bool, str, str], ...]
                 r"Dispatcher",
                 r"full-flow|end-to-end|全流程",
                 r"orchestrat|编排|组织",
-                r"independent|独立",
-                r"read-only|只读",
-                r"self-certif|自证",
-            )),
+            )) and section_has_line(section, (
+                r"Dispatcher", r"read-only|只读", r"self-certif|自证",
+            )) and section_has_line(section, (r"independent|独立", r"read-only|只读", r"gate|门禁")),
             "missing-independent-validation-orchestration",
             "缺少 Dispatcher 编排独立只读全流程验证且不得自证的规则",
         ),

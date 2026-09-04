@@ -76,15 +76,15 @@ def _validate_execution_evidence_policy(text: str, *, mode: str) -> list[Issue]:
             "缺少实现 Agent 单写者及独立 Agent 只读隔离边界",
         ),
         (
-            _section_has_line(text, (r"small|小型", r"reuses?.*registered.*module maintenance Agent|复用.*模块维护 Agent", r"no extra review|不新增审查"))
-            and _section_has_line(text, (r"standard|标准", r"independent acceptance|black-box|独立验收|黑盒", r"risk mapping|风险映射"))
-            and _section_has_line(text, (r"high-risk|高风险", r"change-review|变更审查", r"requirement-consistency|需求一致", r"domain-specialist|领域专项", r"mapping|映射")),
+            _section_has_line(text, (r"small|小型", r"one registered writer|一个.*写者", r"targeted checks?|定向检查"))
+            and _section_has_line(text, (r"standard|标准", r"one read-only BLACK_BOX|black-box|黑盒", r"at most|至多"))
+            and _section_has_line(text, (r"high-risk|高风险", r"specialist roles?|专项角色", r"mapped|映射")),
             "missing-risk-triggered-agent-roles",
             "缺少小型零额外 Agent、标准映射验收与高风险按证据增加角色的规则",
         ),
         (
             _section_has_line(text, (r"multi-Agent evidence|多 Agent.*证据", path_pattern, r"validat|校验"))
-            and _section_has_line(text, (r"unique run ID|唯一.*run ID", r"hashed|哈希", r"disagreement|分歧", r"majority vote|多数票", r"blocked|阻断")),
+            and _section_has_line(text, (r"Agent/run IDs|run ID", r"hashed|哈希", r"disagreement|分歧", r"majority vote|多数票", r"block|阻断")),
             "missing-multi-agent-evidence-gate",
             "缺少多 Agent 证据绑定、分歧阻断和禁止多数票规则",
         ),
@@ -95,13 +95,42 @@ def _validate_execution_evidence_policy(text: str, *, mode: str) -> list[Issue]:
             "缺少共享记录的锁、期望哈希和原子更新规则",
         ),
         (
-            _section_has_line(text, (r"structured browser|结构化.*浏览器", r"Playwright|Cypress", r"evidence|证据", path_pattern, r"validat|校验"))
-            and _section_has_line(text, (r"stale hashes?|过期哈希", r"console errors?|控制台错误", r"failed requests?|请求失败", r"block|阻断")),
+            _section_has_line(text, (r"browser/entry/DOM/screenshot/action/E2E", path_pattern, r"validat|校验|then run|然后运行"))
+            and _section_has_line(text, (r"stale|过期", r"console/network failures?|控制台|网络失败", r"block|阻断")),
             "missing-frontend-evidence-gate",
             "缺少结构化前端证据路径及失败关闭校验规则",
         ),
     )
-    return [Issue("error", code, message) for matched, code, message in checks if not matched]
+    issues = [Issue("error", code, message) for matched, code, message in checks if not matched]
+    if _standard_work_adds_independent_role(text):
+        issues.append(Issue(
+            "error",
+            "contradictory-standard-agent-role-policy",
+            "标准任务只能有一个只读 BLACK_BOX 独立门禁，不得再增加独立审查角色",
+        ))
+    return issues
+
+
+def _standard_work_adds_independent_role(text: str) -> bool:
+    for clause in _policy_clauses(text):
+        if re.search(r"(?i)\bstandard\s+work\b|标准任务|普通任务", clause) is None:
+            continue
+        if re.search(
+            r"(?i)\b(?:CHANGE_REVIEW|UI_UX|ACCEPTANCE_CASES|REQUIREMENT_REVIEW|SPECIALIST_REVIEW)\b",
+            clause,
+        ):
+            return True
+        named_roles = re.findall(r"\b([A-Z][A-Z0-9_/-]{2,})\s+(?:acceptance\s+)?Agent\b", clause)
+        if any(role != "BLACK_BOX" for role in named_roles):
+            return True
+        review_agents = re.findall(
+            r"(?i)\b([a-z][a-z0-9_/-]*(?:\s+[a-z][a-z0-9_/-]*){0,3})\s+review(?:er)?\s+Agent\b",
+            clause,
+        )
+        if any("black_box" not in role.casefold() and "black-box" not in role.casefold()
+               for role in review_agents):
+            return True
+    return False
 
 
 def _validate_task_write_boundary_policy(text: str) -> list[Issue]:
@@ -263,23 +292,22 @@ def _automated_review_trigger_checks(section: str) -> tuple[tuple[bool, str, str
         (
             _section_has_line(section, (
                 r"module.{0,30}closure candidate|模块闭环候选", r"human.{0,20}(?:request|trigger)|人工.{0,20}(?:主动|触发)",
-                r"automatically|自动", r"`[^`]+`",
+                r"run|automatically|运行|自动", r"`[^`]+`",
             )),
             "missing-automated-review-command",
             "缺少模块闭环候选或人工主动触发时运行的审查命令",
         ),
         (
             _section_has_line(section, (
-                r"intermediate|增量|中间", r"accumulate|累计", r"do not start|不启动|不触发", r"review|审查",
+                r"intermediate|增量|中间", r"accumulate|累计", r"only|仅|do not start|不启动|不触发", r"delta|差异|review|审查",
             )),
             "missing-review-trigger-suppression",
             "缺少普通增量只累计证据且不启动审查的规则",
         ),
         (
-            _section_has_line(section, (
-                r"after.{0,30}(?:review|审查)|审查后", r"change|变化|修改", r"stale|失效|过期",
-                r"next.{0,20}(?:closure candidate|闭环候选)|下一.{0,20}闭环候选", r"fingerprint|指纹",
-            )),
+            _section_has_line(section, (r"change|变化|修改", r"stale|失效|过期", r"prior review|之前.*审查"))
+            and _section_has_line(section, (r"candidate fingerprint|候选.*指纹", r"review|审查"))
+            and _section_has_line(section, (r"closure candidate|闭环候选", r"review|审查")),
             "missing-review-trigger-freshness",
             "缺少审查后变更失效及闭环候选重审规则",
         ),
@@ -289,7 +317,7 @@ def _automated_review_trigger_checks(section: str) -> tuple[tuple[bool, str, str
 def _automated_review_quality_checks(section: str, path_pattern: str) -> tuple[tuple[bool, str, str], ...]:
     return (
         (
-            _section_has_line(section, (r"missing|cannot run|缺失|无法运行", r"blocked|阻断", r"skip|跳过")),
+            _section_has_line(section, (r"missing|cannot run|failed|缺失|无法运行|失败", r"block|阻断")),
             "missing-automated-review-fail-closed",
             "缺少自动审查命令不可用时失败关闭的规则",
         ),
@@ -304,17 +332,19 @@ def _automated_review_quality_checks(section: str, path_pattern: str) -> tuple[t
             "自动审查发现缺少严重度、文件行号、触发、影响和复现证据",
         ),
         (
-            _section_has_line(section, (r"regression test|回归测试", r"root-cause|根因", r"rerun|重跑", r"tests?|测试", r"code standards?|代码规范", r"trace|追踪", r"swimlane|泳道", r"review|审查")),
+            _section_has_line(section, (r"regression|回归", r"root-cause|根因", r"rerun|重跑", r"checks?|检查"))
+            and _section_has_line(section, (r"review|审查", r"trace|追踪", r"swimlane|泳道", r"tests?|测试")),
             "missing-automated-review-repair-loop",
             "缺少失败测试、最小根因修复及自动重跑审查闭环",
         ),
         (
-            _section_has_line(section, (r"scope|范围", r"code version|代码版本", r"commands?|命令", r"findings?|发现", r"verdict|结论", path_pattern)),
+            _section_has_line(section, (r"scope|范围", r"candidate fingerprint|候选.*指纹", r"commands?|命令", r"findings?|发现", r"verdict|结论", path_pattern)),
             "missing-automated-review-evidence",
             "自动审查缺少项目内证据路径和必填字段",
         ),
         (
-            _section_has_line(section, (r"do not|must not|不得|不能", r"black-box|黑盒", r"completed|完成", r"finding|问题|发现", r"blocked|阻断")),
+            _section_has_line(section, (r"finding|问题|发现", r"blocked|阻断", r"prevent completion|不得.*完成|阻止.*完成"))
+            and _section_has_line(section, (r"review|审查", r"block|阻断", r"acceptance|验收")),
             "missing-automated-review-completion-gate",
             "缺少未解决发现或审查阻断时禁止黑盒验收与完成的门禁",
         ),
@@ -347,13 +377,13 @@ def _validate_context_budget_policy(text: str, *, mode: str) -> list[Issue]:
     path_pattern, issues = _document_path_pattern(mode), _context_budget_contradictions(section)
     checks = (
         (
-            _section_has_line(section, (r"workset|工作集", r"manifest|清单", path_pattern, r"baseline|基线", r"code version|代码版本", r"requirement|需求", r"module|模块", r"files?|文件", r"commands?|命令", r"evidence|证据")),
+            _section_has_line(section, (r"manifest|清单", path_pattern, r"baseline|基线", r"code/build|代码|构建", r"requirements?|需求", r"modules?|模块", r"files?|文件", r"commands?|命令", r"evidence|证据")),
             "missing-context-workset",
             "缺少带版本、影响面、命令和证据路径的当前工作集清单",
         ),
         (
-            _section_has_line(section, (r"read in this order|读取顺序|按.*读取", r"index|索引", r"latest\.md", r"current run|当前.*run", r"requirement|需求", r"code|代码", r"tests?|测试", r"configuration|配置", r"diagram|图"))
-            and _section_has_line(section, (r"do not|禁止|不得", r"whole repository|全仓", r"historical|历史", r"complete logs?|完整日志", r"default|默认")),
+            _section_has_line(section, (r"default only loads|默认.*只", r"AGENTS\.md", r"progress index|进度索引", r"current run|当前.*run", r"traceability rows|追踪.*行"))
+            and _section_has_line(section, (r"not default|非默认|不.*默认", r"latest\.md", r"old runs?|旧.*run", r"whole-repository|全仓", r"raw logs?|原始日志")),
             "missing-selective-context-loading",
             "缺少按顺序选择性加载并禁止默认全仓/全历史/完整日志的规则",
         ),
@@ -363,7 +393,7 @@ def _validate_context_budget_policy(text: str, *, mode: str) -> list[Issue]:
             "缺少高风险、跨模块、未知影响或测试审查发现时扩展工作集的规则",
         ),
         (
-            _section_has_line(section, (r"reuse|复用", r"code version|代码版本", r"command|命令", r"configuration hash|配置哈希", r"environment ID|环境", r"input hashes?|输入哈希", r"stale|过期|失效", r"rerun|重跑")),
+            _section_has_line(section, (r"reuse|复用", r"code/build|代码|构建", r"command|命令", r"configuration hash|配置哈希", r"environment ID|环境", r"input hashes?|输入哈希", r"stale|过期|失效", r"rerun|重跑")),
             "missing-evidence-fingerprint",
             "缺少验证证据完整指纹、缓存失效和重跑规则",
         ),
@@ -383,8 +413,8 @@ def _validate_context_budget_policy(text: str, *, mode: str) -> list[Issue]:
             "缺少独立 Agent 最小角色输入及禁止传递完整上下文的规则",
         ),
         (
-            _section_has_line(section, (r"do not rerun|避免重复|不.*重复", r"identical command|相同命令", r"fingerprint|指纹"))
-            and _section_has_line(section, (r"never|不得|不能", r"Token|context|上下文", r"skip|跳过", r"correctness|正确性", r"security|安全", r"traceability|追踪", r"review|审查", r"acceptance|验收")),
+            _section_has_line(section, (r"do not rerun|避免重复|不.*重复", r"identical valid fingerprint|相同.*指纹"))
+            and _section_has_line(section, (r"Token", r"never excuse|不得.*跳过", r"correctness|正确性", r"acceptance|验收", r"gate|门禁")),
             "missing-token-safety-boundary",
             "缺少避免无效重复且不得因 Token 限制跳过质量门禁的边界",
         ),
@@ -393,13 +423,43 @@ def _validate_context_budget_policy(text: str, *, mode: str) -> list[Issue]:
 
 
 def _context_budget_contradictions(section: str) -> list[Issue]:
-    if not _section_has_contradiction(
+    issues: list[Issue] = []
+    if _section_has_contradiction(
         section,
-        action=r"(?:maintain\s+(?:the\s+)?current\s+workset|维护当前工作集)",
+        action=r"(?:maintain\s+(?:the\s+)?current\s+workset|keep\s+[^.]{0,50}context[_ -]manifest|维护当前工作集)",
     ):
-        return []
-    return [Issue(
-        "error",
-        "contradictory-context-workset-policy",
-        "上下文章节包含禁止维护当前工作集的反向规则",
-    )]
+        issues.append(Issue(
+            "error",
+            "contradictory-context-workset-policy",
+            "上下文章节包含禁止维护当前工作集的反向规则",
+        ))
+    for clause in _policy_clauses(section):
+        if _default_context_expands_workset(clause):
+            issues.append(Issue(
+                "error",
+                "contradictory-default-context-policy",
+                "默认上下文只能包含四类索引化输入，不得扩展为全仓、历史运行或原始日志",
+            ))
+            break
+    return issues
+
+
+def _default_context_expands_workset(clause: str) -> bool:
+    broad = (
+        r"whole[- ]repository|entire\s+repository|(?:entire|complete|whole|full)\s+"
+        r"(?:codebase|source\s+tree)|all\s+(?:repository\s+)?"
+        r"(?:files|history|logs|documentation)|latest\.md|old\s+runs?|raw\s+logs?"
+        r"|全仓|全部文件|全部历史|原始日志"
+    )
+    load = r"load(?:ed|s|ing)?|include(?:d|s|ing)?|read(?:s|ing)?|ingest(?:ed|s|ing)?|加载|读取|包含"
+    default = r"by\s+default|default(?:ly)?|默认"
+    return bool(
+        (re.search(rf"(?i)(?:{default}).{{0,80}}(?:{load})", clause)
+         and re.search(rf"(?i)(?:{broad})", clause))
+        or re.search(rf"(?i)(?:{default}).{{0,80}}(?:{load}).{{0,100}}(?:{broad})", clause)
+        or re.search(rf"(?i)(?:{broad}).{{0,100}}(?:{load}).{{0,80}}(?:{default})", clause)
+    )
+
+
+def _policy_clauses(text: str) -> list[str]:
+    return re.split(r"\n+|(?<=[.!?])\s+(?=[A-Z])|(?<=[。！？])", text)

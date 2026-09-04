@@ -198,13 +198,13 @@ def _validate_binding(data: dict[str, object], metadata: dict[str, str], issues:
 def _required_roles(metadata: dict[str, str], stage: str) -> set[str]:
     risk = metadata.get("Risk level", "")
     surfaces = {part.strip().casefold() for part in metadata.get("Change surfaces", "").split(",")}
-    roles = {"ACCEPTANCE_CASES"}
+    if risk == "small":
+        return set()
+    if risk == "standard":
+        return {"BLACK_BOX"} if stage in {"closure_candidate", "completion"} else set()
+    roles = {"ACCEPTANCE_CASES"} | STANDARD_ROLES | HIGH_RISK_ROLES
     if stage == "completion":
         roles.add("BLACK_BOX")
-    if risk in {"standard", "high-risk"}:
-        roles |= STANDARD_ROLES
-    if risk == "high-risk":
-        roles |= HIGH_RISK_ROLES
     if surfaces & {"ui", "user-visible"}:
         roles |= UI_ROLES
     return roles

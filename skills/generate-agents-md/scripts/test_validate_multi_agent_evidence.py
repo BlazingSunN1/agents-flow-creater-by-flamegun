@@ -117,6 +117,11 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "open_disagreements": [],
         }
 
+    def valid_standard_data(self) -> dict[str, object]:
+        data = self.valid_data()
+        data["gates"] = [gate for gate in data["gates"] if gate["role"] == "BLACK_BOX"]
+        return data
+
     def codes(self) -> set[str]:
         return {
             issue.code
@@ -132,8 +137,13 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             if issue.severity == "error"
         }
 
-    def test_valid_standard_ui_evidence_passes(self) -> None:
+    def test_valid_standard_ui_evidence_uses_only_black_box_acceptance(self) -> None:
+        data = self.valid_standard_data()
+        self.path.write_text(json.dumps(data), encoding="utf-8")
         self.assertEqual(set(), self.codes())
+
+    def test_standard_ui_rejects_redundant_independent_roles(self) -> None:
+        self.assertIn("nonapplicable-agent-role", self.codes())
 
     def test_bound_local_coordination_receipts_do_not_block_delivery(self) -> None:
         codes = {
@@ -190,14 +200,14 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
         self._write_requirement_questions(answered=True)
         self._write_inputs()
         self._write_outputs()
-        self.path.write_text(json.dumps(self.valid_data()), encoding="utf-8")
+        self.path.write_text(json.dumps(self.valid_standard_data()), encoding="utf-8")
         self.assertEqual(set(), self.codes())
 
     def test_answered_requirement_questions_allow_local_rerun_receipt(self) -> None:
         self._write_requirement_questions(answered=True)
         self._write_inputs()
         self._write_outputs()
-        self.path.write_text(json.dumps(self.valid_data()), encoding="utf-8")
+        self.path.write_text(json.dumps(self.valid_standard_data()), encoding="utf-8")
         codes = {item.code for item in _validate_multi_agent_evidence_impl(
             self.path, trace_path=self.fixture.matrix, context_path=self.context,
             project_root=self.root, stage="completion", template=False, verifier=None,

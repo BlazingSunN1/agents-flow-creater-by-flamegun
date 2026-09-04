@@ -8,6 +8,7 @@ from pathlib import Path
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 CLI_SCRIPTS = (
+    "flowctl.py",
     "activate_local_controlled_module_lease.py",
     "apply_local_controlled_module_write.py",
     "apply_system_governance_bootstrap_v2.py",

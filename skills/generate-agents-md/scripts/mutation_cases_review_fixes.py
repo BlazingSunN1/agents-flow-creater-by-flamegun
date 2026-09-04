@@ -88,8 +88,8 @@ REVIEW_FIX_MUTANT_CASES = (
     ),
     (
         "local-http-preview-policy-check-disabled", "scripts/agents_delivery_policy_validation.py",
-        "def _has_local_http_preview_policy(section: str) -> bool:\n    return _section_has_line(section, (\n",
-        "def _has_local_http_preview_policy(section: str) -> bool:\n    return True or _section_has_line(section, (\n",
+        "def _has_local_http_preview_policy(section: str) -> bool:\n    return (\n        _section_has_line(section, (",
+        "def _has_local_http_preview_policy(section: str) -> bool:\n    return True or (\n        _section_has_line(section, (",
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_local_browser_pages_require_http_preview_not_file_scheme",
     ),
     (

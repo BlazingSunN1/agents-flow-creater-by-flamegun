@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -12,12 +17,61 @@ SKILL_ROOT = SCRIPT_DIR.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from validate_skill import AFFECTED_ASSET_TESTS, build_checks, build_parser, effective_mode, run_check
+from validate_skill import (
+    AFFECTED_ASSET_TESTS,
+    CheckResult,
+    _full_result_validity,
+    _run_freeze_candidate,
+    _run_full_once,
+    build_checks,
+    build_parser,
+    candidate_sha256,
+    effective_mode,
+    full_execution_action,
+    run_check,
+)
+from full_validation_receipt import (
+    FULL_RECEIPT_SCHEMA_VERSION,
+    VerifiedReceipt,
+    write_full_receipt,
+)
+
+
+def _passing_full_results() -> list[CheckResult]:
+    return [CheckResult(name, command, 0, 0.1, "")
+            for name, command in build_checks(mode="full")]
+
+
+def _passing_receipt(fingerprint: str, *, distributed: bool = False) -> dict[str, object]:
+    checks = [{"name": item.name, "returncode": 0} for item in _passing_full_results()]
+    if distributed:
+        checks.append({"name": "plugin-distribution", "returncode": 0})
+    return {
+        "schema_version": FULL_RECEIPT_SCHEMA_VERSION,
+        "skill_root": str(SKILL_ROOT.resolve()),
+        "candidate_sha256": fingerprint,
+        "frozen_at": "2026-09-04T00:00:00+00:00",
+        "full_status": "pass",
+        "distribution_status": "pass" if distributed else "not_requested",
+        "checks": checks,
+    }
+
+
+def _write_frozen_proof(path: Path, fingerprint: str | None = None) -> None:
+    write_full_receipt(path, {
+        "schema_version": FULL_RECEIPT_SCHEMA_VERSION,
+        "skill_root": str(SKILL_ROOT.resolve()),
+        "candidate_sha256": fingerprint or candidate_sha256(SKILL_ROOT),
+        "frozen_at": "2026-09-04T00:00:00+00:00",
+        "full_status": "frozen",
+        "distribution_status": "not_requested",
+        "checks": [],
+    })
 
 
 class SkillValidationTests(unittest.TestCase):
     def test_one_command_gate_contains_all_required_layers(self) -> None:
-        checks = dict(build_checks())
+        checks = dict(build_checks(mode="full"))
         self.assertEqual(
             {"skill-package", "code-structure", "cli-smoke", "unit-regression", "mutation", "swimlane-js-syntax"},
             set(checks),
@@ -26,10 +80,10 @@ class SkillValidationTests(unittest.TestCase):
         self.assertIn("run_mutation_checks.py", " ".join(checks["mutation"]))
         self.assertEqual(["node", "--check", "scripts/browser_test_swimlane.mjs"], checks["swimlane-js-syntax"])
 
-    def test_quick_gate_skips_long_layers_and_full_is_default(self) -> None:
+    def test_quick_gate_skips_long_layers_and_is_default(self) -> None:
         full = dict(build_checks(mode="full"))
         quick = dict(build_checks(mode="quick"))
-        self.assertEqual(full, dict(build_checks()))
+        self.assertEqual(quick, dict(build_checks()))
         self.assertEqual(
             {"skill-package", "code-structure", "cli-smoke", "swimlane-js-syntax"},
             set(quick),
@@ -38,8 +92,9 @@ class SkillValidationTests(unittest.TestCase):
         self.assertNotIn("mutation", quick)
 
         parser = build_parser()
-        self.assertEqual("full", parser.parse_args([]).mode)
+        self.assertEqual("quick", parser.parse_args([]).mode)
         self.assertEqual("quick", parser.parse_args(["--quick"]).mode)
+        self.assertEqual("freeze", parser.parse_args(["--freeze-candidate"]).mode)
         self.assertEqual("full", parser.parse_args(["--full"]).mode)
         with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
             parser.parse_args(["--quick", "--full"])
@@ -105,10 +160,15 @@ class SkillValidationTests(unittest.TestCase):
             with self.subTest(changed=changed):
                 self.assertEqual("full", effective_mode(SKILL_ROOT, "affected", changed))
 
-    def test_shared_planner_and_contract_schema_always_escalate_full(self) -> None:
+    def test_skill_and_references_use_affected_checks_while_shared_code_escalates(self) -> None:
+        for changed in (("SKILL.md",), ("references/delivery-orchestration.md",)):
+            with self.subTest(changed=changed):
+                self.assertEqual("affected", effective_mode(SKILL_ROOT, "affected", changed))
+                checks = dict(build_checks(mode="affected", changed_files=changed))
+                self.assertNotIn("unit-regression", checks)
+                self.assertNotIn("mutation", checks)
+
         for changed in (
-            ("SKILL.md",),
-            ("references/delivery-orchestration.md",),
             ("scripts/delivery_gate_planner.py",),
             ("scripts/validate_delivery_contract.py",),
             ("scripts/validate_skill.py",),
@@ -239,6 +299,267 @@ class SkillValidationTests(unittest.TestCase):
         self.assertTrue(args.distribution)
         self.assertTrue(args.require_direct_skills)
 
+    def test_candidate_fingerprint_changes_only_with_candidate_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "SKILL.md"
+            source.write_text("first", encoding="utf-8")
+            initial = candidate_sha256(root)
+            (root / "__pycache__").mkdir()
+            (root / "__pycache__" / "ignored.pyc").write_bytes(b"runtime")
+            self.assertEqual(initial, candidate_sha256(root))
+            source.write_text("second", encoding="utf-8")
+            self.assertNotEqual(initial, candidate_sha256(root))
+
+    def test_full_receipt_prevents_duplicate_full_and_mutation(self) -> None:
+        template = (SKILL_ROOT / "assets" / "AGENTS.template.md").read_text(encoding="utf-8")
+        self.assertIn("full + mutation at most once per frozen release candidate", template)
+        fingerprint = "a" * 64
+        self.assertEqual(
+            "blocked",
+            full_execution_action(None, fingerprint, distribution=False),
+        )
+        self.assertEqual(
+            "blocked",
+            full_execution_action(
+                {"candidate_sha256": fingerprint, "full_status": "fail"},
+                fingerprint,
+                distribution=False,
+            ),
+        )
+        passed = VerifiedReceipt(_passing_receipt(fingerprint))
+        self.assertEqual(
+            "reuse-full",
+            full_execution_action(passed, fingerprint, distribution=False),
+        )
+        self.assertEqual(
+            "distribution-only",
+            full_execution_action(passed, fingerprint, distribution=True),
+        )
+        distributed = VerifiedReceipt(_passing_receipt(fingerprint, distributed=True))
+        self.assertEqual(
+            "reuse-full",
+            full_execution_action(distributed, fingerprint, distribution=True),
+        )
+        self.assertEqual(
+            "blocked",
+            full_execution_action(passed, "b" * 64, distribution=False),
+        )
+
+    def test_full_runner_executes_checks_once_then_reuses_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            args = build_parser().parse_args([
+                "--full", "--full-receipt", str(Path(temporary) / "receipt.json"),
+            ])
+            _write_frozen_proof(Path(temporary) / "receipt.json")
+            passed = _passing_full_results()
+            with patch("validate_skill._execute_checks", return_value=passed) as execute:
+                first_results, first_valid, first_receipt = _run_full_once(args)
+                second_results, second_valid, second_receipt = _run_full_once(args)
+            self.assertEqual(passed, first_results)
+            self.assertTrue(first_valid)
+            self.assertEqual("run-full", first_receipt["action"])
+            self.assertEqual([], second_results)
+            self.assertTrue(second_valid)
+            self.assertEqual("reuse-full", second_receipt["action"])
+            self.assertEqual(1, execute.call_count)
+
+    def test_distribution_reuses_full_and_runs_only_distribution_check(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            receipt_path = Path(temporary) / "receipt.json"
+            base_args = build_parser().parse_args([
+                "--full", "--full-receipt", str(receipt_path),
+            ])
+            _write_frozen_proof(receipt_path)
+            passed = _passing_full_results()
+            with patch("validate_skill._execute_checks", return_value=passed):
+                _run_full_once(base_args)
+            distribution_args = build_parser().parse_args([
+                "--full", "--distribution", "--full-receipt", str(receipt_path),
+            ])
+            distribution_passed = [CheckResult(
+                "plugin-distribution", ["distribution"], 0, 0.1, "",
+            )]
+            with patch("validate_skill._execute_checks", return_value=distribution_passed) as execute:
+                _, valid, receipt = _run_full_once(distribution_args)
+            self.assertTrue(valid)
+            self.assertEqual("distribution-only", receipt["action"])
+            selected = execute.call_args.args[1]
+            self.assertEqual(["plugin-distribution"], [name for name, _ in selected])
+
+    def test_full_receipt_is_locked_across_concurrent_invocations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            args = build_parser().parse_args([
+                "--full", "--full-receipt", str(Path(temporary) / "receipt.json"),
+            ])
+            _write_frozen_proof(Path(temporary) / "receipt.json")
+            calls: list[int] = []
+
+            def execute_once(*_args: object) -> list[CheckResult]:
+                calls.append(1)
+                time.sleep(0.05)
+                return _passing_full_results()
+
+            with patch("validate_skill._execute_checks", side_effect=execute_once):
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    results = list(executor.map(lambda _: _run_full_once(args), range(2)))
+            self.assertEqual(1, len(calls))
+            self.assertEqual(["reuse-full", "run-full"], sorted(item[2]["action"] for item in results))
+            self.assertTrue(all(item[1] for item in results))
+
+    def test_freeze_candidate_runs_quick_then_emits_current_signed_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            receipt_path = Path(temporary) / "receipt.json"
+            args = build_parser().parse_args([
+                "--freeze-candidate", "--full-receipt", str(receipt_path),
+            ])
+            quick_results = [CheckResult(name, command, 0, 0.1, "")
+                             for name, command in build_checks(mode="quick")]
+            with patch("validate_skill._execute_checks", return_value=quick_results):
+                results, valid, metadata = _run_freeze_candidate(args)
+            self.assertEqual(quick_results, results)
+            self.assertTrue(valid)
+            self.assertEqual("freeze-candidate", metadata["action"])
+            self.assertEqual(
+                "run-full",
+                full_execution_action(
+                    __import__("full_validation_receipt").read_full_receipt(receipt_path),
+                    candidate_sha256(SKILL_ROOT),
+                    distribution=False,
+                ),
+            )
+
+            failed = _passing_receipt(candidate_sha256(SKILL_ROOT))
+            failed["full_status"], failed["checks"] = "fail", []
+            write_full_receipt(receipt_path, failed)
+            with patch("validate_skill._execute_checks") as execute:
+                _, valid, metadata = _run_freeze_candidate(args)
+            self.assertFalse(valid)
+            self.assertEqual("blocked", metadata["action"])
+            execute.assert_not_called()
+
+    def test_receipt_hashing_is_locked_and_validation_drift_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            receipt_path = Path(temporary) / "receipt.json"
+            args = build_parser().parse_args(["--full", "--full-receipt", str(receipt_path)])
+            events: list[str] = []
+
+            class ObservedLock:
+                def __enter__(self) -> None:
+                    events.append("lock")
+
+                def __exit__(self, *_args: object) -> None:
+                    return None
+
+            with patch("validate_skill.exclusive_receipt_lock", return_value=ObservedLock()), \
+                    patch("validate_skill.candidate_sha256",
+                          side_effect=lambda _root: events.append("hash") or "a" * 64):
+                _run_full_once(args)
+            self.assertEqual(["lock", "hash"], events[:2])
+
+            _write_frozen_proof(receipt_path, "a" * 64)
+            with patch("validate_skill.candidate_sha256", side_effect=["a" * 64, "b" * 64]), \
+                    patch("validate_skill._execute_checks", return_value=_passing_full_results()):
+                _, valid, metadata = _run_full_once(args)
+            self.assertFalse(valid)
+            self.assertEqual("blocked", metadata["action"])
+            stored = __import__("full_validation_receipt").read_full_receipt(receipt_path)
+            self.assertEqual("fail", stored.payload["full_status"])
+
+            receipt_path.unlink()
+            freeze = build_parser().parse_args([
+                "--freeze-candidate", "--full-receipt", str(receipt_path),
+            ])
+            quick = [CheckResult(name, command, 0, 0.1, "")
+                     for name, command in build_checks(mode="quick")]
+            with patch("validate_skill.candidate_sha256", side_effect=["a" * 64, "b" * 64]), \
+                    patch("validate_skill._execute_checks", return_value=quick):
+                _, valid, metadata = _run_freeze_candidate(freeze)
+            self.assertFalse(valid)
+            self.assertEqual("blocked", metadata["action"])
+            self.assertFalse(receipt_path.exists())
+
+    def test_full_and_unknown_affected_escalation_require_current_freeze_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            receipt_path = Path(temporary) / "receipt.json"
+            for argv in (
+                ["--full", "--full-receipt", str(receipt_path)],
+                ["--affected", "--changed-file", "unknown/new.py",
+                 "--full-receipt", str(receipt_path)],
+            ):
+                with self.subTest(argv=argv):
+                    args = build_parser().parse_args(argv)
+                    with patch("validate_skill._execute_checks") as execute:
+                        _, valid, metadata = _run_full_once(args)
+                    self.assertFalse(valid)
+                    self.assertEqual("blocked", metadata["action"])
+                    self.assertIn("freeze", metadata["reason"])
+                    execute.assert_not_called()
+
+            _write_frozen_proof(receipt_path, "b" * 64)
+            args = build_parser().parse_args([
+                "--full", "--full-receipt", str(receipt_path),
+            ])
+            with patch("validate_skill._execute_checks") as execute:
+                _, valid, metadata = _run_full_once(args)
+            self.assertFalse(valid)
+            self.assertIn("stale", metadata["reason"])
+            execute.assert_not_called()
+
+    def test_malformed_and_forged_full_receipts_fail_closed(self) -> None:
+        fingerprint = "a" * 64
+        self.assertEqual("blocked", full_execution_action(
+            {"candidate_sha256": fingerprint, "full_status": "pass"},
+            fingerprint, distribution=False,
+        ))
+        with tempfile.TemporaryDirectory() as temporary:
+            receipt_path = Path(temporary) / "receipt.json"
+            receipt_path.write_text("{broken", encoding="utf-8")
+            args = build_parser().parse_args([
+                "--full", "--full-receipt", str(receipt_path),
+            ])
+            with patch("validate_skill._execute_checks") as execute:
+                _, valid, receipt = _run_full_once(args)
+            self.assertFalse(valid)
+            self.assertEqual("blocked", receipt["action"])
+            execute.assert_not_called()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            receipt_path = Path(temporary) / "receipt.json"
+            receipt_path.write_text(
+                json.dumps(_passing_receipt(candidate_sha256(SKILL_ROOT))),
+                encoding="utf-8",
+            )
+            args = build_parser().parse_args([
+                "--full", "--full-receipt", str(receipt_path),
+            ])
+            with patch("validate_skill._execute_checks") as execute:
+                _, valid, receipt = _run_full_once(args)
+            self.assertFalse(valid)
+            self.assertEqual("blocked", receipt["action"])
+            execute.assert_not_called()
+
+    def test_full_receipt_inside_candidate_root_is_rejected(self) -> None:
+        receipt_path = SKILL_ROOT / ".forbidden-full-receipt.json"
+        self.assertFalse(receipt_path.exists())
+        args = build_parser().parse_args([
+            "--full", "--full-receipt", str(receipt_path),
+        ])
+        with patch("validate_skill._execute_checks") as execute:
+            _, valid, receipt = _run_full_once(args)
+        self.assertFalse(valid)
+        self.assertEqual("blocked", receipt["action"])
+        self.assertIn("outside", receipt["reason"])
+        self.assertFalse(receipt_path.exists())
+        execute.assert_not_called()
+
+    def test_distribution_failure_does_not_invalidate_passed_full_layers(self) -> None:
+        results = [
+            CheckResult("mutation", ["mutation"], 0, 0.1, ""),
+            CheckResult("plugin-distribution", ["distribution"], 1, 0.1, "failed"),
+        ]
+        self.assertEqual((True, False, False), _full_result_validity(results, True))
+
     def test_cross_module_aggregate_cli_is_in_smoke_gate(self) -> None:
         from validate_cli_smoke import CLI_SCRIPTS
         self.assertIn("validate_native_review_loop.py", CLI_SCRIPTS)
@@ -308,17 +629,42 @@ class SkillValidationTests(unittest.TestCase):
         # SKILL.md is loaded on every invocation; keep meaningful headroom.
         self.assertLessEqual(len(skill.encode("utf-8")), 10_000)
         # Generated AGENTS.md becomes project context, so retain growth headroom.
-        self.assertLessEqual(len(root_template.encode("utf-8")), 46_000)
+        template_bytes = len(root_template.encode("utf-8"))
+        self.assertGreaterEqual(template_bytes, 29_000)
+        self.assertLessEqual(template_bytes, 30_500)
+        # Captured before this requested compression pass; keep the reduction bounded.
+        compression_delta = 31_995 - template_bytes
+        self.assertGreaterEqual(compression_delta, 1_500)
+        self.assertLessEqual(compression_delta, 2_500)
         self.assertLessEqual(max(map(len, skill.splitlines())), 900)
         for relative in (
             "references/multi-model-review-policy.md",
             "references/evidence-reuse-policy.md",
             "references/browser-validation-policy.md",
-            "references/strict-security-governance.md",
+            "references/extraction-delivery.md",
+            "references/extraction-interfaces.md",
         ):
             with self.subTest(relative=relative):
                 self.assertTrue((SKILL_ROOT / relative).is_file())
                 self.assertIn(relative, skill)
+        strict_skill = SKILL_ROOT.parent / "strict-delivery-security" / "SKILL.md"
+        self.assertTrue(strict_skill.is_file())
+        self.assertIn("$strict-delivery-security", skill)
+        self.assertNotIn("references/strict-security-governance.md", skill)
+
+    def test_default_context_is_limited_to_four_delivery_surfaces(self) -> None:
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        template = (SKILL_ROOT / "assets" / "AGENTS.template.md").read_text(encoding="utf-8")
+        combined = "\n".join((skill, template))
+        for marker in (
+            "生效 `AGENTS.md`",
+            "进度索引",
+            "当前 run",
+            "相关追踪行",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, combined)
+        self.assertIn("默认只加载", combined)
 
     def test_final_aggregate_validators_are_closure_only(self) -> None:
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -329,10 +675,13 @@ class SkillValidationTests(unittest.TestCase):
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         governance = (SKILL_ROOT / "references" / "module-agent-governance.md").read_text(encoding="utf-8")
         strict_path = SKILL_ROOT / "references" / "strict-security-governance.md"
+        optional_skill = (SKILL_ROOT.parent / "strict-delivery-security" / "SKILL.md").read_text(encoding="utf-8")
         self.assertTrue(strict_path.is_file())
-        self.assertIn("references/strict-security-governance.md", skill)
+        self.assertIn("$strict-delivery-security", skill)
         self.assertIn("默认 `delivery-first-local-coordination` 不加载", skill)
         self.assertIn("references/strict-security-governance.md", governance)
+        self.assertIn("../generate-agents-md/references/strict-security-governance.md", optional_skill)
+        self.assertIn("普通项目交付不得自动启用", optional_skill)
         self.assertNotIn("## 5. 可选严格安全：一次性 system-governance bootstrap", governance)
 
         strict = strict_path.read_text(encoding="utf-8")
@@ -359,8 +708,11 @@ class SkillValidationTests(unittest.TestCase):
     def test_stable_delivery_complexity_requires_factual_risk_mapping(self) -> None:
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         template = (SKILL_ROOT / "assets" / "AGENTS.template.md").read_text(encoding="utf-8")
-        checklist = (SKILL_ROOT / "references" / "extraction-checklist.md").read_text(encoding="utf-8")
-        combined = "\n".join((skill, template, checklist))
+        extraction = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((SKILL_ROOT / "references").glob("extraction-*.md"))
+        )
+        combined = "\n".join((skill, template, extraction))
         for required in (
             "稳定交付是流程设计的唯一目的",
             "Stable delivery is the only purpose of process complexity",
@@ -377,8 +729,11 @@ class SkillValidationTests(unittest.TestCase):
     def test_swimlane_writes_are_semantic_batched_and_not_per_edit(self) -> None:
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         template = (SKILL_ROOT / "assets" / "AGENTS.template.md").read_text(encoding="utf-8")
-        checklist = (SKILL_ROOT / "references" / "extraction-checklist.md").read_text(encoding="utf-8")
-        combined = "\n".join((skill, template, checklist))
+        extraction = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((SKILL_ROOT / "references").glob("extraction-*.md"))
+        )
+        combined = "\n".join((skill, template, extraction))
         for required in (
             "flow_impact",
             "`none`, `changed`, or `uncertain`",
@@ -395,7 +750,7 @@ class SkillValidationTests(unittest.TestCase):
                 self.assertIn(required, combined)
 
         self.assertNotIn("阶段中间仅当修改改变", skill)
-        self.assertNotIn("阶段完成时统一同步", checklist)
+        self.assertNotIn("阶段完成时统一同步", extraction)
 
     def test_module_writer_authority_is_role_neutral_and_lease_bound(self) -> None:
         governance = (
@@ -462,8 +817,9 @@ class SkillValidationTests(unittest.TestCase):
         smoke = (
             SKILL_ROOT / "scripts" / "validate_cli_smoke.py"
         ).read_text(encoding="utf-8")
-        for surface in (boundary, skill, checklist):
+        for surface in (boundary, checklist):
             self.assertIn("validate_task_write_scope.py", surface)
+        self.assertIn("scripts/flowctl.py scope", skill)
         for required in (
             "当前用户请求",
             "精确维护源码根",

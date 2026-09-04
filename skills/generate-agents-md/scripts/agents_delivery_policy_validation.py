@@ -1,7 +1,5 @@
 from __future__ import annotations
-
 import re
-
 from agents_policy_common import (
     FRONTEND_VERIFICATION_HEADING_RE,
     Issue,
@@ -13,7 +11,6 @@ from agents_policy_common import (
     section_has_line as _section_has_line,
 )
 from agents_result_first_validation import has_result_first_hardening_sequence
-
 def _validate_traceability_policy(text: str, *, mode: str) -> list[Issue]:
     section = _extract_heading_section(text, TRACEABILITY_HEADING_RE)
     if section is None:
@@ -26,7 +23,6 @@ def _validate_traceability_policy(text: str, *, mode: str) -> list[Issue]:
         *_traceability_completion_checks(section, path_pattern),
     )
     return [Issue("error", code, message) for matched, code, message in checks if not matched]
-
 def _traceability_baseline_checks(section: str, path_pattern: str) -> tuple[tuple[bool, str, str], ...]:
     return (
     (
@@ -93,23 +89,22 @@ def _traceability_risk_checks(section: str, path_pattern: str) -> tuple[tuple[bo
     "缺少所有任务必须闭合的最小可靠交付链、成果冻结或打磨回归保护",
     ),
     (
-    _section_has_line(section, (r"small|小型", r"standard|标准", r"high-risk|高风险", r"reason|evidence|原因|依据"))
-    and _section_has_line(section, (r"small|小型", r"known impact|影响面已知", r"(?:externally )?observable|外部可观测", r"contract|契约", r"flow|流程", r"targeted verification|目标验证"))
-    and _section_has_line(section, (r"small|小型", r"reuses?.*registered.*module maintenance Agent|复用.*模块维护 Agent", r"no extra review|不新增审查", r"prototype|原型", r"swimlane|泳道", r"full (?:multi-artifact )?chain|全链产物"))
-    and _section_has_line(section, (r"standard|标准", r"mapped|risk mapping|映射", r"changed behavior|改变行为"))
-    and _section_has_line(section, (r"high-risk|高风险", r"multi-Agent|多 Agent", r"concurrent major modules|并发大模块", r"independence|compliance|独立性|合规")),
+    _section_has_line(section, (r"small|小型", r"standard|标准", r"high-risk|高风险", r"reason|evidence|justify|原因|依据"))
+    and _section_has_line(section, (r"small|小型", r"known|已知", r"non-observable|不可观测", r"targeted checks?|定向检查"))
+    and _section_has_line(section, (r"standard|标准", r"writer|写者", r"BLACK_BOX|black-box|黑盒"))
+    and _section_has_line(section, (r"high-risk|高风险", r"mapped|映射", r"specialist roles?|专项角色")),
     "missing-risk-tier-policy",
     "缺少小型最小闭环、标准映射加载与高风险多 Agent 的证据分级规则",
     ),
     (
-    _section_has_line(section, (r"change surfaces|变更面", r"behavior-change", r"user-visible", r"ui", r"api", r"standard|标准"))
-    and _section_has_line(section, (r"public-api", r"auth", r"security", r"migration", r"persistence", r"async", r"cross-module", r"data-schema", r"high-risk|高风险"))
-    and _section_has_line(section, (r"unknown|未知", r"high-risk|高风险", r"investigation|调查", r"until.*disprov|disprov|收敛|排除")),
+    _section_has_line(section, (r"behavior|UI|API|mobile|行为|移动", r"standard|标准"))
+    and _section_has_line(section, (r"public API", r"auth", r"security", r"migration", r"persistence", r"async", r"cross-module", r"schema", r"high-risk|高风险"))
+    and _section_has_line(section, (r"unknown|未知", r"high-risk|高风险", r"investigat|调查|排除")),
     "missing-objective-risk-escalation",
     "缺少由变更面触发且未知默认高风险的客观升级规则",
     ),
     (
-    _section_has_line(section, (r"independent UI/UX Agent|独立 UI/UX Agent", r"approved|批准", r"prototype|原型", r"must report|报告", r"instead of|不得|不能", r"requirements?|需求")),
+    _section_has_line(section, (r"UI/UX Agent", r"approved|批准", r"prototype|原型", r"without expanding|instead of|不得|不能", r"requirements?|需求")),
     "missing-independent-ui-ux-gate",
     "缺少独立 UI/UX Agent 的输入、产出和禁止扩需求边界",
     ),
@@ -118,7 +113,8 @@ def _traceability_risk_checks(section: str, path_pattern: str) -> tuple[tuple[bo
 def _traceability_implementation_checks(section: str, path_pattern: str) -> tuple[tuple[bool, str, str], ...]:
     return (
     (
-    _section_has_line(section, (r"test points?|测试点", r"unit test|单元", r"before implementation|实现前", r"separate|independent|另一个|独立", r"acceptance Agent|验收 Agent", r"complete|完整")),
+    _section_has_line(section, (r"test points?|测试点", r"unit|单元", r"before implementation|实现前"))
+    and _section_has_line(section, (r"independent|独立", r"acceptance (?:cases?|role)|验收(?:用例|角色)", r"complete|完整|success|成功")),
     "missing-independent-acceptance-case-gate",
     "缺少实现前测试点、单元用例和独立 Agent 完整验收用例",
     ),
@@ -128,7 +124,7 @@ def _traceability_implementation_checks(section: str, path_pattern: str) -> tupl
     "缺少新增或改变行为先更新追踪产物再继续编码的变更控制",
     ),
     (
-    _section_has_line(section, (r"code standards?|code-standard|代码规范", r"after.*frozen|冻结后", r"mapped|映射", r"`[^`]+`")),
+    _section_has_line(section, (r"after.*(?:freeze|frozen)|冻结后", r"mapped|映射", r"(?:static.*check|run mapped\s+`[^`]+`\s+checks|静态检查)", r"`[^`]+`")),
     "missing-mapped-code-standards",
     "缺少冻结后按变更面映射执行真实代码规范命令的规则",
     ),
@@ -142,8 +138,16 @@ def _traceability_implementation_checks(section: str, path_pattern: str) -> tupl
 def _traceability_completion_checks(section: str, path_pattern: str) -> tuple[tuple[bool, str, str], ...]:
     return (
     (
-    _section_has_line(section, (r"distinct|不同|独立", r"implementation.*run ID|实现.*run ID", r"UI/UX", r"acceptance-case|验收用例", r"black-box|黑盒"))
-    and _section_has_line(section, (r"input manifest|输入清单", r"output evidence|输出证据", r"must not|不得|不能", r"equal|相同|复用")),
+    _section_has_line(section, (
+        r"all required tests?|全部.*测试|所有.*测试", r"black-box|黑盒", r"pass|通过",
+        r"delivery.*documentation|completion.*documentation|交付文档|完成文档", r"only after|after|之后|后",
+    )),
+    "missing-test-before-delivery-documentation",
+    "缺少全部测试（含独立黑盒）通过后才写交付或完成文档的顺序门禁",
+    ),
+    (
+    _section_has_line(section, (r"writer|写者", r"independent Agent/run IDs|独立.*run ID", r"hashed inputs/outputs|哈希.*输入.*输出"))
+    and _section_has_line(section, (r"reused identities/artifacts|复用.*身份|复用.*产物", r"block|阻断")),
     "missing-independent-run-evidence",
     "缺少独立 Agent 运行编号、最小输入清单及防自证/复用规则",
     ),
@@ -161,10 +165,9 @@ def _traceability_completion_checks(section: str, path_pattern: str) -> tuple[tu
     ),
     (
     _section_has_line(section, (
-        r"delivery-bundle validator|交付包验证", r"`[^`]+`", r"AGENTS\.md",
-        r"traceability matrix|追踪矩阵", r"context manifest|工作集", r"plan/progress|计划.进度",
-        r"automated-review|自动审查", r"module run|模块.*run", r"latest\.md",
-        r"baseline|基线", r"code version|代码版本", r"run ID",
+        r"DELIVERY_BUNDLE_VALIDATION|delivery-bundle validator|At handoff/completion run\s+`[^`]+`|交付包验证", r"AGENTS",
+        r"contract", r"trace", r"plan/progress", r"current run",
+        r"baseline/code/build", r"review/frontend",
     )),
     "missing-delivery-bundle-validator",
     "缺少跨 AGENTS、追踪、工作集、计划进度、审查和模块日志的交付包一致性验证命令",
@@ -187,13 +190,13 @@ def _validate_swimlane_policy(text: str, *, mode: str) -> list[Issue]:
         (
             _section_has_line(
                 section,
-                (r"only when|只有.*才|仅当", r"system overview|系统总览", r"system|cross-module|系统|跨模块", r"boundary|handoff|entry|exit|边界|交接|入口|出口"),
+                (r"only (?:for|when)|只有.*才|仅当", r"system overview|系统总览|SWIMLANE_OVERVIEW", r"system|cross-module|系统|跨模块", r"boundary|handoff|entry|exit|边界|交接|入口|出口"),
             ),
             "missing-swimlane-overview-scope-rule",
             "缺少“仅在系统或跨模块边界变化时更新系统总览”的范围规则",
         ),
         (
-            _section_has_line(section, (r"module.*swimlane|module.*diagram|模块.*泳道图|模块.*图", path_pattern))
+            _section_has_line(section, (r"module.*diagram|模块.*图", path_pattern))
             and _section_has_line(section, (r"system overview|系统总览", path_pattern)),
             "missing-swimlane-path",
             "缺少系统总览和模块泳道图的两个明确路径",
@@ -219,7 +222,7 @@ def _validate_swimlane_policy(text: str, *, mode: str) -> list[Issue]:
             "缺少“泳道图未同步验证不得标记代码修改完成”的门禁",
         ),
         (
-            _section_has_line(section, (r"implementation code|实现代码", r"entry point|入口", r"call chain|调用链", r"test|测试")),
+            _section_has_line(section, (r"implementation|实现", r"entry(?: point)?|入口", r"call(?: chain)?|调用链", r"test|测试")),
             "missing-swimlane-code-evidence",
             "缺少从实现代码、入口、调用链和测试提取泳道图的规则",
         ),
@@ -240,7 +243,7 @@ def _swimlane_trigger_checks(section: str) -> tuple[tuple[bool, str, str], ...]:
         (
             _section_has_line(
                 section,
-                (r"flow_impact=changed|flow_impact.*changed", r"stabili[sz]ed candidate|稳定候选", r"batch|合并|批", r"at most once|至多.*一次", r"first downstream consumer|首次.*下游"),
+                (r"(?:flow_impact=|if )`?changed|flow_impact.*changed", r"stabili[sz]ed candidate|稳定候选", r"batch|合并|批", r"at most once|至多.*一次", r"first downstream consumer|首次.*下游"),
             ),
             "missing-swimlane-batched-update-rule",
             "缺少按模块、阶段和稳定候选合并且首次下游依赖前至多写图一次的规则",
@@ -264,7 +267,7 @@ def _swimlane_trigger_checks(section: str) -> tuple[tuple[bool, str, str], ...]:
         (
             _section_has_line(
                 section,
-                (r"flow_impact=changed|flow_impact.*changed", r"update|synchron|更新|同步", r"first downstream consumer|首次.*下游|stage|阶段|milestone|里程碑"),
+                (r"(?:flow_impact=|if )`?changed|flow_impact.*changed", r"update|synchron|更新|同步", r"first downstream consumer|首次.*下游|stage|阶段|milestone|里程碑"),
             ),
             "missing-swimlane-sync-rule",
             "缺少确认 changed 后在首次下游依赖或阶段交接前同步泳道的强制规则",
@@ -316,8 +319,7 @@ def _swimlane_trigger_weakened(section: str) -> bool:
 
 def _validate_frontend_verification_policy(text: str) -> list[Issue]:
     section = _extract_heading_section(text, FRONTEND_VERIFICATION_HEADING_RE)
-    if section is None:
-        return [Issue("error", "missing-frontend-verification-section", "缺少“前端交互验证”根级规则章节")]
+    if section is None: return [Issue("error", "missing-frontend-verification-section", "缺少“前端交互验证”根级规则章节")]
     checks = (
         (
             _section_has_line(section, (r"every|after every|每次", r"frontend code|前端代码", r"browser:control-in-app-browser")),
@@ -348,7 +350,8 @@ def _validate_frontend_verification_policy(text: str) -> list[Issue]:
             "缺少仅在需求或支持范围明确涉及移动端时才启用且否则不得阻断的规则",
         ),
         (
-            _section_has_line(section, (r"human|manual-like|人工", r"click|点击", r"entry|入口", r"result|结果|闭环")),
+            _section_has_line(section, (r"human|manual-like|人工", r"click|点击"))
+            and _section_has_line(section, (r"click|点击", r"entry|入口", r"outcome|result|结果|闭环")),
             "missing-human-click-closure",
             "缺少从入口到结果的人工式点击闭环",
         ),
@@ -364,14 +367,11 @@ def _validate_frontend_verification_policy(text: str) -> list[Issue]:
         ),
     )
     return [Issue("error", code, message) for matched, code, message in checks if not matched]
-
 def _has_local_http_preview_policy(section: str) -> bool:
-    return _section_has_line(section, (
-        r"local|本地", r"server|preview|loopback|服务|预览|回环",
-        r"http://|https://|HTTP", r"file://", r"never|not valid|禁止|不得",
-    ))
-
-
+    return (
+        _section_has_line(section, (r"local|本地", r"server|preview|loopback|服务|预览|回环"))
+        and _section_has_line(section, (r"file://", r"never|invalid|not valid|禁止|不得|无效"))
+    )
 def _validate_modular_execution_log_policy(text: str, *, mode: str) -> list[Issue]:
     section = _extract_heading_section(text, MODULAR_LOG_HEADING_RE)
     if section is None:
@@ -380,8 +380,6 @@ def _validate_modular_execution_log_policy(text: str, *, mode: str) -> list[Issu
     checks = (*_execution_log_storage_checks(section, path_pattern),
               *_execution_log_read_checks(section, path_pattern))
     return [Issue("error", code, message) for matched, code, message in checks if not matched]
-
-
 def _execution_log_storage_checks(section: str, path_pattern: str) -> tuple[tuple[bool, str, str], ...]:
     return (
     (
@@ -415,7 +413,8 @@ def _execution_log_storage_checks(section: str, path_pattern: str) -> tuple[tupl
 def _execution_log_read_checks(section: str, path_pattern: str) -> tuple[tuple[bool, str, str], ...]:
     return (
     (
-    _section_has_line(section, (r"read|读", r"index|索引", r"only|只", r"latest\.md", r"run_id")),
+    _section_has_line(section, (r"read|读", r"index|索引", r"current.*run|当前.*run"))
+    and _section_has_line(section, (r"latest\.md", r"only|只", r"regression|回归|conflict|冲突|historical|历史")),
     "missing-selective-log-read-policy",
     "缺少先读索引、再只读受影响模块的选择性读取协议",
     ),
@@ -453,11 +452,14 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
         ),
         (
             _section_has_line(text, (
-                r"solution-author|方案", r"black-box-reviewer|黑盒", r"parent GPT|父 GPT|Codex GPT",
-                r"independent|独立", r"same candidate|同一候选|same version|同一版本|same hash|同一哈希",
+                r"solution-author|writer|方案|写者", r"BLACK_BOX|black-box-reviewer|黑盒",
+                r"sole independent gate|唯一独立门禁", r"same candidate|同一候选|same version|同一版本|same hash|同一哈希",
+            )) and _section_has_line(text, (
+                r"parent GPT|父 GPT|Codex GPT", r"Dispatcher", r"relay|转交|转发",
+                r"no (?:separate )?standard gate|不增加.*(?:标准|普通).*门禁",
             )),
             "missing-native-sol-role-policy",
-            "缺少原生方案、黑盒审查与父 GPT 独立同候选复核职责",
+            "缺少标准任务单一 BLACK_BOX 独立门禁及父 GPT/Dispatcher 仅转交结论的职责",
         ),
         (
             _section_has_line(text, (
@@ -469,14 +471,12 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
         ),
         (
             _section_has_line(text, (
-                r"read-only|只读", r"only.*(?:Agent|代理).*(?:write|写)|唯一写者",
-                r"assigned.*(?:implementation|module maintenance) Agent|指派.*(?:实现|模块维护) Agent|current module maintenance",
-                r"Dispatcher", r"must not.*(?:execute|self-certify)|不得.*(?:执行|自证)",
-                r"self-report|自报",
+                r"read-only|只读", r"assigned writer|assigned.*(?:implementation|module maintenance) Agent|唯一写者|指派.*(?:实现|模块维护) Agent",
+                r"Dispatcher", r"relay|转交|转发", r"self-report|自报",
                 r"black-box execution|黑盒.*执行", r"secrets?|敏感|凭据",
             )),
             "missing-native-sol-authority-policy",
-            "缺少子 Agent 只读、获派模块维护 Agent 唯一写入、Dispatcher 不写及真实执行证据边界",
+            "缺少独立 Agent 只读、获派写者唯一写入、Dispatcher 仅转交及真实执行证据边界",
         ),
     )
     issues = [Issue("error", code, message) for matched, code, message in checks if not matched]
@@ -484,17 +484,16 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
         r"gpt-5\.6-sol.{0,80}(?:optional|fallback|substitut|可选|替换|降级)",
         r"solution-author.{0,80}(?:write workspace|modify code|写工作区|修改代码)",
         r"black-box-reviewer.{0,80}(?:write workspace|modify code|写工作区|修改代码)",
-        r"(?:parent GPT|父 GPT).{0,80}(?:need not|must not|optional|无需|不必).{0,80}(?:adjudicat|verify|裁决|复核)",
+        r"(?:parent GPT|父 GPT).{0,80}(?:additional|separate|another|额外|另加).{0,50}(?:standard|普通|标准).{0,20}(?:gates?|门禁)",
         r"(?:parent GPT\s+(?:runs?|executes?)|父 GPT(?:运行|执行)).{0,50}(?:independent|black-box|acceptance|独立|黑盒|验收).{0,20}(?:gates?|门禁)?",
         r"Dispatcher.{0,80}(?:parent GPT|父 GPT).{0,80}(?:sole.*writer|唯一写者|写入)",
         r"child self-report.{0,40}(?:proves|is sufficient|counts as).{0,30}(?:model|evidence)",
         r"子 Agent 自报.{0,30}(?:可以|可|足以|能够).{0,20}(?:证明|证据)",
     )
-    issues.extend(_native_sol_contradiction_issues(text, contradiction_patterns))
-    return issues
+    return [*issues, *_native_sol_contradiction_issues(text, contradiction_patterns)]
 
 def _native_sol_contradiction_issues(text: str, patterns: tuple[str, ...]) -> list[Issue]:
     flattened = " ".join(line.strip() for line in text.splitlines())
     if not any(re.search(pattern, flattened, re.IGNORECASE) for pattern in patterns):
         return []
-    return [Issue("error", "contradictory-native-sol-policy", "原生 GPT Sol 模型、只读角色、父级裁决和证据边界不得被否定或降级")]
+    return [Issue("error", "contradictory-native-sol-policy", "原生 GPT Sol 模型、只读角色、父级转交边界和证据门禁不得被否定或降级")]

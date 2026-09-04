@@ -104,8 +104,9 @@ class SwimlaneHtmlContractTests(unittest.TestCase):
         self.assertNotIn("active parent GPT remains the final adjudicator and may write", NATIVE_SKILL)
         self.assertNotIn("Keep the active parent GPT as sole workspace writer", NATIVE_AGENT_CONFIG)
         self.assertIn("Hierarchy never grants write authority", NATIVE_AGENT_CONFIG)
-        self.assertIn("A separate read-only coordinator/adjudicator", AGENTS_TEMPLATE)
-        self.assertIn("must use a different Agent ID and run ID from the leased writer", AGENTS_TEMPLATE)
+        self.assertIn("a different independent read-only Agent validates the same code/build identity", AGENTS_TEMPLATE)
+        self.assertIn("Use distinct Codex-native `gpt-5.6-sol` Agent/runs", AGENTS_TEMPLATE)
+        self.assertIn("Drift, identity reuse or failed evidence blocks completion", AGENTS_TEMPLATE)
         self.assertNotIn("The parent GPT independently adjudicates both roles", AGENTS_TEMPLATE)
         template_ref = "../generate-agents-md/assets/native-review-loop-evidence.template.json"
         validator_ref = "../generate-agents-md/scripts/validate_native_review_loop.py"

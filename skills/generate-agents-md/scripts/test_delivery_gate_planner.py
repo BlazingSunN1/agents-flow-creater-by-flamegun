@@ -131,7 +131,7 @@ class DeliveryGatePlannerTests(unittest.TestCase):
         self.assertNotIn("multi_agent_evidence", plan["required_command_ids"])
         self.assertNotIn("delivery_bundle", plan["required_command_ids"])
 
-    def test_standard_closure_uses_affected_and_review(self) -> None:
+    def test_standard_closure_uses_one_independent_acceptance_agent(self) -> None:
         plan = build_gate_plan(
             self.change(
                 delivery_phase="closure_candidate",
@@ -143,7 +143,7 @@ class DeliveryGatePlannerTests(unittest.TestCase):
             impact_fingerprint="b" * 64,
         )
         self.assertEqual("affected", plan["validation_tier"])
-        self.assertIn("CHANGE_REVIEW", plan["independent_roles"])
+        self.assertEqual(["BLACK_BOX"], plan["independent_roles"])
         self.assertIn("automated_review", plan["required_command_ids"])
         self.assertNotIn("full_test_or_build", plan["required_command_ids"])
 
@@ -184,7 +184,7 @@ class DeliveryGatePlannerTests(unittest.TestCase):
             stage="completion",
             impact_fingerprint="d" * 64,
         )
-        self.assertIn("UI_UX", plan["independent_roles"])
+        self.assertEqual(["BLACK_BOX"], plan["independent_roles"])
         self.assertIn("frontend_e2e", plan["required_command_ids"])
         self.assertNotIn("mobile_frontend_e2e", plan["required_command_ids"])
 
@@ -239,7 +239,7 @@ class DeliveryGatePlannerTests(unittest.TestCase):
         )
         self.assertIn("frontend_e2e", plan["required_command_ids"])
         self.assertIn("native_mobile_tests", plan["required_command_ids"])
-        self.assertIn("UI_UX", plan["independent_roles"])
+        self.assertEqual(["BLACK_BOX"], plan["independent_roles"])
 
     def test_mobile_web_requires_frontend_validation(self) -> None:
         for surface in ("mobile-web", "responsive"):
@@ -252,13 +252,13 @@ class DeliveryGatePlannerTests(unittest.TestCase):
                     stage="completion", impact_fingerprint="8" * 64,
                 )
 
-    def test_human_review_trigger_requests_independent_change_review(self) -> None:
+    def test_human_review_trigger_reuses_automated_review_without_extra_agent(self) -> None:
         plan = build_gate_plan(
             self.change(human_review_triggered=True),
             stage="implementation", impact_fingerprint="6" * 64,
         )
-        self.assertIn("CHANGE_REVIEW", plan["independent_roles"])
-        self.assertIn("multi_agent_evidence", plan["required_command_ids"])
+        self.assertEqual([], plan["independent_roles"])
+        self.assertNotIn("multi_agent_evidence", plan["required_command_ids"])
         self.assertIn("automated_review", plan["required_command_ids"])
         self.assertNotIn("delivery_bundle", plan["required_command_ids"])
         self.assertEqual([], plan["aggregate_command_ids"])

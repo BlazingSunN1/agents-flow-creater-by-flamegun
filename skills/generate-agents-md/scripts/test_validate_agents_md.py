@@ -107,14 +107,22 @@ class ValidatorRegressionTests(unittest.TestCase):
             error_codes(ROOT_TEMPLATE, mode="public-template", scope="root"),
         )
 
+    def test_delivery_documentation_requires_tests_and_black_box_to_pass_first(self) -> None:
+        rule = (
+            "- Write or update delivery/completion documentation only after all required tests, "
+            "including independent black-box acceptance, pass for the same candidate.\n"
+        )
+        weakened = ROOT_TEMPLATE.replace(rule, "")
+        self.assertIn(
+            "missing-test-before-delivery-documentation",
+            error_codes(weakened, mode="public-template", scope="root"),
+        )
+
     def test_local_browser_pages_require_http_preview_not_file_scheme(self) -> None:
         rule = (
-            "- For local HTML or frontend pages, start the registered preview server on a "
-            "loopback address, verify its HTTP health URL, and open that `http://` or `https://` "
-            "URL in the application browser. Require a loopback host and bind the URL path to the "
-            "current system-diagram path relative to its preview root, the diagram's actual SHA-256, "
-            "and the browser-observed HTTP response-body SHA-256; never use `file://` or an unrelated "
-            "HTTP page for automated browser evidence.\n"
+            "- For local pages use the registered server or loopback `http://` preview. Bind "
+            "entry URL/root/artifact and same-run live response hash; stopped services, `file://`, "
+            "redirects, decoys and unrelated pages are invalid.\n"
         )
         weakened = ROOT_TEMPLATE.replace(rule, "")
         codes = error_codes(weakened, mode="public-template", scope="root")
@@ -146,8 +154,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_dispatcher_cannot_receive_business_write_authority(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "The Dispatcher must not edit business code or write shared project records.",
-            "The Dispatcher may edit business code and write shared project records.",
+            "Dispatcher must not edit business code or shared records.",
+            "Dispatcher may edit business code and shared records.",
         )
         codes = error_codes(weakened, mode="public-template", scope="root")
         self.assertIn("missing-dispatcher-no-write-boundary", codes)
@@ -161,7 +169,7 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_dispatcher_context_packet_requires_complete_minimum_fields(self) -> None:
-        weakened = ROOT_TEMPLATE.replace("and relevant paths and evidence", "")
+        weakened = ROOT_TEMPLATE.replace("paths/evidence", "paths")
         self.assertIn(
             "missing-dispatcher-context-packet",
             error_codes(weakened, mode="public-template", scope="root"),
@@ -169,7 +177,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_module_work_has_exactly_one_writer(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "Every implementation task has exactly one implementation Agent as its sole writer.",
+            "Each task has exactly one implementation Agent as writer; all other Agents are read-only.",
             "Implementation tasks may use multiple writers.",
         )
         self.assertIn(
@@ -180,9 +188,9 @@ class ValidatorRegressionTests(unittest.TestCase):
     def test_project_agent_write_boundary_is_required(self) -> None:
         rule = (
             "A project task may write only inside the canonical project root or its assigned "
-            "isolated worktree and only within its owned paths. Before a write, validate every "
-            "declared target with registered command ID `task_write_scope`; a resolved target "
-            "outside that boundary, including a symlink escape, fails before mutation."
+            "isolated worktree and only within owned paths. Before writing, validate each "
+            "declared canonical target with `task_write_scope`; a realpath "
+            "outside that boundary, including symlink escape, fails before mutation."
         )
         self.assertIn(rule, ROOT_TEMPLATE)
         weakened = ROOT_TEMPLATE.replace(rule, "Project Agents may write anywhere.")
@@ -200,11 +208,10 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_skill_maintenance_requires_a_dedicated_authorized_task(self) -> None:
         rule = (
-            "For project tasks, global Skill/plugin source roots, Codex plugin caches, and direct "
-            "Skill installation roots are read-only. Editing one requires a separate dedicated "
-            "Skill-maintainer task, explicit authorization in the current user request, and one "
-            "exact canonical maintenance source root; prior authorization, Agent hierarchy, or a "
-            "project lease does not grant it."
+            "For project tasks, global Skill/plugin source roots, caches and direct Skill installs "
+            "are read-only. Editing requires a dedicated Skill-maintainer task, explicit "
+            "authorization in the current user request and one exact canonical maintenance source "
+            "root; hierarchy or a project lease grants nothing."
         )
         self.assertIn(rule, ROOT_TEMPLATE)
         weakened = ROOT_TEMPLATE.replace(rule, "A project Agent may maintain global Skills.")
@@ -215,8 +222,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_plugin_cache_and_direct_installs_are_derived_outputs(self) -> None:
         rule = (
-            "Plugin cache and direct Skill installs are derived outputs: update authorized source, "
-            "validate, use cachebuster/reinstall; never edit those copies directly."
+            "Plugin caches and direct Skill installs are derived outputs: update authorized source, "
+            "validate, use cachebuster/reinstall, and never edit those copies directly."
         )
         self.assertIn(rule, ROOT_TEMPLATE)
         weakened = ROOT_TEMPLATE.replace(rule, "Update the cached plugin directly.")
@@ -243,7 +250,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_major_module_requires_stable_capability_definition(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "A major functional module is a stable business capability with an independently testable entry, output contract, and non-overlapping ownership boundary; helpers and temporary task slices remain inside their owning module and do not create extra maintenance Agents.",
+            "A major functional module is a stable business capability with an independently testable entry/output contract and non-overlapping ownership boundary; helpers/temporary slices stay inside it and do not create Agents.",
             "Create a maintenance Agent whenever a file changes.",
         )
         self.assertIn(
@@ -253,15 +260,14 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_each_major_module_requires_local_delivery_closure(self) -> None:
         expected_closed_loop = (
-            "Every major functional module has one independent long-term maintenance Agent "
-            "that maintains its requirement → design/flow → implementation → targeted tests → "
-            "evidence/log/swimlane chain through successful independent black-box acceptance by "
-            "a different read-only Agent. This chain must be complete before the module is completed."
+            "Every major functional module has one independent long-term maintenance Agent closing "
+            "requirement → design/flow → implementation → targeted tests → independent black-box "
+            "acceptance → evidence/log/swimlane before completion."
         )
         self.assertIn(expected_closed_loop, ROOT_TEMPLATE)
         self.assertIn(
-            "only to record the already-passed result after all applicable independent gates have passed; "
-            "it does not authorize that Agent to independently adjudicate or close the module delivery.",
+            "`record_completion_after_verified_gates` only records another read-only Agent's "
+            "passed gates.",
             ROOT_TEMPLATE,
         )
         self.assertNotIn("may close its own requirement", ROOT_TEMPLATE)
@@ -275,16 +281,12 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_major_module_closure_cannot_be_made_optional(self) -> None:
-        weakened = ROOT_TEMPLATE.replace(
-            "before the module is completed.",
-            "before the module is completed, but this closure is optional and skippable.",
-            1,
-        )
+        weakened = ROOT_TEMPLATE + "\nModule closure is optional and skippable.\n"
         codes = error_codes(weakened, mode="public-template", scope="root")
         self.assertTrue({"contradictory-global-policy", "contradictory-dispatcher-policy"} & codes)
 
     def test_module_closure_referential_weakening_is_rejected(self) -> None:
-        base = "before the module is completed."
+        base = "before completion."
         for reversal in (
             " The requirement-to-acceptance maintenance loop described above is advisory and may be skipped.",
             " This entire requirement is advisory; implementers may ignore it.",
@@ -298,7 +300,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_maintenance_agent_cannot_self_accept_its_implementation(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "The module maintenance Agent may implement an assigned change as the sole writer, but it must not self-certify review or acceptance of its own implementation; a different independent read-only Agent executes the applicable review and black-box gates against the same code/build identity.",
+            "The module maintenance Agent is the sole writer but must not self-certify review/acceptance; a different independent read-only Agent validates the same code/build identity.",
             "The module maintenance Agent may implement and accept its own change.",
         )
         self.assertIn(
@@ -308,8 +310,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_self_acceptance_cannot_be_reauthorized_elsewhere(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "a different independent read-only Agent executes the applicable review and black-box gates against the same code/build identity.",
-            "a different independent read-only Agent executes the applicable review and black-box gates against the same code/build identity. A module maintenance Agent may self-certify acceptance of its own implementation.",
+            "a different independent read-only Agent validates the same code/build identity.",
+            "a different independent read-only Agent validates the same code/build identity. A module maintenance Agent may self-certify acceptance of its own implementation.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -893,7 +895,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_system_completion_requires_every_affected_module_closed(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "Cross-module or system work must be split into one independently validated delivery bundle per affected module, written only by that module's registered maintenance Agent. After every affected module closes, a separate native Sol `SYSTEM_AGGREGATION` writer creates the system manifest and binds its canonical candidate payload SHA-256 in a closed output receipt. The Dispatcher only invokes the read-only validator. Dispatcher, aggregation writer, every module maintainer, and every gate reviewer must have globally distinct Agent IDs and run IDs; local mode records their bindings, while strict mode additionally host-attests them. System completion requires every affected module's current requirement IDs, code/build, targeted tests, independent acceptance, run/latest index, applicable flow-change swimlane evidence, and no open finding.",
+            "Before cross-module/system completion, every affected module binds current requirement IDs, code/build, targeted tests, independent acceptance, run/latest, swimlane evidence and no open findings. A distinct native Sol `SYSTEM_AGGREGATION` writer emits the system manifest/receipt; Dispatcher only invokes its read-only validator.",
             "Cross-module completion follows the Dispatcher summary.",
         )
         self.assertIn(
@@ -903,8 +905,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_open_module_cannot_be_overridden_by_system_summary(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "and no open finding.",
-            "and no open finding. System completion may proceed while an affected module remains open.",
+            "and no open findings.",
+            "and no open findings. System completion may proceed while an affected module remains open.",
             1,
         )
         self.assertIn(
@@ -924,7 +926,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_new_module_requires_owner_before_implementation(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "Before implementation, the non-overlapping ownership must exist; only then may the Dispatcher delegate initialization and implementation.",
+            "Before implementation, Dispatcher gives each stable new module a unique module key/name, non-overlapping ownership boundary and long-term maintenance Agent/session, registers them, then delegates initialization.",
             "The ownership mapping can be updated later.",
         )
         self.assertIn(
@@ -945,8 +947,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_other_agents_cannot_receive_parallel_write_authority(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "Other module maintenance Agents and all independent gate Agents are read-only for code and shared records.",
-            "Other module maintenance Agents and all independent gate Agents are read-only for code and shared records. Other Agents may also write code and shared records.",
+            "all other Agents are read-only.",
+            "all other Agents are read-only. Other Agents may also write code and shared records.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -965,8 +967,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_new_module_cannot_implement_before_owner_exists(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "Runtime thread/session IDs stay in runtime evidence, never in this AGENTS.md.",
-            "Runtime thread/session IDs stay in runtime evidence, never in this AGENTS.md. A new module may implement before its owner Agent/session exists.",
+            "registers them, then delegates initialization.",
+            "registers them, then delegates initialization. A new module may implement before its owner Agent/session exists.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -1110,8 +1112,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_dispatcher_passive_write_authorization_is_rejected(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "The Dispatcher must not edit business code or write shared project records.",
-            "The Dispatcher must not edit business code or write shared project records. The Dispatcher is permitted to write shared project records and business code.",
+            "Dispatcher must not edit business code or shared records.",
+            "Dispatcher must not edit business code or shared records. The Dispatcher is permitted to write shared project records and business code.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -1120,8 +1122,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_dispatcher_passive_written_authorization_is_rejected(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "The Dispatcher must not edit business code or write shared project records.",
-            "The Dispatcher must not edit business code or write shared project records. Business code and shared project records may also be written by the Dispatcher.",
+            "Dispatcher must not edit business code or shared records.",
+            "Dispatcher must not edit business code or shared records. Business code and shared project records may also be written by the Dispatcher.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -1130,8 +1132,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_reversed_other_agent_write_grant_is_rejected(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "Other module maintenance Agents and all independent gate Agents are read-only for code and shared records.",
-            "Other module maintenance Agents and all independent gate Agents are read-only for code and shared records. Write access to code and shared records is granted to other Agents.",
+            "all other Agents are read-only.",
+            "all other Agents are read-only. Write access to code and shared records is granted to other Agents.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -1140,8 +1142,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_reversed_new_module_order_authorization_is_rejected(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "Before implementation, the non-overlapping ownership must exist; only then may the Dispatcher delegate initialization and implementation.",
-            "Before implementation, the non-overlapping ownership must exist; only then may the Dispatcher delegate initialization and implementation. Implementation is allowed before the owner Agent/session is created for a new module.",
+            "registers them, then delegates initialization.",
+            "registers them, then delegates initialization. Implementation is allowed before the owner Agent/session is created for a new module.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -1700,8 +1702,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_second_user_entry_point_is_rejected(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "The Dispatcher Agent is the user's only entry point",
-            "The Dispatcher Agent is the user's only entry point. A second coordinator is another user entry point",
+            "Dispatcher is the user's only entry point",
+            "Dispatcher is the user's only entry point. A second coordinator is another user entry point",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -1710,8 +1712,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_second_intake_agent_accepting_user_requests_is_rejected(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "The Dispatcher Agent is the user's only entry point",
-            "The Dispatcher Agent is the user's only entry point. A second intake Agent may also accept user requests",
+            "Dispatcher is the user's only entry point",
+            "Dispatcher is the user's only entry point. A second intake Agent may also accept user requests",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -2529,8 +2531,8 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_system_overview_updates_only_for_system_boundary_change(self) -> None:
         text = ROOT_TEMPLATE.replace(
-            "Update the complete system overview at `{{SWIMLANE_OVERVIEW_PATH}}` only when",
-            "Update the complete system overview at `{{SWIMLANE_OVERVIEW_PATH}}` whenever",
+            "Update the system overview at `{{SWIMLANE_OVERVIEW_PATH}}` only for",
+            "Update the system overview at `{{SWIMLANE_OVERVIEW_PATH}}` whenever",
         )
         self.assertIn(
             "missing-swimlane-overview-scope-rule",
@@ -2595,7 +2597,7 @@ class ValidatorRegressionTests(unittest.TestCase):
                 )
 
     def test_swimlane_reference_checklist_matches_stage_frequency(self) -> None:
-        reference = (SKILL_ROOT / "references/extraction-checklist.md").read_text(encoding="utf-8")
+        reference = (SKILL_ROOT / "references/extraction-interfaces.md").read_text(encoding="utf-8")
         self.assertNotIn("每次修改代码模块后", reference)
         self.assertNotIn("每次代码模块修改后同步", reference)
         self.assertIn("每次代码模块修改后只判定", reference)
@@ -2635,17 +2637,71 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_negated_context_manifest_policy_fails(self) -> None:
         text = ROOT_TEMPLATE.replace(
-            "Maintain the current workset manifest",
-            "Do not maintain the current workset manifest",
+            "Keep `{{CONTEXT_MANIFEST_PATH}}` on disk",
+            "Do not keep `{{CONTEXT_MANIFEST_PATH}}` on disk",
         )
         self.assertIn(
             "contradictory-context-workset-policy",
             error_codes(text, mode="public-template", scope="root"),
         )
 
+    def test_default_context_allowlist_cannot_add_whole_repository(self) -> None:
+        text = ROOT_TEMPLATE.replace(
+            "and related traceability rows.",
+            "and related traceability rows, plus the whole repository.",
+        )
+        self.assertIn(
+            "contradictory-default-context-policy",
+            error_codes(text, mode="public-template", scope="root"),
+        )
+
+    def test_separate_default_context_expansion_is_rejected(self) -> None:
+        for statement in (
+            "By default, load all repository documentation.",
+            "All history is loaded by default.",
+            "By default, load the entire codebase.",
+            "By default, read the complete source tree.",
+        ):
+            with self.subTest(statement=statement):
+                text = ROOT_TEMPLATE.replace(
+                    "## Context and Token Budget\n\n",
+                    f"## Context and Token Budget\n\n- {statement}\n",
+                    1,
+                )
+                self.assertIn(
+                    "contradictory-default-context-policy",
+                    error_codes(text, mode="public-template", scope="root"),
+                )
+
+    def test_standard_task_cannot_add_second_independent_agent(self) -> None:
+        text = ROOT_TEMPLATE.replace(
+            "High-risk may add separately mapped specialist roles.",
+            "Standard work also requires an independent CHANGE_REVIEW Agent. "
+            "High-risk may add separately mapped specialist roles.",
+        )
+        self.assertIn(
+            "contradictory-standard-agent-role-policy",
+            error_codes(text, mode="public-template", scope="root"),
+        )
+
+    def test_standard_task_role_allowlist_does_not_depend_on_addition_words(self) -> None:
+        for statement in (
+            "Standard work uses a read-only CHANGE_REVIEW Agent before BLACK_BOX.",
+            "Standard work uses a read-only Security Review Agent before BLACK_BOX.",
+        ):
+            with self.subTest(statement=statement):
+                text = ROOT_TEMPLATE.replace(
+                    "High-risk may add separately mapped specialist roles.",
+                    f"{statement} High-risk may add separately mapped specialist roles.",
+                )
+                self.assertIn(
+                    "contradictory-standard-agent-role-policy",
+                    error_codes(text, mode="public-template", scope="root"),
+                )
+
     def test_context_manifest_validator_is_required(self) -> None:
         text = ROOT_TEMPLATE.replace(
-            "run the fail-closed manifest validator `{{CONTEXT_MANIFEST_VALIDATION_COMMAND}}`",
+            "run fail-closed manifest validator `{{CONTEXT_MANIFEST_VALIDATION_COMMAND}}`",
             "inspect the manifest manually",
         )
         self.assertIn(
@@ -2706,7 +2762,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_result_first_hardening_sequence_is_required(self) -> None:
         text = ROOT_TEMPLATE.replace(
-            "First drive the smallest end-to-end business flow through a real entry, the approved core behavior, and an observable acceptance result.",
+            "First prove the smallest end-to-end business flow through a real entry and observable result.",
             "Begin by expanding all governance gates.",
         )
         self.assertIn(
@@ -2716,7 +2772,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_negated_result_first_sequence_is_rejected(self) -> None:
         text = ROOT_TEMPLATE.replace(
-            "First drive the smallest end-to-end business flow through a real entry, the approved core behavior, and an observable acceptance result.",
+            "First prove the smallest end-to-end business flow through a real entry and observable result.",
             "Do not drive the smallest end-to-end business flow through a real entry or observable acceptance result.",
         )
         self.assertIn(
@@ -2763,7 +2819,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_delivery_bundle_validator_is_required(self) -> None:
         text = ROOT_TEMPLATE.replace(
-            "run the aggregate delivery-bundle validator `{{DELIVERY_BUNDLE_VALIDATION_COMMAND}}`",
+            "run `{{DELIVERY_BUNDLE_VALIDATION_COMMAND}}`",
             "compare delivery files manually",
         )
         self.assertIn(
@@ -2774,10 +2830,9 @@ class ValidatorRegressionTests(unittest.TestCase):
     def test_delivery_bundle_must_bind_review_and_module_records(self) -> None:
         text = ROOT_TEMPLATE
         for token in (
-            "plan/progress, ",
-            "automated-review evidence, ",
-            "current module run, ",
-            "completion-stage `latest.md`, ",
+            "plan/progress,",
+            "current run/latest index,",
+            "automated-review/frontend evidence",
         ):
             text = text.replace(token, "")
         self.assertIn(
@@ -2786,14 +2841,16 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_delivery_bundle_must_bind_automated_review_record(self) -> None:
-        text = ROOT_TEMPLATE.replace("automated-review evidence, ", "")
+        text = ROOT_TEMPLATE.replace(
+            "automated-review/frontend evidence", "frontend evidence",
+        )
         self.assertIn(
             "missing-delivery-bundle-validator",
             error_codes(text, mode="public-template", scope="root"),
         )
 
     def test_delivery_bundle_must_bind_module_run_and_latest(self) -> None:
-        text = ROOT_TEMPLATE.replace("current module run, completion-stage `latest.md`, ", "")
+        text = ROOT_TEMPLATE.replace("current run/latest index,", "")
         self.assertIn(
             "missing-delivery-bundle-validator",
             error_codes(text, mode="public-template", scope="root"),
@@ -2801,7 +2858,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_objective_risk_escalation_is_required(self) -> None:
         text = ROOT_TEMPLATE.replace(
-            "unknown impact is temporarily high-risk until a minimum factual investigation disproves it.",
+            "unknown stays high-risk until investigated.",
             "assess unknown impact later.",
         )
         self.assertIn(

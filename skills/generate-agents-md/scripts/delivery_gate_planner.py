@@ -9,7 +9,7 @@ from strict_json import loads as strict_json_loads
 
 
 ALLOWED_STAGES = {"planning", "implementation", "closure_candidate", "completion"}
-PLANNER_VERSION = "delivery-gates-v3"
+PLANNER_VERSION = "delivery-gates-v4"
 ALLOWED_SURFACES = {
     "internal", "behavior-change", "user-visible", "ui", "api", "mobile", "touch",
     "responsive", "mobile-web", "native-mobile", "public-api", "auth", "security", "privacy", "migration",
@@ -54,9 +54,7 @@ def build_gate_plan(
     surfaces = set(normalized["surfaces"])
     risk = str(normalized["risk_level"])
     tier = _validation_tier(risk, stage, bool(normalized["cross_module"]))
-    roles = _independent_roles(
-        risk, surfaces, stage, bool(normalized["human_review_triggered"]),
-    )
+    roles = _independent_roles(risk, surfaces, stage)
     commands = _required_commands(normalized, surfaces, stage, tier, roles)
     commands = sorted(commands)
     aggregate_commands = sorted(set(commands) & FINAL_AGGREGATE_COMMANDS)
@@ -211,23 +209,21 @@ def _validation_tier(risk: str, stage: str, cross_module: bool) -> str:
     return "affected" if risk == "standard" else "quick"
 
 
-def _independent_roles(
-    risk: str, surfaces: set[str], stage: str, human_review_triggered: bool,
-) -> set[str]:
-    roles: set[str] = set()
-    if human_review_triggered:
-        roles.add("CHANGE_REVIEW")
-    if risk != "small" and stage in {"closure_candidate", "completion"}:
-        roles.add("ACCEPTANCE_CASES")
-    if risk != "small" and stage == "completion":
-        roles.add("BLACK_BOX")
-    if risk in {"standard", "high-risk"} and stage in {"closure_candidate", "completion"}:
-        roles.add("CHANGE_REVIEW")
-    if risk == "high-risk" and stage in {"closure_candidate", "completion"}:
-        roles.update({"REQUIREMENT_REVIEW", "SPECIALIST_REVIEW"})
-    if "ui" in surfaces and stage in {"closure_candidate", "completion"}:
-        roles.add("UI_UX")
-    return roles
+def _independent_roles(risk: str, surfaces: set[str], stage: str) -> set[str]:
+    closing = stage in {"closure_candidate", "completion"}
+    if risk == "high-risk" and closing:
+        roles = {"ACCEPTANCE_CASES", "CHANGE_REVIEW", "REQUIREMENT_REVIEW", "SPECIALIST_REVIEW"}
+        if stage == "completion":
+            roles.add("BLACK_BOX")
+        if "ui" in surfaces:
+            roles.add("UI_UX")
+        return roles
+    if risk == "standard" and closing:
+        # One read-only acceptance Agent owns review, acceptance design and black-box replay.
+        return {"BLACK_BOX"}
+    # A mid-stage human trigger runs the automated review command against the
+    # current candidate; independent Agents remain reserved for closure gates.
+    return set()
 
 
 def _required_commands(

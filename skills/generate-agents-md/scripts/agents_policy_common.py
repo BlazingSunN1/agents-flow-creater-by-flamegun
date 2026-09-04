@@ -54,6 +54,7 @@ REQUIRED_MACHINE_POLICY = {
     "context_manifest_validation": "required_before_expansion_or_reuse",
     "traceability_validation": "required_before_handoff_and_completion",
     "delivery_bundle_validation": "required_before_handoff_and_completion",
+    "documentation_after_black_box": "required",
     "project_command_validation": "required_before_evidenced_gate_or_completion",
     "frontend_evidence_validation": "required_after_frontend_change",
     "multi_agent_evidence_validation": "required_before_handoff_and_completion",

@@ -33,14 +33,17 @@ Every hardening candidate must replay the frozen acceptance command. A regressio
 
 - `quick`: known small implementation work only; package, structure, CLI, syntax, and direct target feedback. It never proves closure.
 - `affected`: the default closure-candidate tier for known standard impact. Run with one `--changed-file` per normalized project-relative path. It selects mapped tests and relevant fast checks.
-- `full`: final Skill release, high-risk or cross-module change, shared planner/schema change, or any unknown affected mapping. Unknown impact automatically escalates; it never silently skips checks.
+- `full`: final Skill release, high-risk or cross-module change, shared planner/schema change, or any unknown affected mapping. Unknown impact requires full but cannot start it without a signed freeze proof matching the current candidate SHA-256.
 
 For this Skill:
 
 ```bash
 python3 scripts/validate_skill.py --affected --changed-file scripts/example.py
+python3 scripts/validate_skill.py --freeze-candidate
 python3 scripts/validate_skill.py --full
 ```
+
+`--freeze-candidate` first runs quick checks, then writes a signed proof outside the source tree. Explicit full and affected-to-full escalation both fail closed before mutation when the proof is absent, unsigned, malformed, failed, or stale. Any candidate change requires a new proof.
 
 Local plugin release adds a distribution gate after cachebuster update and reinstall:
 

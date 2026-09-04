@@ -17,6 +17,7 @@ class GoldenWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fixture = bundle_test_support.DeliveryBundleValidatorTests()
         self.fixture.setUp()
+        self.frontend_applicable = True
 
     def tearDown(self) -> None:
         self.fixture.tearDown()
@@ -32,7 +33,7 @@ class GoldenWorkflowTests(unittest.TestCase):
                 command_manifest_path=self.fixture.commands,
                 multi_agent_evidence_path=self.fixture.multi_agent,
                 swimlane_evidence_path=self.fixture.swimlane,
-                frontend_evidence_path=self.fixture.frontend,
+                frontend_evidence_path=(self.fixture.frontend if self.frontend_applicable else None),
                 requirement_questions_path=self.fixture.requirement_questions,
                 requirement_questions_sha256=hashlib.sha256(
                     self.fixture.requirement_questions.read_bytes()
@@ -66,12 +67,18 @@ class GoldenWorkflowTests(unittest.TestCase):
         evidence = json.loads(self.fixture.multi_agent.read_text(encoding="utf-8"))
         evidence["gates"] = [item for item in evidence["gates"] if item["role"] != "UI_UX"]
         if risk == "small":
-            evidence["gates"] = [item for item in evidence["gates"] if item["role"] != "CHANGE_REVIEW"]
+            evidence["gates"] = []
         if risk == "high-risk":
-            for role, run_id in (("REQUIREMENT_REVIEW", "requirement-run-1"), ("SPECIALIST_REVIEW", "specialist-run-1")):
-                input_path = f"evidence/{role.casefold()}-input.md"
-                output_path = f"evidence/{role.casefold()}-output.md"
+            high_risk_roles = (
+                ("ACCEPTANCE_CASES", "at-run-1", "evidence/at-input.md", "evidence/at-output.md"),
+                ("CHANGE_REVIEW", "change-run-1", "evidence/change-input.md", "evidence/change-output.md"),
+                ("REQUIREMENT_REVIEW", "requirement-run-1", "evidence/requirement_review-input.md", "evidence/requirement_review-output.md"),
+                ("SPECIALIST_REVIEW", "specialist-run-1", "evidence/specialist_review-input.md", "evidence/specialist_review-output.md"),
+            )
+            for role, run_id, input_path, output_path in high_risk_roles:
                 role_paths = {
+                    "ACCEPTANCE_CASES": ["requirements/baseline.md", "features/list.md", "tests/unit.md", "tests/acceptance.md"],
+                    "CHANGE_REVIEW": ["requirements/baseline.md", "flows/system.html", "tests/unit.md", "src/module.py"],
                     "REQUIREMENT_REVIEW": ["requirements/baseline.md", "flows/system.html", "features/list.md"],
                     "SPECIALIST_REVIEW": ["requirements/baseline.md", "flows/system.html", "tests/unit.md", "src/module.py"],
                 }
@@ -121,6 +128,7 @@ class GoldenWorkflowTests(unittest.TestCase):
                 "applicability": "required",
             })
         self.fixture.commands.write_text(json.dumps(commands), encoding="utf-8")
+        self.frontend_applicable = False
         self._refresh_context_dependent_records(f"{risk}; {reason}; no expansion")
 
     def _refresh_context_dependent_records(self, risk_reason: str) -> None:
@@ -134,6 +142,21 @@ class GoldenWorkflowTests(unittest.TestCase):
         self.fixture.module_run.write_text(
             self.fixture._module_run_record(risk_reason=risk_reason), encoding="utf-8",
         )
+        if not self.frontend_applicable:
+            run_text = self.fixture.module_run.read_text(encoding="utf-8")
+            run_text = run_text.replace(
+                "Verification evidence: swimlane.json, frontend.json",
+                "Verification evidence: swimlane.json",
+            ).replace(
+                "Frontend evidence: frontend.json",
+                "Frontend evidence: N/A: no frontend",
+            )
+            self.fixture.module_run.write_text(run_text, encoding="utf-8")
+            latest_text = self.fixture.module_latest.read_text(encoding="utf-8").replace(
+                "Verification evidence: swimlane.json, frontend.json",
+                "Verification evidence: swimlane.json",
+            )
+            self.fixture.module_latest.write_text(latest_text, encoding="utf-8")
         transcript = self.fixture.root / "evidence/automated-review.json"
         payload = json.loads(transcript.read_text(encoding="utf-8"))
         payload["command_manifest_fingerprint"] = command_fingerprint
