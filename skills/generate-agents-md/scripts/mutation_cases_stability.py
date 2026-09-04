@@ -421,4 +421,23 @@ STABILITY_MUTANT_CASES = (
         "if len(paths) != len(set(paths)):", "if False:",
         "scripts.test_validate_context_manifest.ContextManifestValidatorTests.test_duplicate_workset_paths_are_rejected",
     ),
+    (
+        "public-module-closure-stage-forwarding-disabled",
+        "scripts/validate_delivery_bundle.py",
+        "        frontend_evidence_path=frontend_evidence_path, stage=stage,\n"
+        "        requirement_questions_path=requirement_questions_path,\n"
+        "        requirement_questions_sha256=requirement_questions_sha256,\n"
+        "        requirement_baseline_version=requirement_baseline_version,\n"
+        "        requirement_baseline_sha256=requirement_baseline_sha256,\n"
+        "        delivery_contract_path=delivery_contract_path,\n"
+        "        allow_passwords=allow_passwords, verifier=None,\n",
+        "        frontend_evidence_path=frontend_evidence_path, stage=\"completion\",\n"
+        "        requirement_questions_path=requirement_questions_path,\n"
+        "        requirement_questions_sha256=requirement_questions_sha256,\n"
+        "        requirement_baseline_version=requirement_baseline_version,\n"
+        "        requirement_baseline_sha256=requirement_baseline_sha256,\n"
+        "        delivery_contract_path=delivery_contract_path,\n"
+        "        allow_passwords=allow_passwords, verifier=None,\n",
+        "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_closure_candidate_bundle_passes_at_the_planned_stage",
+    ),
 )

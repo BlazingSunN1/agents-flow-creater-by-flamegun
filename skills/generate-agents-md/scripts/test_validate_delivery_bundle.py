@@ -641,6 +641,26 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             if issue.severity == "error"
         }
 
+    def public_issues(self, *, stage: str = "completion") -> list[object]:
+        return validate_delivery_bundle(
+            delivery_contract_path=self.contract,
+            agents_path=self.agents,
+            trace_path=self.trace_fixture.matrix,
+            context_path=self.context,
+            command_manifest_path=self.commands,
+            multi_agent_evidence_path=self.multi_agent,
+            swimlane_evidence_path=self.swimlane,
+            frontend_evidence_path=self.frontend,
+            requirement_questions_path=self.requirement_questions,
+            requirement_questions_sha256=self.requirement_questions_sha256,
+            requirement_baseline_version="req-v1",
+            requirement_baseline_sha256=hashlib.sha256(
+                (self.root / "requirements/baseline.md").read_bytes()
+            ).hexdigest(),
+            project_root=self.root,
+            stage=stage,
+        )
+
     def _requirement_questions_payload(self, baseline_sha: str) -> dict[str, object]:
         return {
             "schema_version": 1, "baseline_version": "req-v1",
@@ -979,7 +999,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         self.multi_agent.write_text(json.dumps(evidence), encoding="utf-8")
         self._write_delivery_contract(stage="closure_candidate")
 
-        self.assertEqual(set(), self.codes(stage="closure_candidate"))
+        self.assertEqual([], self.public_issues(stage="closure_candidate"))
 
     def test_closure_candidate_is_exposed_by_all_delivery_clis(self) -> None:
         for script in (
