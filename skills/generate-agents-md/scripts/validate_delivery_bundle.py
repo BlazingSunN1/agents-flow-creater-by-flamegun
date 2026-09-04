@@ -20,7 +20,7 @@ from validate_swimlane_evidence import validate_swimlane_evidence
 from validate_traceability import TRACE_COLUMNS, _parse_metadata as parse_trace_metadata
 from validate_traceability import _parse_table as parse_trace_table
 from validate_traceability import validate_traceability
-from traceability_common import LINK_RE
+from traceability_common import LINK_RE, VALIDATION_STAGES
 from trace_workset_binding import (
     binding_issue_codes, encode_module_requirement_ids, module_requirement_ids,
 )
@@ -465,7 +465,7 @@ def main() -> int:
     parser.add_argument("--requirement-baseline-version", required=True)
     parser.add_argument("--requirement-baseline-sha256", required=True)
     parser.add_argument("--project-root", type=Path, required=True)
-    parser.add_argument("--stage", choices=("implementation", "completion"), default="completion")
+    parser.add_argument("--stage", choices=VALIDATION_STAGES, default="completion")
     parser.add_argument("--allow-passwords", action="store_true")
     parser.add_argument("--json", action="store_true")
     arguments = parser.parse_args()

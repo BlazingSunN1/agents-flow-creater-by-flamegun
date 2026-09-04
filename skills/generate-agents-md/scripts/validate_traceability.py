@@ -25,8 +25,7 @@ from traceability_common import (
     STANDARD_SURFACES,
     STATUSES,
     TRACE_COLUMNS,
-    TRACE_PREFIXES,
-    VERDICTS,
+    TRACE_PREFIXES, VALIDATION_STAGES, VERDICTS,
     required_independent_roles,
 )
 from traceability_parsing import (
@@ -94,8 +93,8 @@ def _read_traceability(path: Path, issues: list[Issue]) -> str | None:
 def _validate_document_shape(text: str, template: bool, stage: str, issues: list[Issue]) -> None:
     if not template and PLACEHOLDER_RE.search(text):
         issues.append(Issue("error", "placeholder", "项目追踪矩阵包含未解析占位符"))
-    if stage not in {"implementation", "completion"}:
-        issues.append(Issue("error", "invalid-stage", "stage 必须是 implementation 或 completion"))
+    if stage not in VALIDATION_STAGES:
+        issues.append(Issue("error", "invalid-stage", "stage 必须是 implementation、closure_candidate 或 completion"))
 
 
 def _validate_metadata(text: str, issues: list[Issue]) -> dict[str, str]:
@@ -319,7 +318,7 @@ def _validate_gate_applicability(
 ) -> bool:
     applicability = row["Applicability"].strip()
     if applicability == "required":
-        if stage == "completion" and gate not in required_roles:
+        if stage in {"closure_candidate", "completion"} and gate not in required_roles:
             issues.append(Issue(
                 "error", "nonapplicable-independent-gate",
                 f"当前 gate plan 不要求 {gate}，不得启动额外独立 Agent", row_number,
@@ -328,7 +327,7 @@ def _validate_gate_applicability(
     if not _is_na(applicability):
         issues.append(Issue("error", "invalid-gate-applicability", f"{gate} 的 Applicability 必须是 required 或 N/A: 原因", row_number))
         return False
-    if stage == "completion" and gate in required_roles:
+    if stage in {"closure_candidate", "completion"} and gate in required_roles:
         issues.append(Issue(
             "error", "required-independent-gate-not-applicable",
             f"当前 gate plan 要求 {gate}，不得标记为不适用", row_number,
@@ -460,7 +459,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("path", type=Path)
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--template", action="store_true", help="只校验公共模板结构和 UTF-8")
-    parser.add_argument("--stage", choices=("implementation", "completion"), default="completion")
+    parser.add_argument("--stage", choices=VALIDATION_STAGES, default="completion")
     parser.add_argument("--json", action="store_true")
     return parser
 

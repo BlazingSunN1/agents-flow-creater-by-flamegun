@@ -16,7 +16,7 @@ from implementation_agent_validation import (
 )
 from native_gate_agent_validation import validate_native_gate_agent
 from multi_agent_input_validation import validate_gate_input
-from traceability_common import INDEPENDENT_ROLES, required_independent_roles
+from traceability_common import INDEPENDENT_ROLES, VALIDATION_STAGES, required_independent_roles
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
 SHA256_RE = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
 KNOWN_ROLES = INDEPENDENT_ROLES
@@ -428,7 +428,7 @@ def main() -> int:
     parser.add_argument("--trace", type=Path, required=True)
     parser.add_argument("--context", type=Path, required=True)
     parser.add_argument("--project-root", type=Path, required=True)
-    parser.add_argument("--stage", choices=("implementation", "completion"), default="completion")
+    parser.add_argument("--stage", choices=VALIDATION_STAGES, default="completion")
     parser.add_argument("--template", action="store_true")
     parser.add_argument("--json", action="store_true")
     arguments = parser.parse_args()

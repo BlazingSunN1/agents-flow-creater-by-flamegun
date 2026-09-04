@@ -5,6 +5,7 @@ import inspect
 import json
 import os
 import re
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -615,7 +616,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "open_disagreements": [],
         }
 
-    def codes(self, verifier=lambda *_: True) -> set[str]:
+    def codes(self, verifier=lambda *_: True, *, stage: str = "completion") -> set[str]:
         return {
             issue.code
             for issue in _test_only_validate_delivery_bundle(
@@ -634,6 +635,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
                     (self.root / "requirements/baseline.md").read_bytes()
                 ).hexdigest(),
                 project_root=self.root,
+                stage=stage,
                 _test_only_host_attestation_verifier=verifier,
             )
             if issue.severity == "error"
@@ -682,11 +684,18 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             if item.strip()
         ]
         modules = [item.strip() for item in context.get("Modules", "").split(",") if item.strip()]
+        delivery_phase = {
+            "completion": "completed",
+            "closure_candidate": "closure_candidate",
+        }.get(stage, "result_candidate")
         data: dict[str, object] = {
             "schema_version": 1,
             "contract_id": "impl-run-1",
             "stage": stage,
-            "status": "completed" if stage == "completion" else "in_progress",
+            "status": {
+                "completion": "completed",
+                "closure_candidate": "closure_candidate",
+            }.get(stage, "in_progress"),
             "baseline": {
                 "version": "req-v1",
                 **self._contract_ref(self.root / "requirements/baseline.md"),
@@ -704,8 +713,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
                 "environment_id": trace.get("Acceptance environment"),
             },
             "change": {
-                "delivery_phase": "completed" if stage == "completion" else "result_candidate",
-                "baseline_frozen": stage == "completion",
+                "delivery_phase": delivery_phase,
+                "baseline_frozen": stage in {"closure_candidate", "completion"},
                 "requirement_ids": [item.strip() for item in context.get("Requirement IDs", "").split(",") if item.strip()],
                 "modules": modules,
                 "changed_files": _split_paths(context.get("Changed files", "")),
@@ -951,6 +960,42 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
 
     def test_valid_delivery_bundle_passes(self) -> None:
         self.assertEqual(set(), self.codes())
+
+    def test_closure_candidate_bundle_passes_at_the_planned_stage(self) -> None:
+        self.progress.write_text(
+            self.progress.read_text(encoding="utf-8").replace(
+                "- Status: completed", "- Status: in_progress",
+            ),
+            encoding="utf-8",
+        )
+        self.module_run.write_text(
+            self.module_run.read_text(encoding="utf-8").replace(
+                "- Status: completed", "- Status: in_progress",
+            ),
+            encoding="utf-8",
+        )
+        evidence = json.loads(self.multi_agent.read_text(encoding="utf-8"))
+        evidence["stage"] = "closure_candidate"
+        self.multi_agent.write_text(json.dumps(evidence), encoding="utf-8")
+        self._write_delivery_contract(stage="closure_candidate")
+
+        self.assertEqual(set(), self.codes(stage="closure_candidate"))
+
+    def test_closure_candidate_is_exposed_by_all_delivery_clis(self) -> None:
+        for script in (
+            "validate_traceability.py",
+            "validate_multi_agent_evidence.py",
+            "validate_delivery_bundle.py",
+        ):
+            with self.subTest(script=script):
+                result = subprocess.run(
+                    [sys.executable, str(Path(__file__).parent / script), "--help"],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertIn("closure_candidate", result.stdout)
 
     def test_gate_inputs_cannot_rebind_to_noncanonical_questions(self) -> None:
         alternate = self.root / "alternate-requirement-questions.json"

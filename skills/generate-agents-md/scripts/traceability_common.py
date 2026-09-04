@@ -48,6 +48,7 @@ INDEPENDENT_ROLES = {
 }
 VERDICTS = {"pending", "pass", "fail", "blocked", "not_applicable"}
 STATUSES = {"pending", "in_progress", "blocked", "completed"}
+VALIDATION_STAGES = ("implementation", "closure_candidate", "completion")
 FINDING_ROUTES = {
     "implementation_defect": "implementation",
     "requirement_ambiguity": "requirement-baseline",
