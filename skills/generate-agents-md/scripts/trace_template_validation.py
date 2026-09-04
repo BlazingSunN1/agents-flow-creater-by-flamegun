@@ -48,14 +48,12 @@ def _gate_issues(rows: list[dict[str, str]], numbers: list[int]) -> list[Issue]:
         verdict = row.get("Verdict", "").strip()
         if gate not in REQUIRED_GATES:
             issues.append(Issue("error", "invalid-gate", f"模板未知门禁：{gate}", number))
-        elif gate in {"ACCEPTANCE_CASES", "BLACK_BOX"} and applicability != "required":
-            issues.append(Issue("error", "invalid-gate-applicability", f"模板 {gate} 必须 required", number))
-        elif gate == "UI_UX" and not _valid_ui_applicability(applicability):
-            issues.append(Issue("error", "invalid-gate-applicability", "模板 UI_UX applicability 非法", number))
+        elif not _valid_gate_applicability(applicability):
+            issues.append(Issue("error", "invalid-gate-applicability", f"模板 {gate} applicability 非法", number))
         if verdict not in {"pending", "not_applicable"} and not PLACEHOLDER_RE.fullmatch(verdict):
             issues.append(Issue("error", "invalid-gate-verdict", f"模板门禁不得预置 {verdict} 结论", number))
     return issues
 
 
-def _valid_ui_applicability(value: str) -> bool:
+def _valid_gate_applicability(value: str) -> bool:
     return value == "required" or bool(PLACEHOLDER_RE.fullmatch(value)) or _is_na(value)

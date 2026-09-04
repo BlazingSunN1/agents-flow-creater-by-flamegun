@@ -30,17 +30,22 @@ REQUIRED_METADATA = (
     "Risk reason", "Change surfaces", "Implementation run ID",
 )
 RISK_ORDER = {"small": 0, "standard": 1, "high-risk": 2}
-STANDARD_SURFACES = {"user-visible", "ui", "api", "behavior-change", "mobile", "mobile-web", "native-mobile"}
-CONDITIONAL_FRONTEND_SURFACES = {"touch", "responsive"}
+STANDARD_SURFACES = {
+    "user-visible", "ui", "api", "behavior-change", "mobile", "mobile-web",
+    "native-mobile", "touch", "responsive",
+}
 HIGH_RISK_SURFACES = {
     "auth", "security", "privacy", "migration", "persistence", "async",
     "cross-module", "data-schema", "public-api",
 }
 ALLOWED_SURFACES = {
-    "internal", *STANDARD_SURFACES, *CONDITIONAL_FRONTEND_SURFACES,
-    *HIGH_RISK_SURFACES,
+    "internal", *STANDARD_SURFACES, *HIGH_RISK_SURFACES,
 }
 REQUIRED_GATES = {"UI_UX", "ACCEPTANCE_CASES", "BLACK_BOX"}
+INDEPENDENT_ROLES = {
+    "UI_UX", "ACCEPTANCE_CASES", "CHANGE_REVIEW", "BLACK_BOX",
+    "REQUIREMENT_REVIEW", "SPECIALIST_REVIEW",
+}
 VERDICTS = {"pending", "pass", "fail", "blocked", "not_applicable"}
 STATUSES = {"pending", "in_progress", "blocked", "completed"}
 FINDING_ROUTES = {
@@ -50,6 +55,22 @@ FINDING_ROUTES = {
     "environment_blocker": "blocked",
     "approved_requirement_change": "new-baseline",
 }
+
+
+def required_independent_roles(risk: str, surfaces: set[str], stage: str) -> set[str]:
+    """Return the single canonical independent-role plan for a delivery stage."""
+    if stage not in {"closure_candidate", "completion"}:
+        return set()
+    if risk == "standard":
+        return {"BLACK_BOX"}
+    if risk != "high-risk":
+        return set()
+    roles = {"ACCEPTANCE_CASES", "CHANGE_REVIEW", "REQUIREMENT_REVIEW", "SPECIALIST_REVIEW"}
+    if stage == "completion":
+        roles.add("BLACK_BOX")
+    if "ui" in surfaces:
+        roles.add("UI_UX")
+    return roles
 
 
 @dataclass(frozen=True)

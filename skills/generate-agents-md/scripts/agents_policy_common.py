@@ -72,7 +72,7 @@ REQUIRED_MACHINE_POLICY = {
     "frontend_click_verification": "required_after_frontend_change",
     "local_browser_preview": "http_or_https_only",
     "mobile_verification": "conditional_on_approved_scope",
-    "ui_ux_agent": "conditional_on_ui_or_user_visible_change",
+    "ui_ux_agent": "conditional_on_mapped_high_risk_ui",
     "sensitive_connection_values": "explicit_project_authorization_only",
     "authority_matrix_path": "AGENTS.md#machine-enforced-authority-matrix",
     "authority_matrix_sha256": "aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643",

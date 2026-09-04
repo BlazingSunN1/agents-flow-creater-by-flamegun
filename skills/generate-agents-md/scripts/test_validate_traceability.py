@@ -117,8 +117,8 @@ class TraceabilityValidatorTests(unittest.TestCase):
 
 | Gate | Applicability | Agent run ID | Input baseline version | Input baseline SHA-256 | Code version | Build ID | Input manifest | Output evidence | Verdict |
 |---|---|---|---|---|---|---|---|---|---|
-| UI_UX | required | ui-run-1 | req-v1 | {digest} | N/A | N/A | [CTX-UI-001](evidence/ui-input.md) | [EVD-UI-001](evidence/ui-output.md) | pass |
-| ACCEPTANCE_CASES | required | at-run-1 | req-v1 | {digest} | N/A | N/A | [CTX-AT-001](evidence/at-input.md) | [EVD-AT-001](evidence/at-output.md) | pass |
+| UI_UX | N/A: consolidated into BLACK_BOX |  | req-v1 | {digest} | N/A | N/A | N/A: consolidated into BLACK_BOX | N/A: consolidated into BLACK_BOX | not_applicable |
+| ACCEPTANCE_CASES | N/A: consolidated into BLACK_BOX |  | req-v1 | {digest} | N/A | N/A | N/A: consolidated into BLACK_BOX | N/A: consolidated into BLACK_BOX | not_applicable |
 | BLACK_BOX | required | bb-run-1 | req-v1 | {digest} | code-v1 | build-1 | [CTX-BB-001](evidence/bb-input.md) | [EVD-BB-001](evidence/bb-output.md) | pass |
 
 ## Open Findings
@@ -203,13 +203,31 @@ class TraceabilityValidatorTests(unittest.TestCase):
 
     def test_template_mode_rejects_optional_or_failed_required_gate(self) -> None:
         text = PUBLIC_TEMPLATE.read_text(encoding="utf-8")
-        text = text.replace("| ACCEPTANCE_CASES | required |", "| ACCEPTANCE_CASES | optional |")
+        text = text.replace(
+            "| ACCEPTANCE_CASES | {{ACCEPTANCE_CASES_APPLICABILITY}} |",
+            "| ACCEPTANCE_CASES | optional |",
+        )
         text = text.replace("| pending |", "| fail |", 2)
         self.matrix.write_text(text, encoding="utf-8")
         codes = {item.code for item in validate_traceability(self.matrix, project_root=self.root, template=True)}
         self.assertTrue({"invalid-gate-applicability", "invalid-gate-verdict"} <= codes)
 
     def test_closed_trace_passes(self) -> None:
+        self.assertEqual(set(), issue_codes(self.matrix, self.root))
+
+    def test_standard_ui_completion_uses_only_planned_black_box_gate(self) -> None:
+        for gate, run_id, input_id, input_path, output_id, output_path in (
+            ("UI_UX", "ui-run-1", "CTX-UI-001", "evidence/ui-input.md", "EVD-UI-001", "evidence/ui-output.md"),
+            ("ACCEPTANCE_CASES", "at-run-1", "CTX-AT-001", "evidence/at-input.md", "EVD-AT-001", "evidence/at-output.md"),
+        ):
+            self.rewrite(
+                f"| {gate} | required | {run_id} | req-v1 |",
+                f"| {gate} | N/A: consolidated into BLACK_BOX |  | req-v1 |",
+            )
+            self.rewrite(
+                f"[{input_id}]({input_path}) | [{output_id}]({output_path}) | pass |",
+                "N/A: consolidated into BLACK_BOX | N/A: consolidated into BLACK_BOX | not_applicable |",
+            )
         self.assertEqual(set(), issue_codes(self.matrix, self.root))
 
     def test_requirement_id_cannot_be_split_across_multiple_rows(self) -> None:
@@ -242,12 +260,28 @@ class TraceabilityValidatorTests(unittest.TestCase):
         self.rewrite("Risk level: standard", "Risk level: small")
         self.assertIn("risk-underclassified", issue_codes(self.matrix, self.root))
 
+    def test_touch_surface_cannot_be_classified_as_small(self) -> None:
+        self.rewrite("Risk level: standard", "Risk level: small")
+        self.rewrite("Change surfaces: ui,user-visible", "Change surfaces: touch")
+        self.assertIn("risk-underclassified", issue_codes(self.matrix, self.root))
+
     def test_self_certification_and_agent_reuse_fail(self) -> None:
-        self.rewrite("ui-run-1", "impl-run-1")
-        self.rewrite("at-run-1", "bb-run-1")
+        self.rewrite("bb-run-1", "impl-run-1")
         codes = issue_codes(self.matrix, self.root)
         self.assertIn("self-certified-gate", codes)
-        self.assertIn("reused-independent-agent", codes)
+
+    def test_high_risk_independent_agent_run_cannot_be_reused(self) -> None:
+        self.rewrite("Risk level: standard", "Risk level: high-risk")
+        self.rewrite("Change surfaces: ui,user-visible", "Change surfaces: ui,auth")
+        self.rewrite(
+            "| UI_UX | N/A: consolidated into BLACK_BOX |  | req-v1 |",
+            "| UI_UX | required | bb-run-1 | req-v1 |",
+        )
+        self.rewrite(
+            "N/A: consolidated into BLACK_BOX | N/A: consolidated into BLACK_BOX | not_applicable |",
+            "[CTX-UI-001](evidence/ui-input.md) | [EVD-UI-001](evidence/ui-output.md) | pass |",
+        )
+        self.assertIn("reused-independent-agent", issue_codes(self.matrix, self.root))
 
     def test_stale_black_box_build_fails(self) -> None:
         self.rewrite("| code-v1 | build-1 | [CTX-BB", "| code-v0 | build-0 | [CTX-BB")
@@ -287,9 +321,14 @@ class TraceabilityValidatorTests(unittest.TestCase):
         self.assertIn("unsafe-trace-artifact-path", codes)
         self.assertIn("missing-trace-artifact", codes)
 
-    def test_ui_na_is_rejected_for_user_visible_change(self) -> None:
+    def test_ui_artifact_na_is_rejected_for_actual_ui_change(self) -> None:
         self.rewrite("[UI-001](ui/prototype.html)", "N/A: no prototype")
-        self.assertIn("ui-gate-required", issue_codes(self.matrix, self.root))
+        self.assertIn("ui-artifact-required", issue_codes(self.matrix, self.root))
+
+    def test_plain_user_visible_text_may_skip_ui_artifact(self) -> None:
+        self.rewrite("Change surfaces: ui,user-visible", "Change surfaces: user-visible")
+        self.rewrite("[UI-001](ui/prototype.html)", "N/A: no interaction or design change")
+        self.assertEqual(set(), issue_codes(self.matrix, self.root))
 
     def test_unknown_surface_fails_and_cannot_keep_standard_risk(self) -> None:
         self.rewrite("Change surfaces: ui,user-visible", "Change surfaces: ui,typo-surface")
@@ -391,25 +430,19 @@ class TraceabilityValidatorTests(unittest.TestCase):
         self.rewrite("Change surfaces: ui,user-visible", "Change surfaces: internal")
         self.rewrite("[UI-001](ui/prototype.html)", "N/A: no UI behavior")
         self.rewrite(
-            "| UI_UX | required | ui-run-1 | req-v1 |",
-            "| UI_UX | N/A: no UI behavior |  | req-v1 |",
+            "| BLACK_BOX | required | bb-run-1 | req-v1 |",
+            "| BLACK_BOX | N/A: small task |  | req-v1 |",
         )
         self.rewrite(
-            "[EVD-UI-001](evidence/ui-output.md) | pass |",
-            "[EVD-UI-001](evidence/ui-output.md) | not_applicable |",
+            "[CTX-BB-001](evidence/bb-input.md) | [EVD-BB-001](evidence/bb-output.md) | pass |",
+            "N/A: small task | N/A: small task | not_applicable |",
         )
         self.assertEqual(set(), issue_codes(self.matrix, self.root))
 
-    def test_ui_change_cannot_skip_ui_agent(self) -> None:
-        self.rewrite(
-            "| UI_UX | required | ui-run-1 | req-v1 |",
-            "| UI_UX | N/A: no UI behavior |  | req-v1 |",
-        )
-        self.rewrite(
-            "[EVD-UI-001](evidence/ui-output.md) | pass |",
-            "[EVD-UI-001](evidence/ui-output.md) | not_applicable |",
-        )
-        self.assertIn("ui-gate-required", issue_codes(self.matrix, self.root))
+    def test_high_risk_ui_change_cannot_skip_ui_agent(self) -> None:
+        self.rewrite("Risk level: standard", "Risk level: high-risk")
+        self.rewrite("Change surfaces: ui,user-visible", "Change surfaces: ui,auth")
+        self.assertIn("required-independent-gate-not-applicable", issue_codes(self.matrix, self.root))
 
     def test_shared_artifact_id_and_path_are_allowed(self) -> None:
         row = (

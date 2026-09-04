@@ -6,26 +6,17 @@ import re
 from pathlib import Path
 
 from strict_json import loads as strict_json_loads
+from traceability_common import (
+    ALLOWED_SURFACES, HIGH_RISK_SURFACES, RISK_ORDER, STANDARD_SURFACES,
+    required_independent_roles,
+)
 
 
 ALLOWED_STAGES = {"planning", "implementation", "closure_candidate", "completion"}
 PLANNER_VERSION = "delivery-gates-v4"
-ALLOWED_SURFACES = {
-    "internal", "behavior-change", "user-visible", "ui", "api", "mobile", "touch",
-    "responsive", "mobile-web", "native-mobile", "public-api", "auth", "security", "privacy", "migration",
-    "persistence", "async", "cross-module", "data-schema",
-}
-STANDARD_SURFACES = {
-    "behavior-change", "user-visible", "ui", "api", "mobile", "mobile-web", "native-mobile", "touch", "responsive",
-}
 FRONTEND_SURFACES = {"ui", "mobile-web", "touch", "responsive"}
 MOBILE_WEB_SURFACES = {"mobile", "mobile-web", "touch", "responsive"}
 FINAL_AGGREGATE_COMMANDS = {"delivery_contract", "delivery_bundle", "system_delivery_bundle"}
-HIGH_RISK_SURFACES = {
-    "public-api", "auth", "security", "privacy", "migration", "persistence",
-    "async", "cross-module", "data-schema",
-}
-RISK_ORDER = {"small": 0, "standard": 1, "high-risk": 2}
 FLOW_IMPACTS = {"none", "changed", "uncertain"}
 DELIVERY_PHASES = {
     "bootstrap", "result_candidate", "affected_checks_passed", "baseline_frozen",
@@ -210,20 +201,7 @@ def _validation_tier(risk: str, stage: str, cross_module: bool) -> str:
 
 
 def _independent_roles(risk: str, surfaces: set[str], stage: str) -> set[str]:
-    closing = stage in {"closure_candidate", "completion"}
-    if risk == "high-risk" and closing:
-        roles = {"ACCEPTANCE_CASES", "CHANGE_REVIEW", "REQUIREMENT_REVIEW", "SPECIALIST_REVIEW"}
-        if stage == "completion":
-            roles.add("BLACK_BOX")
-        if "ui" in surfaces:
-            roles.add("UI_UX")
-        return roles
-    if risk == "standard" and closing:
-        # One read-only acceptance Agent owns review, acceptance design and black-box replay.
-        return {"BLACK_BOX"}
-    # A mid-stage human trigger runs the automated review command against the
-    # current candidate; independent Agents remain reserved for closure gates.
-    return set()
+    return required_independent_roles(risk, surfaces, stage)
 
 
 def _required_commands(

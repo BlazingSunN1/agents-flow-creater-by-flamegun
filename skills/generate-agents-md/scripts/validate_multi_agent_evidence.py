@@ -16,13 +16,10 @@ from implementation_agent_validation import (
 )
 from native_gate_agent_validation import validate_native_gate_agent
 from multi_agent_input_validation import validate_gate_input
+from traceability_common import INDEPENDENT_ROLES, required_independent_roles
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
 SHA256_RE = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
-BASE_ROLES = {"ACCEPTANCE_CASES", "BLACK_BOX"}
-STANDARD_ROLES = {"CHANGE_REVIEW"}
-HIGH_RISK_ROLES = {"REQUIREMENT_REVIEW", "SPECIALIST_REVIEW"}
-UI_ROLES = {"UI_UX"}
-KNOWN_ROLES = BASE_ROLES | STANDARD_ROLES | HIGH_RISK_ROLES | UI_ROLES
+KNOWN_ROLES = INDEPENDENT_ROLES
 V1_TOP_LEVEL_FIELDS = {"schema_version", "stage", "baseline_version", "baseline_sha256", "code_version", "candidate_sha256",
                     "build_id", "implementation_agent_title", "implementation_run_id",
                     "implementation_agent_provider", "implementation_agent_model",
@@ -198,16 +195,7 @@ def _validate_binding(data: dict[str, object], metadata: dict[str, str], issues:
 def _required_roles(metadata: dict[str, str], stage: str) -> set[str]:
     risk = metadata.get("Risk level", "")
     surfaces = {part.strip().casefold() for part in metadata.get("Change surfaces", "").split(",")}
-    if risk == "small":
-        return set()
-    if risk == "standard":
-        return {"BLACK_BOX"} if stage in {"closure_candidate", "completion"} else set()
-    roles = {"ACCEPTANCE_CASES"} | STANDARD_ROLES | HIGH_RISK_ROLES
-    if stage == "completion":
-        roles.add("BLACK_BOX")
-    if surfaces & {"ui", "user-visible"}:
-        roles |= UI_ROLES
-    return roles
+    return required_independent_roles(risk, surfaces, stage)
 def _validate_gates(
     data: dict[str, object],
     metadata: dict[str, str],

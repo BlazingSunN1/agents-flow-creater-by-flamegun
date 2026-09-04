@@ -16,7 +16,7 @@
 - Change surfaces: {{CHANGE_SURFACES}}
 - Implementation run ID: `{{IMPLEMENTATION_RUN_ID}}`
 
-Allowed change surfaces are `internal`, `behavior-change`, `user-visible`, `ui`, `api`, `mobile`, `mobile-web`, `native-mobile`, `touch`, `responsive`, `public-api`, `auth`, `security`, `privacy`, `migration`, `persistence`, `async`, `cross-module`, and `data-schema`. `mobile-web`, `touch`, and `responsive` use browser/E2E validation; `native-mobile` uses the registered native test command; legacy `mobile` is disambiguated by `frontend_applicable`. They are recorded only when the approved scope explicitly includes them and do not make mobile adaptation globally mandatory. Any `public-api`, `auth`, `security`, `privacy`, `migration`, `persistence`, `async`, `cross-module`, or `data-schema` change is `high-risk`; any `behavior-change`, `user-visible`, `ui`, `api`, `mobile`, `mobile-web`, or `native-mobile` change is at least `standard`. Unknown impact is `high-risk` until disproved.
+Allowed change surfaces are `internal`, `behavior-change`, `user-visible`, `ui`, `api`, `mobile`, `mobile-web`, `native-mobile`, `touch`, `responsive`, `public-api`, `auth`, `security`, `privacy`, `migration`, `persistence`, `async`, `cross-module`, and `data-schema`. `mobile-web`, `touch`, and `responsive` use browser/E2E validation; `native-mobile` uses the registered native test command; legacy `mobile` is disambiguated by `frontend_applicable`. They are recorded only when the approved scope explicitly includes them and do not make mobile adaptation globally mandatory. Any `public-api`, `auth`, `security`, `privacy`, `migration`, `persistence`, `async`, `cross-module`, or `data-schema` change is `high-risk`; any `behavior-change`, `user-visible`, `ui`, `api`, `mobile`, `mobile-web`, `native-mobile`, `touch`, or `responsive` change is at least `standard`. Unknown impact is `high-risk` until disproved.
 
 ## Traceability
 
@@ -24,17 +24,17 @@ Allowed change surfaces are `internal`, `behavior-change`, `user-visible`, `ui`,
 |---|---|---|---|---|---|---|---|---|
 | [REQ-001]({{REQUIREMENT_ARTIFACT_PATH}}) | [FLOW-001]({{FLOW_ARTIFACT_PATH}}) | [FEAT-001]({{FEATURE_ARTIFACT_PATH}}) | [UI-001]({{UI_ARTIFACT_PATH}}) | [UT-001]({{UNIT_TEST_PATH}}) | [AT-001]({{ACCEPTANCE_CASE_PATH}}) | [MOD-001]({{CODE_MODULE_PATH}}) | [BB-001]({{BLACK_BOX_RESULT_PATH}}) | pending |
 
-Use one row per requirement and put multiple unique links in a cell when needed. Only UI/UX may use `N/A: verified reason`, and never for a `ui` or `user-visible` change. Do not mark a row `completed` until every required path exists, all required independent gates pass against the current baseline/code/build, and Open Findings has no `open` row.
+Use one row per requirement and put multiple unique links in a cell when needed. Only UI/UX may use `N/A: verified reason`, and never when the actual `ui` surface applies; plain user-visible text alone does not require a UI/UX artifact. Do not mark a row `completed` until every required path exists, all required independent gates pass against the current baseline/code/build, and Open Findings has no `open` row.
 
 ## Independent Gate Evidence
 
 | Gate | Applicability | Agent run ID | Input baseline version | Input baseline SHA-256 | Code version | Build ID | Input manifest | Output evidence | Verdict |
 |---|---|---|---|---|---|---|---|---|---|
 | UI_UX | {{UI_UX_APPLICABILITY}} | {{UI_UX_AGENT_RUN_ID}} | {{BASELINE_VERSION}} | {{BASELINE_SHA256}} | N/A: pre-implementation | N/A: pre-implementation | [CTX-UI-001]({{UI_UX_INPUT_MANIFEST_PATH}}) | [UI-REVIEW-001]({{UI_UX_REVIEW_PATH}}) | pending |
-| ACCEPTANCE_CASES | required | {{ACCEPTANCE_AGENT_RUN_ID}} | {{BASELINE_VERSION}} | {{BASELINE_SHA256}} | N/A: pre-implementation | N/A: pre-implementation | [CTX-AT-001]({{ACCEPTANCE_INPUT_MANIFEST_PATH}}) | [AT-REVIEW-001]({{ACCEPTANCE_REVIEW_PATH}}) | pending |
-| BLACK_BOX | required | {{BLACK_BOX_AGENT_RUN_ID}} | {{BASELINE_VERSION}} | {{BASELINE_SHA256}} | {{CODE_VERSION}} | {{BUILD_ID}} | [CTX-BB-001]({{BLACK_BOX_INPUT_MANIFEST_PATH}}) | [BB-REVIEW-001]({{BLACK_BOX_REVIEW_PATH}}) | pending |
+| ACCEPTANCE_CASES | {{ACCEPTANCE_CASES_APPLICABILITY}} | {{ACCEPTANCE_AGENT_RUN_ID}} | {{BASELINE_VERSION}} | {{BASELINE_SHA256}} | N/A: pre-implementation | N/A: pre-implementation | [CTX-AT-001]({{ACCEPTANCE_INPUT_MANIFEST_PATH}}) | [AT-REVIEW-001]({{ACCEPTANCE_REVIEW_PATH}}) | pending |
+| BLACK_BOX | {{BLACK_BOX_APPLICABILITY}} | {{BLACK_BOX_AGENT_RUN_ID}} | {{BASELINE_VERSION}} | {{BASELINE_SHA256}} | {{CODE_VERSION}} | {{BUILD_ID}} | [CTX-BB-001]({{BLACK_BOX_INPUT_MANIFEST_PATH}}) | [BB-REVIEW-001]({{BLACK_BOX_REVIEW_PATH}}) | pending |
 
-Use `required` for applicable gates. For a non-UI, non-user-visible change, UI_UX may use `N/A: verified reason`, a blank Agent run ID, and `not_applicable`; UI or user-visible work cannot do so. Every applicable Agent run ID must be distinct and different from the implementation run ID. Input manifests must contain only the approved baseline version and the minimum affected IDs and paths needed by that role; the black-box manifest must not include implementation self-reports.
+Resolve every applicability from the generated gate plan: use `required` only for a listed role; otherwise use `N/A: gate plan did not select role`, a blank Agent run ID/input/output, and `not_applicable`. Standard closure/completion uses only `BLACK_BOX`; high-risk adds separately mapped roles, and `UI_UX` requires the actual `ui` surface rather than plain user-visible text. Every applicable Agent run ID must be distinct and different from the implementation run ID. Input manifests must contain only the approved baseline version and the minimum affected IDs and paths needed by that role; the black-box manifest must not include implementation self-reports.
 
 ## Open Findings
 

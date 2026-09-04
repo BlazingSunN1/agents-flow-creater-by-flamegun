@@ -63,6 +63,21 @@ class GoldenWorkflowTests(unittest.TestCase):
             "[EVD-UI-001](evidence/ui-output.md) | pass |",
             "[EVD-UI-001](evidence/ui-output.md) | not_applicable |",
         )
+        adjusted_rows: list[str] = []
+        for line in trace.splitlines():
+            cells = [cell.strip() for cell in line.split("|")]
+            if risk == "small" and line.startswith("| BLACK_BOX |"):
+                line = (
+                    f"| BLACK_BOX | N/A: gate plan did not select role |  | req-v1 | {cells[5]} | "
+                    "N/A | N/A | N/A: small task | N/A: small task | not_applicable |"
+                )
+            elif risk == "high-risk" and line.startswith("| ACCEPTANCE_CASES |"):
+                line = (
+                    f"| ACCEPTANCE_CASES | required | at-run-1 | req-v1 | {cells[5]} | N/A | N/A | "
+                    "[CTX-AT-001](evidence/at-input.md) | [EVD-AT-001](evidence/at-output.md) | pass |"
+                )
+            adjusted_rows.append(line)
+        trace = "\n".join(adjusted_rows) + "\n"
         self.fixture.trace_fixture.matrix.write_text(trace, encoding="utf-8")
         evidence = json.loads(self.fixture.multi_agent.read_text(encoding="utf-8"))
         evidence["gates"] = [item for item in evidence["gates"] if item["role"] != "UI_UX"]

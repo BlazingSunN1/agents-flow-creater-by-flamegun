@@ -27,6 +27,7 @@ from traceability_common import (
     TRACE_COLUMNS,
     TRACE_PREFIXES,
     VERDICTS,
+    required_independent_roles,
 )
 from traceability_parsing import (
     _deduplicate,
@@ -69,11 +70,9 @@ def validate_traceability(
     surfaces = _validate_risk(metadata, issues)
     expected_sha = _validate_baseline(metadata, root, issues)
     _validate_trace_rows(trace_rows, trace_numbers, surfaces, root, issues)
-    gates = _validate_gate_rows(
-        gate_rows, gate_numbers, metadata, expected_sha, surfaces, root, stage, issues,
-    )
+    gates = _validate_gate_rows(gate_rows, gate_numbers, metadata, expected_sha, surfaces, root, stage, issues)
     open_findings = _validate_finding_rows(finding_rows, finding_numbers, root, issues)
-    _validate_stage(stage, trace_rows, gates, surfaces, open_findings, issues)
+    _validate_stage(stage, trace_rows, gates, metadata, surfaces, open_findings, issues)
     return _deduplicate(issues)
 
 
@@ -134,8 +133,6 @@ def _parse_required_tables(
     )
 
 
-
-
 def _validate_risk(metadata: dict[str, str], issues: list[Issue]) -> set[str]:
     risk = metadata.get("Risk level", "")
     surfaces = {
@@ -193,8 +190,8 @@ def _validate_trace_rows(trace_rows: list[dict[str, str]], row_numbers: list[int
             if _is_na(cell):
                 if column != "UI/UX":
                     issues.append(Issue("error", "invalid-na", f"{column} 不允许 N/A", row_number))
-                elif surfaces & {"ui", "user-visible"}:
-                    issues.append(Issue("error", "ui-gate-required", "UI 或用户可见变更不能把 UI/UX 标记为 N/A", row_number))
+                elif "ui" in surfaces:
+                    issues.append(Issue("error", "ui-artifact-required", "实际 UI 变更不能把 UI/UX 工件标记为 N/A", row_number))
                 continue
             links = LINK_RE.findall(cell)
             if not links:
@@ -273,6 +270,7 @@ def _validate_gate_rows(
     gates: dict[str, dict[str, str]] = {}
     agent_run_ids: dict[str, str] = {}
     implementation_run_id = metadata.get("Implementation run ID", "").strip()
+    required_roles = required_independent_roles(metadata.get("Risk level", ""), surfaces, stage)
     for row, row_number in zip(gate_rows, row_numbers):
         gate = row["Gate"].strip()
         if gate not in REQUIRED_GATES:
@@ -281,7 +279,9 @@ def _validate_gate_rows(
         if gate in gates:
             issues.append(Issue("error", "duplicate-gate", f"独立门禁重复：{gate}", row_number))
         gates[gate] = row
-        if _validate_gate_applicability(gate, row, row_number, surfaces, issues):
+        if _validate_gate_applicability(
+            gate, row, row_number, required_roles, stage, issues,
+        ):
             continue
         if gate == "BLACK_BOX" and stage == "implementation":
             if not black_box_not_started(row):
@@ -313,21 +313,28 @@ def _validate_gate_applicability(
     gate: str,
     row: dict[str, str],
     row_number: int,
-    surfaces: set[str],
+    required_roles: set[str],
+    stage: str,
     issues: list[Issue],
 ) -> bool:
     applicability = row["Applicability"].strip()
     if applicability == "required":
+        if stage == "completion" and gate not in required_roles:
+            issues.append(Issue(
+                "error", "nonapplicable-independent-gate",
+                f"当前 gate plan 不要求 {gate}，不得启动额外独立 Agent", row_number,
+            ))
         return False
     if not _is_na(applicability):
         issues.append(Issue("error", "invalid-gate-applicability", f"{gate} 的 Applicability 必须是 required 或 N/A: 原因", row_number))
         return False
-    if gate != "UI_UX":
-        issues.append(Issue("error", "invalid-gate-applicability", f"{gate} 不允许标记为不适用", row_number))
-    if surfaces & {"ui", "user-visible"}:
-        issues.append(Issue("error", "ui-gate-required", "UI 或用户可见变更必须执行 UI_UX 独立门禁", row_number))
+    if stage == "completion" and gate in required_roles:
+        issues.append(Issue(
+            "error", "required-independent-gate-not-applicable",
+            f"当前 gate plan 要求 {gate}，不得标记为不适用", row_number,
+        ))
     if row["Verdict"].strip() != "not_applicable":
-        issues.append(Issue("error", "invalid-gate-verdict", "不适用的 UI_UX 门禁必须使用 not_applicable 结论", row_number))
+        issues.append(Issue("error", "invalid-gate-verdict", "不适用的独立门禁必须使用 not_applicable 结论", row_number))
     return True
 
 
@@ -430,17 +437,17 @@ def _validate_stage(
     stage: str,
     trace_rows: list[dict[str, str]],
     gates: dict[str, dict[str, str]],
+    metadata: dict[str, str],
     surfaces: set[str],
     open_findings: bool,
     issues: list[Issue],
 ) -> None:
-    required_pass_gates = {"ACCEPTANCE_CASES"}
+    required_pass_gates = required_independent_roles(
+        metadata.get("Risk level", ""), surfaces, stage,
+    ) & REQUIRED_GATES
     if stage == "completion":
-        required_pass_gates.add("BLACK_BOX")
         if any(row.get("Status", "").strip() != "completed" for row in trace_rows):
             issues.append(Issue("error", "trace-not-completed", "completion 阶段要求所有追踪行均为 completed"))
-    if surfaces & {"ui", "user-visible"}:
-        required_pass_gates.add("UI_UX")
     for gate in required_pass_gates:
         if gates.get(gate, {}).get("Verdict", "").strip() != "pass":
             issues.append(Issue("error", "gate-not-passed", f"{stage} 阶段要求 {gate}=pass"))

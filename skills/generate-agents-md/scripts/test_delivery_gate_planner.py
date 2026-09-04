@@ -273,6 +273,17 @@ class DeliveryGatePlannerTests(unittest.TestCase):
         )
         self.assertNotIn("UI_UX", plan["independent_roles"])
 
+    def test_high_risk_user_visible_text_still_does_not_create_ui_ux_agent(self) -> None:
+        plan = build_gate_plan(
+            self.change(
+                delivery_phase="closure_candidate", baseline_frozen=True,
+                risk_level="high-risk", surfaces=["auth", "user-visible"],
+            ),
+            stage="closure_candidate", impact_fingerprint="4" * 64,
+        )
+        self.assertNotIn("UI_UX", plan["independent_roles"])
+        self.assertIn("ACCEPTANCE_CASES", plan["independent_roles"])
+
     def test_flow_none_completion_checks_freshness_only_when_swimlane_applies(self) -> None:
         plan = build_gate_plan(
             self.change(delivery_phase="completed", baseline_frozen=True, swimlane_applicable=True),
