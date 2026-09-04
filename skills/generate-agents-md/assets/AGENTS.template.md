@@ -136,7 +136,8 @@ Ownership cells contain backticked project-relative paths separated only by comm
 
 ## Development Plan and Progress
 
-- Maintain the development plan in `{{DEVELOPMENT_PLAN_PATH}}` and the compact completion index in `{{PROGRESS_RECORD_PATH}}`.
+- Development plan path: `{{DEVELOPMENT_PLAN_PATH}}`
+- Completion progress path: `{{PROGRESS_RECORD_PATH}}`
 - Bind the plan to `Baseline version` and `Baseline SHA-256`, and include non-empty `Objective`, `Scope`, `Ordered steps`, `Verification criteria`, and `Known risks`. Bind progress to the current `Run ID` and `Code version`; completion additionally requires `Completion date`, `Delivered result`, `Validation performed`, closed `Remaining work`, and `Status: completed`.
 - Before substantial implementation, record the objective, scope, ordered steps, verification criteria, and known risks.
 - After completing verified work, record the completion date, delivered result, validation performed, and remaining work.
@@ -172,11 +173,12 @@ Ownership cells contain backticked project-relative paths separated only by comm
 
 ## Automated Code Review
 
+- Automated review evidence path: `{{AUTOMATED_REVIEW_EVIDENCE_PATH}}`
 - Run `{{AUTOMATED_REVIEW_COMMAND}}` only at a module closure candidate or explicit human trigger. Intermediate edits only accumulate current-run deltas. Missing/failed closure review blocks acceptance; a human-triggered snapshot does not stop unrelated implementation.
 - Review the actual changed files and their affected callers, callees, public interfaces, configuration, persistence or asynchronous boundaries, tests, requirement trace, and gate-plan-mapped swimlane diagrams. A diff summary or implementation self-report is not sufficient evidence.
 - Record every actionable finding with severity, exact file and line, trigger, impact, and executable reproduction or verification. Classify requirement ambiguity separately from implementation defects.
 - Route implementation defects to the writer; add a failing regression when applicable, make the smallest root-cause fix, and rerun affected checks. Limit auto-repair to three rounds and two repeats of one failure fingerprint; never edit approved requirements/authority or weaken gates to pass.
-- Any code/config change stales a prior review. Store trigger, candidate fingerprint, scope, findings, commands/results and verdict at `{{AUTOMATED_REVIEW_EVIDENCE_PATH}}`; actionable findings, unexplained errors or stale/blocked closure review prevent completion.
+- Any code/config change stales a prior review. Store trigger, candidate fingerprint, scope, findings, commands/results and verdict in the declared automated review evidence record; actionable findings, unexplained errors or stale/blocked closure review prevent completion.
 
 ## Context and Token Budget
 
@@ -191,7 +193,9 @@ Ownership cells contain backticked project-relative paths separated only by comm
 ## Modular Execution Logs
 
 - Keep the compact execution index at `{{PROGRESS_RECORD_PATH}}`; it contains only current module status and links to detailed records.
-- Store immutable module runs under `{{MODULE_EXECUTION_LOG_DIRECTORY}}/<module>/run-<run_id>.md`. Store cross-module runs under `{{SYSTEM_EXECUTION_LOG_DIRECTORY}}/`.
+- For cross-module aggregation, configure that progress path and `{{AUTOMATED_REVIEW_EVIDENCE_PATH}}` with literal `<module>` and `<run_id>` so every module run resolves to a different file; single-module projects may use static paths.
+- Immutable module run template path: `{{MODULE_EXECUTION_LOG_DIRECTORY}}/<module>/run-<run_id>.md`
+- Cross-module runs: `{{SYSTEM_EXECUTION_LOG_DIRECTORY}}/`.
 - Assign every run a distinct `run_id` and `code_version`. Use `run_id` for the Agent execution and `code_version` for a Git commit, tag, or build version; never treat them as the same identifier.
 - Each run record must include the run ID, module, status, code version, risk level, traceability IDs, changed files, delivered result, automated code review, verification and independent review evidence, remaining risks, and only swimlane records/paths selected by the gate plan.
 - After verified completion, update the module's compressed `latest.md` summary and the compact execution index. Do not rewrite immutable historical run records.

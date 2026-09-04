@@ -2,6 +2,51 @@ from __future__ import annotations
 
 
 STABILITY_MUTANT_CASES = (
+    ("normative-html-comment-stripping-disabled", "scripts/agents_policy_common.py",
+     "    return HTML_COMMENT_RE.sub(_blank_match, text)\n", "    return text\n",
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_html_comment_policy_text_cannot_satisfy_normative_rule"),
+    ("normative-fenced-code-stripping-disabled", "scripts/agents_policy_common.py",
+     "        if match:\n            fence = match.group(\"fence\")\n",
+     "        if False and match:\n            fence = match.group(\"fence\")\n",
+        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_fenced_policy_text_cannot_satisfy_normative_rule"),
+    ("record-path-exactly-once-check-disabled", "scripts/delivery_record_paths.py",
+     "    return values[0] if len(values) == 1 else None\n", "    return values[0] if values else None\n",
+        "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_duplicate_path_declarations_fail_closed"),
+    ("review-scope-path-label-confusion", "scripts/delivery_record_paths.py",
+     "(?:Automated review evidence path|自动审查证据路径)",
+     "(?:Automated review evidence path|Review scope|自动审查证据路径)",
+        "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_review_scope_is_not_a_review_evidence_path_declaration"),
+    ("system-cross-module-record-parent-alias-check-disabled",
+        "scripts/system_record_path_validation.py",
+        '            and all(part not in {".", ".."} for part in candidate.parts)\n',
+        '            and all(part not in {"."} for part in candidate.parts)\n',
+        "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_cross_module_record_templates_reject_parent_traversal",
+    ),
+    (
+        "system-cross-module-record-component-isolation-check-disabled",
+        "scripts/system_record_path_validation.py",
+        "            and module_parts[0] != run_parts[0])",
+        "            and True)",
+        "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_cross_module_record_placeholders_require_separate_components",
+    ),
+    (
+        "system-cross-module-progress-record-mapping-disabled",
+        "scripts/system_record_path_validation.py",
+        '        "进度记录": declared_path(\n'
+        '            plan_section, PROGRESS_RECORD_PATH,\n'
+        '        ),\n',
+        "",
+        "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_cross_module_aggregation_rejects_shared_progress_path",
+    ),
+    (
+        "system-cross-module-review-record-mapping-disabled",
+        "scripts/system_record_path_validation.py",
+        '        "自动审查证据": declared_path(\n'
+        '            review_section, AUTOMATED_REVIEW_EVIDENCE_PATH,\n'
+        '        ),\n',
+        "",
+        "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_cross_module_aggregation_rejects_shared_review_path",
+    ),
     (
         "browser-page-url-artifact-binding-disabled", "scripts/browser_page_validation.py",
         "if expected_hash != actual_hash or url_path != served_path:",
@@ -439,5 +484,17 @@ STABILITY_MUTANT_CASES = (
         "        delivery_contract_path=delivery_contract_path,\n"
         "        allow_passwords=allow_passwords, verifier=None,\n",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_closure_candidate_bundle_passes_at_the_planned_stage",
+    ),
+    (
+        "module-scoped-record-template-resolution-disabled", "scripts/delivery_record_paths.py",
+        "    return normalize_template(raw_path, context_modules[0], run_id)\n",
+        "    return raw_path\n",
+        "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_module_scoped_progress_and_review_templates_pass",
+    ),
+    (
+        "partial-module-record-template-rejection-disabled", "scripts/delivery_record_paths.py",
+        "    if not has_module or not has_run_id:\n",
+        "    if False:\n",
+        "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_module_scoped_progress_template_requires_module_and_run_id",
     ),
 )

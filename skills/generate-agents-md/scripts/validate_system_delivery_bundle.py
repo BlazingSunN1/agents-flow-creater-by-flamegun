@@ -17,11 +17,10 @@ from system_actor_validation import validate_module_gate_actors, validate_system
 from system_aggregate_validation import validate_system_aggregate_sets
 from system_delivery_cli import main as system_delivery_main
 from system_delivery_path_validation import normalized_project_path as _normalized_project_path
+from system_record_path_validation import cross_module_record_template_error
 from delivery_authority_binding import agents_declares_authority_binding, authority_binding_valid, receipt_repeats_authority_binding
-from system_delivery_schema import (
-    ARTIFACT_FIELDS, ARTIFACT_HASH_FIELDS, ENTRY_FIELDS, LEGACY_SYSTEM_FIELDS,
-    MODULE_FIELDS, OPTIONAL_ARTIFACT_FIELDS, SYSTEM_FIELDS,
-)
+from system_delivery_schema import (ARTIFACT_FIELDS, ARTIFACT_HASH_FIELDS, ENTRY_FIELDS,
+                                    LEGACY_SYSTEM_FIELDS, MODULE_FIELDS, OPTIONAL_ARTIFACT_FIELDS, SYSTEM_FIELDS)
 @dataclass(frozen=True)
 class Issue:
     severity: str
@@ -75,9 +74,13 @@ def _validate_system_delivery_bundle_impl(
     agents_path, path_issue = _project_file(root, manifest["agents_path"], "agents")
     if path_issue:
         return [path_issue]
+    agents_text = agents_path.read_text(encoding="utf-8")
     issues.extend(_validate_agents_identity(manifest, agents_path))
+    template_error = cross_module_record_template_error(agents_text)
+    if template_error:
+        issues.append(_issue("system-module-record-path-template", template_error, agents_path))
     if not agents_declares_authority_binding(
-        agents_path.read_text(encoding="utf-8"), manifest["authority_binding"],
+        agents_text, manifest["authority_binding"],
     ):
         issues.append(_issue(
             "system-agents-authority-binding",
@@ -89,7 +92,7 @@ def _validate_system_delivery_bundle_impl(
         for item in validate_system_actors(manifest, root, host_attestation_verifier)
     )
     issues.extend(_validate_aggregation_receipt_authority(manifest, root))
-    canonical = module_ownership_mapping(agents_path.read_text(encoding="utf-8"))
+    canonical = module_ownership_mapping(agents_text)
     if not canonical:
         issues.append(_issue("system-module-ownership-invalid", "根 AGENTS 所有权映射不可解析", agents_path))
         return _deduplicate(issues)

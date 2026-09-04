@@ -96,7 +96,7 @@ MODULE_CLOSURE_MUTANT_CASES = (
     (
         "authority-matrix-validator-call-disabled",
         "scripts/agents_policy_validation.py",
-        "    issues.extend(validate_authority_matrix(text))",
+        "    issues.extend(validate_authority_matrix(structured))",
         "    issues.extend(())",
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_authority_matrix_is_required_in_both_root_modes",
     ),
@@ -414,7 +414,7 @@ MODULE_CLOSURE_MUTANT_CASES = (
     (
         "effective-agents-authority-reference-check-disabled",
         "scripts/validate_system_delivery_bundle.py",
-        "    if not agents_declares_authority_binding(\n        agents_path.read_text(encoding=\"utf-8\"), manifest[\"authority_binding\"],\n    ):",
+        "    if not agents_declares_authority_binding(\n        agents_text, manifest[\"authority_binding\"],\n    ):",
         "    if False:",
         "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_effective_agents_authority_locator_or_sha_drift_fails_closed",
     ),

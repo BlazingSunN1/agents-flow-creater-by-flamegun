@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agents_policy_common import DEVELOPMENT_PLAN_HEADING_RE, extract_heading_section
-from delivery_record_validation import _declared_path
+from delivery_record_paths import (
+    DEVELOPMENT_PLAN_PATH,
+    PROGRESS_RECORD_PATH,
+    context_record_path as _context_record_path,
+    declared_path as _declared_path,
+)
 from implementation_agent_validation import HostAttestationVerifier
 from validate_context_manifest import _parse_metadata as parse_context_metadata
 from validate_context_manifest import _split_paths
@@ -52,7 +57,7 @@ def validate_contract_bundle_binding(
         return issues
     issues.extend(_artifact_path_issues(
         data, agents_text, trace_path, command_manifest_path,
-        requirement_questions_path, project_root, delivery_contract_path,
+        requirement_questions_path, context, project_root, delivery_contract_path,
     ))
     issues.extend(_identity_issues(data, trace, stage, delivery_contract_path))
     issues.extend(_change_issues(data, trace, context, commands, delivery_contract_path))
@@ -80,16 +85,15 @@ def _read_binding_inputs(
 def _artifact_path_issues(
     data: dict[str, object], agents_text: str, trace_path: Path,
     command_manifest_path: Path, questions_path: Path | None,
-    root: Path, contract_path: Path,
+    context: dict[str, str], root: Path, contract_path: Path,
 ) -> list[Finding]:
     artifacts = data.get("artifacts")
     if not isinstance(artifacts, dict):
         return []
     section = extract_heading_section(agents_text, DEVELOPMENT_PLAN_HEADING_RE) or ""
-    plan = _declared_path(section, r"development plan|开发计划")
-    progress = _declared_path(
-        section, r"completion (?:index|progress)|progress (?:record|index)|完成进度|进度记录",
-    )
+    plan = _declared_path(section, DEVELOPMENT_PLAN_PATH)
+    progress = _declared_path(section, PROGRESS_RECORD_PATH)
+    progress = _context_record_path(progress, context)
     expected = {
         "traceability": trace_path,
         "questions": questions_path,

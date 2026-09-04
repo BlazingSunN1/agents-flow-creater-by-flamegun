@@ -1,6 +1,6 @@
 ---
 name: generate-agents-md
-description: 从仓库事实和项目需求提取可验证约束，生成、更新、拆分、公共化或审查 UTF-8 AGENTS.md；建立需求追踪、风险分级、独立验收、计划进度、模块日志、前端点击验证和阶段泳道门禁。用于稳定项目规则、约束需求偏移、脱敏模板、减少无谓 Token，或审查安全性与可执行性。
+description: 从仓库事实和需求生成、更新、拆分、公共化或审查 UTF-8 AGENTS.md；建立可验证的需求追踪、独立验收、进度日志、前端点击验证和阶段泳道门禁，用于稳定交付、约束偏移、模板脱敏及减少 Token。
 ---
 
 # Agents Flow Creater by FlameGun
@@ -13,7 +13,7 @@ description: 从仓库事实和项目需求提取可验证约束，生成、更�
 - 产物使用 UTF-8；不得把 RTF、HTML 或含 NUL 的内容当 Markdown。
 - 公共模板脱敏。仅在已授权项目任务或明确要求只读审查该策略或隔离效果时读取 `references/sensitive-configuration-policy.md`；只读不授权写入或传播真实值。
 - 优先级：需求闭环与稳定交付 > 效率。状态为 `result_candidate → affected_checks_passed → baseline_frozen → hardening → closure_candidate`；成果前只做执行、受影响验收或防不可逆损害检查，冻结后才加载映射的打磨。治理不能替代成果或以无事实收益的机制阻塞验收。
-- 稳定交付是流程设计的唯一目的；无映射就不得新增或启动。
+- 稳定交付是唯一目的；无映射不得新增或启动。
 
 ## 模式
 
@@ -60,9 +60,10 @@ description: 从仓库事实和项目需求提取可验证约束，生成、更�
 ### 5. 同步代码、证据与可视流程
 
 - 开发前更新计划，验证后更新进度；计划绑定需求基线，进度绑定 run 和代码版本。未执行、未验证、失败门禁或开放缺陷不得标记 `completed`；未答疑问不是缺陷或门禁。
+- 多模块进度/审查路径含字面 `<module>`、`<run_id>`，否则可静态。策略匹配忽略 fenced code/HTML 注释；四类记录路径只认锚定字段且各一次，缺失/重复/歧义失败。
 - AI 维护机器可验疑问清单。未答项统一为 `P2 pending`/`NON_BLOCKING_P2`；记录可逆最小影响的默认值、回退和假设后继续，答复到达再更新基线并只重跑受影响门禁。
 - 计划和需求基线可在实现前建立；交付/完成文档只在同一候选的全部适用测试（含独立黑盒）通过后写入或更新。未通过时只记录测试证据和未完成状态，不得提前宣称交付。
-- 代码增量只累计证据；仅模块闭环候选或人工触发时审查当前指纹，代码再变则结论失效。发现含严重度、文件行、触发、影响和复现；修复先补失败测试，再最小修因。
+- 代码增量只累计证据；仅闭环候选或人工触发时审查当前指纹，代码再变则失效。发现须含严重度、文件行、触发、影响和复现；修复先补失败测试，再最小修因。
 - 默认只加载：生效 `AGENTS.md`、进度索引、当前 run、相关追踪行；验证器可从磁盘读取上下文清单。扩展或复用证据时才读 `references/evidence-reuse-policy.md`；`latest.md`、历史日志和大型原始输出不进默认提示。
 - 每次修改只判定 `swimlane_applicable=true|false` 和 `flow_impact=none|changed|uncertain`。无适用泳道不建图、不查新鲜度；适用的 `none` 保留，`uncertain` 调查，`changed` 按稳定候选合并，首次依赖或阶段交接前至多更新一次；仅系统边界变化更新总览。
 - 泳道或 Web 前端适用时读取 `references/browser-validation-policy.md`，执行应用内浏览器人工式闭环和真实 Playwright/Cypress。移动 Web 在相关范围启用浏览器门禁；原生移动执行 `native_mobile_tests`，跨端两套并行；遗留 `mobile` 由 `frontend_applicable` 区分。
@@ -76,14 +77,14 @@ description: 从仓库事实和项目需求提取可验证约束，生成、更�
 python3 scripts/flowctl.py doctor --quick
 ```
 
-它不能证明闭环。已知标准影响可用 `--affected --changed-file <相对路径>`；未知映射会要求 full，但没有与当前 SHA-256 一致的签名冻结证明时失败关闭，不执行 mutation。候选最终稳定后先冻结，再对该候选至多执行一次 full：
+它不证明闭环。已知标准影响用 `--affected --changed-file <相对路径>`；未知映射升 full，无匹配当前 SHA-256 的签名冻结证明则失败且不执行 mutation。候选稳定后冻结，并至多执行一次 full：
 
 ```bash
 python3 scripts/flowctl.py doctor --freeze-candidate
 python3 scripts/flowctl.py doctor --full
 ```
 
-冻结证明和 full receipt 位于源码树外，经本机 HMAC 和跨进程锁保护。full 保留回归和 mutation；每个已冻结 SHA-256 只跑一次，通过复用，失败/中断/畸形阻断；源码变化后必须重新冻结。分发用 `python3 scripts/flowctl.py doctor --full --distribution --require-direct-skills`，只补 distribution；无直装省略末项，不同步/缺失不得发布。
+冻结证明/full receipt 在源码树外，受本机 HMAC 和跨进程锁保护。full 保留回归、mutation；每个冻结 SHA-256 仅跑一次，通过可复用，失败/中断/畸形阻断；源码变化须重冻。分发用 `python3 scripts/flowctl.py doctor --full --distribution --require-direct-skills`，仅补 distribution；无直装则省略末项，未同步不得发布。
 
 生成项目产物时以 `python3 scripts/flowctl.py --help` 为入口：`check` 运行项目验证，`plan` 规划门禁，`record` 原子更新记录；旧 `scripts/*.py` 仅作兼容。验证器故障、证据漂移、失败门禁或开放缺陷阻断；`P2 pending` 不阻断且不得伪装已答。
 

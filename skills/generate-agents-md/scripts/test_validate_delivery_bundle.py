@@ -981,7 +981,58 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
     def test_valid_delivery_bundle_passes(self) -> None:
         self.assertEqual(set(), self.codes())
 
-    def test_closure_candidate_bundle_passes_at_the_planned_stage(self) -> None:
+    def test_module_scoped_progress_and_review_templates_pass(self) -> None:
+        progress_relative = "docs/progress/module/impl-run-1.md"
+        review_relative = "docs/reviews/module/impl-run-1.md"
+        agents = self.agents.read_text(encoding="utf-8")
+        agents = agents.replace(
+            "docs/progress_record_path.md",
+            "docs/progress/<module>/<run_id>.md",
+        ).replace(
+            "docs/automated_review_evidence_path.md",
+            "docs/reviews/<module>/<run_id>.md",
+        )
+        self.agents.write_text(agents, encoding="utf-8")
+
+        progress = self.root / progress_relative
+        review = self.root / review_relative
+        progress.parent.mkdir(parents=True)
+        review.parent.mkdir(parents=True)
+        self.progress.rename(progress)
+        self.review.rename(review)
+        self.progress = progress
+        self.review = review
+
+        self.context.write_text(self._context_manifest(), encoding="utf-8")
+        self.module_run.write_text(
+            self._module_run_record().replace(
+                "docs/automated_review_evidence_path.md", review_relative,
+            ),
+            encoding="utf-8",
+        )
+        self._write_delivery_contract()
+
+        self.assertEqual(set(), self.codes())
+
+    def test_module_scoped_progress_template_requires_module_and_run_id(self) -> None:
+        agents = self.agents.read_text(encoding="utf-8").replace(
+            "docs/progress_record_path.md",
+            "docs/progress/<module>.md",
+        )
+        self.agents.write_text(agents, encoding="utf-8")
+
+        self.assertIn("bundle-progress-record-path-unresolved", self.codes())
+
+    def test_module_scoped_review_template_requires_module_and_run_id(self) -> None:
+        agents = self.agents.read_text(encoding="utf-8").replace(
+            "docs/automated_review_evidence_path.md",
+            "docs/reviews/<run_id>.md",
+        )
+        self.agents.write_text(agents, encoding="utf-8")
+
+        self.assertIn("bundle-automated-review-path-unresolved", self.codes())
+
+    def prepare_closure_candidate(self) -> None:
         self.progress.write_text(
             self.progress.read_text(encoding="utf-8").replace(
                 "- Status: completed", "- Status: in_progress",
@@ -998,6 +1049,9 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         evidence["stage"] = "closure_candidate"
         self.multi_agent.write_text(json.dumps(evidence), encoding="utf-8")
         self._write_delivery_contract(stage="closure_candidate")
+
+    def test_closure_candidate_bundle_passes_at_the_planned_stage(self) -> None:
+        self.prepare_closure_candidate()
 
         self.assertEqual([], self.public_issues(stage="closure_candidate"))
 

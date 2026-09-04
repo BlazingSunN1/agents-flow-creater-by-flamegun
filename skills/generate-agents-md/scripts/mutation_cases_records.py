@@ -76,7 +76,7 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "module-run-review-evidence-binding-disabled", "scripts/delivery_record_validation.py",
-        '        "Automated review evidence": _review_path(text), **evidence_paths,\n',
+        '        "Automated review evidence": _review_path(text, context), **evidence_paths,\n',
         '        **evidence_paths,\n',
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_module_run_must_bind_declared_evidence_paths",
     ),

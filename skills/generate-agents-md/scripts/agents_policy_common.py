@@ -11,6 +11,8 @@ URI_CREDENTIAL_DETAIL_RE = re.compile(
     r"(?P<authority>\[[^\]]+\]|[^/\s?#]+)(?P<suffix>/[^\s]*)?)"
 )
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+HTML_COMMENT_RE = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
+FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(?P<fence>`{3,}|~{3,})(?:[^\r\n]*)$")
 MODULAR_LOG_HEADING_RE = re.compile(
     r"(?:模块化执行日志|modular execution logs?)", re.IGNORECASE
 )
@@ -86,6 +88,46 @@ class Issue:
     code: str
     message: str
     line: int | None = None
+
+
+def normative_markdown_view(text: str) -> str:
+    """Return prose used for policy matching, preserving source line count."""
+    uncommented = markdown_without_html_comments(text)
+    visible: list[str] = []
+    fence_marker = ""
+    fence_length = 0
+    for line in uncommented.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        if fence_marker:
+            if re.fullmatch(
+                rf"[ \t]{{0,3}}{re.escape(fence_marker)}{{{fence_length},}}[ \t]*",
+                content,
+            ):
+                fence_marker = ""
+                fence_length = 0
+            visible.append(_blank_line(line))
+            continue
+        match = FENCE_OPEN_RE.match(content)
+        if match:
+            fence = match.group("fence")
+            fence_marker, fence_length = fence[0], len(fence)
+            visible.append(_blank_line(line))
+            continue
+        visible.append(line)
+    return "".join(visible)
+
+
+def markdown_without_html_comments(text: str) -> str:
+    """Remove non-normative comments while retaining fenced structured declarations."""
+    return HTML_COMMENT_RE.sub(_blank_match, text)
+
+
+def _blank_match(match: re.Match[str]) -> str:
+    return "".join("\n" if char == "\n" else " " for char in match.group(0))
+
+
+def _blank_line(line: str) -> str:
+    return "".join(char for char in line if char in "\r\n")
 
 
 def extract_heading_section(text: str, title_pattern: re.Pattern[str]) -> str | None:

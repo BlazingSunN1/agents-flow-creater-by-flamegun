@@ -2935,6 +2935,28 @@ class ValidatorRegressionTests(unittest.TestCase):
                     error_codes(text, mode="public-template", scope="root"),
                 )
 
+    def test_fenced_policy_text_cannot_satisfy_normative_rule(self) -> None:
+        rule = (
+            "- Write or update delivery/completion documentation only after all required tests, "
+            "including independent black-box acceptance, pass for the same candidate.\n"
+        )
+        fenced = ROOT_TEMPLATE.replace(rule, f"```text\n{rule}```\n", 1)
+        self.assertIn(
+            "missing-test-before-delivery-documentation",
+            error_codes(fenced, mode="public-template", scope="root"),
+        )
+
+    def test_html_comment_policy_text_cannot_satisfy_normative_rule(self) -> None:
+        rule = (
+            "- Write or update delivery/completion documentation only after all required tests, "
+            "including independent black-box acceptance, pass for the same candidate.\n"
+        )
+        commented = ROOT_TEMPLATE.replace(rule, f"<!-- {rule.strip()} -->\n", 1)
+        self.assertIn(
+            "missing-test-before-delivery-documentation",
+            error_codes(commented, mode="public-template", scope="root"),
+        )
+
     def test_missing_file_json_mode_returns_structured_issue(self) -> None:
         missing = SKILL_ROOT / "does-not-exist-AGENTS.md"
         result = subprocess.run(

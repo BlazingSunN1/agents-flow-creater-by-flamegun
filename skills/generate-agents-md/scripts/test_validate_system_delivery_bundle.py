@@ -19,6 +19,7 @@ from validate_system_delivery_bundle import (
     validate_system_delivery_bundle,
 )
 from system_actor_validation import system_candidate_payload_sha256
+from system_record_path_validation import cross_module_record_template_error
 from test_validate_agents_md import project_root_fixture
 
 
@@ -65,6 +66,12 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             "| module | verified module scope | `src/` | ModuleMaintainer |",
             "| module-a | capability a | `src/a/` | Maintainer A |\n"
             "| module-b | capability b | `src/b/` | Maintainer B |",
+        ).replace(
+            "docs/progress_record_path.md",
+            "docs/progress/<module>/<run_id>.md",
+        ).replace(
+            "docs/automated_review_evidence_path.md",
+            "docs/reviews/<module>/<run_id>.md",
         )
         self.agents.write_text(agents_text, encoding="utf-8")
         self.bundle_paths = [self._module_bundle("module-a", "REQ-A"), self._module_bundle("module-b", "REQ-B")]
@@ -293,23 +300,176 @@ class SystemDeliveryBundleTests(unittest.TestCase):
         }
         self.assertIn("system-dispatcher-receipt-not-validated", strict_codes)
 
-    def test_closure_candidate_aggregates_same_stage_module_bundles(self) -> None:
-        calls: list[dict[str, object]] = []
-        for path in self.bundle_paths:
-            bundle = json.loads(path.read_text(encoding="utf-8"))
-            bundle["stage"] = "closure_candidate"
-            evidence_path = self.root / bundle["artifacts"]["multi_agent_evidence"]
-            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-            evidence["stage"] = "closure_candidate"
-            evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
-            path.write_text(json.dumps(bundle, sort_keys=True), encoding="utf-8")
-        self._write_system_manifest()
-
-        self.assertEqual(
-            set(),
-            self.codes(lambda **kwargs: calls.append(kwargs) or [], stage="closure_candidate"),
+    def test_cross_module_aggregation_rejects_shared_progress_path(self) -> None:
+        text = self.agents.read_text(encoding="utf-8").replace(
+            "docs/progress/<module>/<run_id>.md",
+            "docs/progress.md",
         )
-        self.assertEqual({"closure_candidate"}, {call["stage"] for call in calls})
+        self.agents.write_text(text, encoding="utf-8")
+        self._write_system_manifest()
+        self.assertIn("system-module-record-path-template", self.codes())
+
+    def test_cross_module_aggregation_rejects_shared_review_path(self) -> None:
+        text = self.agents.read_text(encoding="utf-8").replace(
+            "docs/reviews/<module>/<run_id>.md",
+            "docs/reviews.md",
+        )
+        self.agents.write_text(text, encoding="utf-8")
+        self._write_system_manifest()
+        self.assertIn("system-module-record-path-template", self.codes())
+
+    def test_cross_module_record_placeholders_require_separate_components(self) -> None:
+        text = self.agents.read_text(encoding="utf-8").replace(
+            "docs/progress/<module>/<run_id>.md",
+            "docs/progress/<module><run_id>.md",
+        )
+        self.agents.write_text(text, encoding="utf-8")
+        self._write_system_manifest()
+        issues = _test_only_validate_system_delivery_bundle(
+            manifest_path=self.manifest,
+            project_root=self.root,
+            _test_only_module_validator=lambda **_: [],
+            _test_only_host_attestation_verifier=lambda *_: True,
+        )
+        message = next(
+            item.message for item in issues
+            if item.code == "system-module-record-path-template"
+        )
+        self.assertIn("分别位于不同且不含路径遍历的安全组件", message)
+
+    def test_cross_module_record_templates_reject_parent_traversal(self) -> None:
+        text = self.agents.read_text(encoding="utf-8").replace(
+            "docs/progress/<module>/<run_id>.md",
+            "docs/<module>/../shared-progress/<run_id>.md",
+        )
+        self.agents.write_text(text, encoding="utf-8")
+        self._write_system_manifest()
+        self.assertIn("system-module-record-path-template", self.codes())
+
+    def test_commented_path_declaration_cannot_spoof_real_static_paths(self) -> None:
+        text = """## Development Plan and Progress
+
+<!-- - Completion progress path: `docs/progress/<module>/<run_id>.md` -->
+- Completion progress path: `docs/progress.md`
+
+## Automated Code Review
+
+<!-- - Automated review evidence path: `docs/reviews/<module>/<run_id>.md` -->
+- Automated review evidence path: `docs/reviews.md`
+"""
+        self.assertIsNotNone(cross_module_record_template_error(text))
+
+    def test_fenced_path_declaration_cannot_spoof_real_static_paths(self) -> None:
+        text = """## Development Plan and Progress
+
+```text
+- Completion progress path: `docs/progress/<module>/<run_id>.md`
+```
+- Completion progress path: `docs/progress.md`
+
+## Automated Code Review
+
+```text
+- Automated review evidence path: `docs/reviews/<module>/<run_id>.md`
+```
+- Automated review evidence path: `docs/reviews.md`
+"""
+        self.assertIsNotNone(cross_module_record_template_error(text))
+
+    def test_duplicate_path_declarations_fail_closed(self) -> None:
+        text = """## Development Plan and Progress
+
+- Completion progress path: `docs/progress/<module>/<run_id>.md`
+- Completion progress path: `docs/progress/<module>/<run_id>.md`
+
+## Automated Code Review
+
+- Automated review evidence path: `docs/reviews/<module>/<run_id>.md`
+"""
+        self.assertIsNotNone(cross_module_record_template_error(text))
+
+    def test_review_scope_is_not_a_review_evidence_path_declaration(self) -> None:
+        text = """## Development Plan and Progress
+
+- Completion progress path: `docs/progress/<module>/<run_id>.md`
+
+## Automated Code Review
+
+- Review scope: `src/`
+- Automated review evidence path: `docs/reviews/<module>/<run_id>.md`
+"""
+        self.assertIsNone(cross_module_record_template_error(text))
+
+    def test_closure_candidate_forwards_two_module_artifacts_and_composes_real_module_passes(self) -> None:
+        from test_validate_delivery_bundle import DeliveryBundleValidatorTests
+
+        fixtures: list[DeliveryBundleValidatorTests] = []
+        calls: list[dict[str, object]] = []
+        try:
+            for path in self.bundle_paths:
+                bundle = json.loads(path.read_text(encoding="utf-8"))
+                bundle["stage"] = "closure_candidate"
+                evidence_path = self.root / bundle["artifacts"]["multi_agent_evidence"]
+                evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+                evidence["stage"] = "closure_candidate"
+                evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+                path.write_text(json.dumps(bundle, sort_keys=True), encoding="utf-8")
+            self._write_system_manifest()
+
+            for _ in self.bundle_paths:
+                fixture = DeliveryBundleValidatorTests(
+                    methodName="test_closure_candidate_bundle_passes_at_the_planned_stage",
+                )
+                fixture.setUp()
+                fixture.prepare_closure_candidate()
+                fixtures.append(fixture)
+
+            def validate_real_module(**kwargs: object) -> list[object]:
+                # Process-level coverage invokes the public module-close validator directly.
+                # This composition test isolates system-to-module argument binding while
+                # requiring two independently complete module candidates to pass it.
+                index = len(calls)
+                calls.append(kwargs)
+                fixture = fixtures[index]
+                return fixture.public_issues(stage=str(kwargs["stage"]))
+
+            self.assertEqual(
+                set(),
+                self.codes(validate_real_module, stage="closure_candidate"),
+            )
+            self.assertEqual(2, len(calls))
+            path_arguments = {
+                "agents": "agents_path",
+                "trace": "trace_path",
+                "context": "context_path",
+                "command_manifest": "command_manifest_path",
+                "multi_agent_evidence": "multi_agent_evidence_path",
+                "swimlane_evidence": "swimlane_evidence_path",
+                "frontend_evidence": "frontend_evidence_path",
+                "delivery_contract": "delivery_contract_path",
+                "requirement_questions": "requirement_questions_path",
+            }
+            for bundle_path, call in zip(self.bundle_paths, calls):
+                bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+                artifacts = bundle["artifacts"]
+                for artifact_field, argument in path_arguments.items():
+                    expected = artifacts.get(artifact_field)
+                    if expected is None:
+                        self.assertIsNone(call[argument])
+                    else:
+                        self.assertEqual((self.root / expected).resolve(), Path(call[argument]).resolve())
+                self.assertEqual(
+                    artifacts["requirement_questions_sha256"],
+                    call["requirement_questions_sha256"],
+                )
+                self.assertEqual(bundle["requirement_baseline_version"], call["requirement_baseline_version"])
+                self.assertEqual(bundle["requirement_baseline_sha256"], call["requirement_baseline_sha256"])
+            self.assertEqual({"closure_candidate"}, {call["stage"] for call in calls})
+            self.assertEqual({self.root.resolve()}, {Path(call["project_root"]).resolve() for call in calls})
+            self.assertEqual({False}, {call["allow_passwords"] for call in calls})
+        finally:
+            for fixture in fixtures:
+                fixture.tearDown()
 
     def test_requested_stage_rejects_mismatched_or_invalid_system_aggregation(self) -> None:
         self.assertIn("system-module-not-complete", self.codes(stage="closure_candidate"))

@@ -10,7 +10,7 @@ REVIEW_FIX_MUTANT_CASES = (
     ),
     (
         "dispatcher-ownership-policy-check-disabled", "scripts/agents_policy_validation.py",
-        "    issues.extend(validate_dispatcher_ownership_policy(text, mode=mode))\n",
+        "    issues.extend(validate_dispatcher_ownership_policy(normative, mode=mode))\n",
         "",
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_dispatcher_ownership_section_is_required",
     ),
@@ -106,7 +106,7 @@ REVIEW_FIX_MUTANT_CASES = (
     ),
     (
         "global-policy-contradiction-check-disabled", "scripts/agents_policy_validation.py",
-        "    issues.extend(_validate_global_policy_contradictions(text))\n",
+        "    issues.extend(_validate_global_policy_contradictions(normative))\n",
         "",
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_global_or_section_override_cannot_disable_machine_gates",
     ),

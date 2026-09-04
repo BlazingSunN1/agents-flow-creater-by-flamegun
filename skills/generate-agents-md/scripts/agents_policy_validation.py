@@ -8,9 +8,12 @@ from agents_policy_common import (
     DEVELOPMENT_PLAN_HEADING_RE,
     Issue,
     MACHINE_POLICY_HEADING_RE,
+    MODULAR_LOG_HEADING_RE,
     REQUIRED_MACHINE_POLICY,
     document_path_pattern as _document_path_pattern,
     extract_heading_section as _extract_heading_section,
+    markdown_without_html_comments,
+    normative_markdown_view,
     section_has_contradiction as _section_has_contradiction,
     section_has_line as _section_has_line,
 )
@@ -23,24 +26,52 @@ from agents_delivery_policy_validation import (
 )
 from agents_dispatcher_policy_validation import validate_dispatcher_ownership_policy
 from agents_authority_matrix_validation import validate_authority_matrix
+from delivery_record_paths import (
+    AUTOMATED_REVIEW_EVIDENCE_PATH,
+    DEVELOPMENT_PLAN_PATH,
+    MODULE_EXECUTION_LOG_TEMPLATE,
+    PROGRESS_RECORD_PATH,
+    declared_path,
+)
 
 
 def _validate_root_policies(text: str, mode: str) -> list[Issue]:
+    normative = normative_markdown_view(text)
+    structured = markdown_without_html_comments(text)
     issues: list[Issue] = []
-    issues.extend(_validate_global_policy_contradictions(text))
-    issues.extend(_validate_machine_policy(text))
-    issues.extend(validate_authority_matrix(text))
-    issues.extend(validate_dispatcher_ownership_policy(text, mode=mode))
-    issues.extend(_validate_development_plan_policy(text, mode=mode))
-    issues.extend(_validate_traceability_policy(text, mode=mode))
-    issues.extend(_validate_automated_review_policy(text, mode=mode))
-    issues.extend(_validate_context_budget_policy(text, mode=mode))
-    issues.extend(_validate_swimlane_policy(text, mode=mode))
-    issues.extend(_validate_modular_execution_log_policy(text, mode=mode))
-    issues.extend(_validate_frontend_verification_policy(text))
-    issues.extend(_validate_execution_evidence_policy(text, mode=mode))
-    issues.extend(_validate_task_write_boundary_policy(text))
-    issues.extend(_validate_external_multi_model_policy(text))
+    issues.extend(_validate_global_policy_contradictions(normative))
+    issues.extend(_validate_machine_policy(structured))
+    issues.extend(validate_authority_matrix(structured))
+    issues.extend(_validate_record_path_declarations(normative))
+    issues.extend(validate_dispatcher_ownership_policy(normative, mode=mode))
+    issues.extend(_validate_development_plan_policy(normative, mode=mode))
+    issues.extend(_validate_traceability_policy(normative, mode=mode))
+    issues.extend(_validate_automated_review_policy(normative, mode=mode))
+    issues.extend(_validate_context_budget_policy(normative, mode=mode))
+    issues.extend(_validate_swimlane_policy(normative, mode=mode))
+    issues.extend(_validate_modular_execution_log_policy(normative, mode=mode))
+    issues.extend(_validate_frontend_verification_policy(normative))
+    issues.extend(_validate_execution_evidence_policy(normative, mode=mode))
+    issues.extend(_validate_task_write_boundary_policy(normative))
+    issues.extend(_validate_external_multi_model_policy(normative))
+    return issues
+
+
+def _validate_record_path_declarations(text: str) -> list[Issue]:
+    declarations = (
+        (DEVELOPMENT_PLAN_HEADING_RE, DEVELOPMENT_PLAN_PATH, "development-plan"),
+        (DEVELOPMENT_PLAN_HEADING_RE, PROGRESS_RECORD_PATH, "progress-record"),
+        (AUTOMATED_REVIEW_HEADING_RE, AUTOMATED_REVIEW_EVIDENCE_PATH, "automated-review"),
+        (MODULAR_LOG_HEADING_RE, MODULE_EXECUTION_LOG_TEMPLATE, "module-run"),
+    )
+    issues: list[Issue] = []
+    for heading, field, code in declarations:
+        section = _extract_heading_section(text, heading) or ""
+        if declared_path(section, field) is None:
+            issues.append(Issue(
+                "error", f"invalid-{code}-path-declaration",
+                f"{field} 必须以锚定字段恰好声明一次",
+            ))
     return issues
 
 
@@ -338,7 +369,8 @@ def _automated_review_quality_checks(section: str, path_pattern: str) -> tuple[t
             "缺少失败测试、最小根因修复及自动重跑审查闭环",
         ),
         (
-            _section_has_line(section, (r"scope|范围", r"candidate fingerprint|候选.*指纹", r"commands?|命令", r"findings?|发现", r"verdict|结论", path_pattern)),
+            _section_has_line(section, (r"scope|范围", r"candidate fingerprint|候选.*指纹", r"commands?|命令", r"findings?|发现", r"verdict|结论"))
+            and _section_has_line(section, (r"Automated review evidence path|自动审查证据路径", path_pattern)),
             "missing-automated-review-evidence",
             "自动审查缺少项目内证据路径和必填字段",
         ),

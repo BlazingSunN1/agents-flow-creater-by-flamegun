@@ -21,6 +21,17 @@ from delivery_record_io import (
     split_record_paths,
     _validate_record,
 )
+from delivery_record_paths import (
+    AUTOMATED_REVIEW_EVIDENCE_PATH,
+    DEVELOPMENT_PLAN_PATH,
+    MODULE_EXECUTION_LOG_TEMPLATE,
+    PROGRESS_RECORD_PATH,
+    STABLE_ID_RE,
+    context_record_path as _context_record_path,
+    declared_path as _declared_path,
+    modules as _modules,
+    normalize_template as _normalize_template,
+)
 
 
 @dataclass(frozen=True)
@@ -31,7 +42,6 @@ class Issue:
     source: str
 
 
-STABLE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SWIMLANE_GATE_IDS = frozenset({"swimlane_evidence", "swimlane_freshness"})
 
 
@@ -62,7 +72,7 @@ def validate_declared_records(
         text, context, root, command_manifest_path, planned_command_ids,
     ))
     issues.extend(_validate_progress_index(text, context, root, stage, module_paths))
-    issues.extend(_record_alias_issues(text, module_paths, root))
+    issues.extend(_record_alias_issues(text, context, module_paths, root))
     return issues
 
 
@@ -70,10 +80,9 @@ def _validate_plan_progress(
     text: str, trace: dict[str, str], context: dict[str, str], root: Path, stage: str,
 ) -> list[Issue]:
     section = extract_heading_section(text, DEVELOPMENT_PLAN_HEADING_RE) or ""
-    plan = _declared_path(section, r"development plan|开发计划")
-    progress = _declared_path(
-        section, r"completion (?:index|progress)|progress (?:record|index)|完成进度|进度记录",
-    )
+    plan = _declared_path(section, DEVELOPMENT_PLAN_PATH)
+    progress = _declared_path(section, PROGRESS_RECORD_PATH)
+    progress = _context_record_path(progress, context)
     issues = _validate_record(
         plan, root, "development-plan",
         {"Baseline version": trace.get("Baseline version", ""),
@@ -100,7 +109,7 @@ def _validate_module_records(
     planned_command_ids: set[str] | None,
 ) -> tuple[dict[str, tuple[str, str]], list[Issue]]:
     section = extract_heading_section(text, MODULAR_LOG_HEADING_RE) or ""
-    template = _declared_path(section, r"immutable module runs|模块.*运行|模块.*run")
+    template = _declared_path(section, MODULE_EXECUTION_LOG_TEMPLATE)
     raw_modules = [item.strip() for item in context.get("Modules", "").split(",") if item.strip()]
     if not raw_modules or any(not STABLE_ID_RE.fullmatch(item) for item in raw_modules):
         return {}, [Issue("error", "bundle-execution-run-unsafe-module", "Module 不是安全的单段标识符", "delivery-bundle")]
@@ -192,7 +201,7 @@ def _module_run_expected(
             f'{_relative_path(context_path, root)} / {context.get("Evidence cache key", "")}'
         ),
         "Risk level and reason": context.get("Risk / expansion reason", ""),
-        "Automated review evidence": _review_path(text), **evidence_paths,
+        "Automated review evidence": _review_path(text, context), **evidence_paths,
     }
 
 
@@ -216,7 +225,7 @@ def _validate_review_record(
     text: str, context: dict[str, str], root: Path, command_manifest_path: Path,
     planned_command_ids: set[str] | None,
 ) -> list[Issue]:
-    path = _review_path(text)
+    path = _review_path(text, context)
     issues = _validate_record(
         path, root, "automated-review",
         {"Run ID": context.get("Run ID", ""), "Code version": context.get("Code version", ""),
@@ -441,9 +450,8 @@ def _validate_progress_index(
     paths: dict[str, tuple[str, str]],
 ) -> list[Issue]:
     section = extract_heading_section(text, DEVELOPMENT_PLAN_HEADING_RE) or ""
-    progress = _declared_path(
-        section, r"completion (?:index|progress)|progress (?:record|index)|完成进度|进度记录",
-    )
+    progress = _declared_path(section, PROGRESS_RECORD_PATH)
+    progress = _context_record_path(progress, context)
     modules = sorted(paths)
     run_links = ", ".join(f"{module}={paths[module][0]}" for module in modules)
     expected = {"Modules": ", ".join(modules), "Module run records": run_links}
@@ -456,33 +464,24 @@ def _validate_progress_index(
     return _validate_record(progress, root, "progress-index", expected, required)
 
 
-def _modules(context: dict[str, str]) -> list[str]:
-    values = sorted({item.strip() for item in context.get("Modules", "").split(",") if item.strip()})
-    return values if values and all(STABLE_ID_RE.fullmatch(value) for value in values) else []
-
-
-def _declared_path(section: str, label: str) -> str | None:
-    match = re.search(rf"(?:{label})[^`\r\n]*`([^`]+)`", section, re.IGNORECASE)
-    return match.group(1).strip() if match else None
-
-
-def _normalize_template(template: str, module: str, run_id: str) -> str:
-    return Path(template.replace("<module>", module).replace("<run_id>", run_id)).as_posix()
-
-
-def _review_path(text: str) -> str:
+def _review_path(text: str, context: dict[str, str]) -> str:
     section = extract_heading_section(text, AUTOMATED_REVIEW_HEADING_RE) or ""
-    return _declared_path(section, r"review scope|审查.*(?:范围|证据)|scope") or ""
+    raw_path = _declared_path(section, AUTOMATED_REVIEW_EVIDENCE_PATH)
+    return _context_record_path(raw_path, context) or ""
 
 
 def _record_alias_issues(
-    text: str, module_paths: dict[str, tuple[str, str]], root: Path,
+    text: str, context: dict[str, str],
+    module_paths: dict[str, tuple[str, str]], root: Path,
 ) -> list[Issue]:
     plan_section = extract_heading_section(text, DEVELOPMENT_PLAN_HEADING_RE) or ""
     paths = [
-        _declared_path(plan_section, r"development plan|开发计划"),
-        _declared_path(plan_section, r"completion (?:index|progress)|progress (?:record|index)|完成进度|进度记录"),
-        _review_path(text),
+        _declared_path(plan_section, DEVELOPMENT_PLAN_PATH),
+        _context_record_path(
+            _declared_path(plan_section, PROGRESS_RECORD_PATH),
+            context,
+        ),
+        _review_path(text, context),
         *(path for pair in module_paths.values() for path in pair),
     ]
     identities: dict[tuple[int, int], str] = {}

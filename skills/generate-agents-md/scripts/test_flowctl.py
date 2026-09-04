@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -73,7 +74,7 @@ class FlowctlTests(unittest.TestCase):
         from test_validate_system_delivery_bundle import SystemDeliveryBundleTests
 
         fixture = SystemDeliveryBundleTests(
-            methodName="test_closure_candidate_aggregates_same_stage_module_bundles",
+            methodName="test_closure_candidate_forwards_two_module_artifacts_and_composes_real_module_passes",
         )
         fixture.setUp()
         try:
@@ -111,11 +112,68 @@ class FlowctlTests(unittest.TestCase):
                 payload = json.loads(completed.stdout)
                 return {item["code"] for item in payload["issues"]}
 
-            self.assertNotIn(
-                "system-module-not-complete",
+            self.assertEqual(
+                {
+                    "system-module-bundle-invalid",
+                    "system-affected-modules-mismatch",
+                    "system-requirements-mismatch",
+                    "system-changed-files-mismatch",
+                },
                 issue_codes(["--stage", "closure_candidate"]),
             )
-            self.assertIn("system-module-not-complete", issue_codes([]))
+            self.assertEqual(
+                {
+                    "system-module-not-complete",
+                    "system-affected-modules-mismatch",
+                    "system-requirements-mismatch",
+                    "system-changed-files-mismatch",
+                },
+                issue_codes([]),
+            )
+        finally:
+            fixture.tearDown()
+
+    def test_process_level_module_close_accepts_a_real_closure_candidate(self) -> None:
+        from test_validate_delivery_bundle import DeliveryBundleValidatorTests
+
+        fixture = DeliveryBundleValidatorTests(
+            methodName="test_closure_candidate_bundle_passes_at_the_planned_stage",
+        )
+        fixture.setUp()
+        try:
+            fixture.prepare_closure_candidate()
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_ROOT / "flowctl.py"),
+                    "check",
+                    "module-close",
+                    "--agents", str(fixture.agents),
+                    "--delivery-contract", str(fixture.contract),
+                    "--trace", str(fixture.trace_fixture.matrix),
+                    "--context", str(fixture.context),
+                    "--command-manifest", str(fixture.commands),
+                    "--multi-agent-evidence", str(fixture.multi_agent),
+                    "--swimlane-evidence", str(fixture.swimlane),
+                    "--frontend-evidence", str(fixture.frontend),
+                    "--requirement-questions", str(fixture.requirement_questions),
+                    "--requirement-questions-sha256", fixture.requirement_questions_sha256,
+                    "--requirement-baseline-version", "req-v1",
+                    "--requirement-baseline-sha256", hashlib.sha256(
+                        (fixture.root / "requirements/baseline.md").read_bytes(),
+                    ).hexdigest(),
+                    "--project-root", str(fixture.root),
+                    "--stage", "closure_candidate",
+                    "--json",
+                ],
+                cwd=SCRIPT_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+            self.assertEqual(0, completed.returncode, completed.stdout)
+            self.assertEqual({"valid": True, "issues": []}, json.loads(completed.stdout))
         finally:
             fixture.tearDown()
 
