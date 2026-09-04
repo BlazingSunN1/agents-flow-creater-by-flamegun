@@ -17,6 +17,13 @@ MODULE_CLOSURE_MUTANT_CASES = (
         "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_module_validator_receives_requirement_closure_binding",
     ),
     (
+        "system-cli-stage-forwarding-disabled",
+        "scripts/system_delivery_cli.py",
+        '        stage=args.stage, allow_passwords=args.allow_passwords,',
+        '        stage="completion", allow_passwords=args.allow_passwords,',
+        "scripts.test_flowctl.FlowctlTests.test_process_level_system_close_forwards_explicit_stage",
+    ),
+    (
         "record-update-module-ownership-check-disabled",
         "scripts/project_record_authorization.py",
         "    if not _target_is_owned(target, owned_paths):",
@@ -414,7 +421,7 @@ MODULE_CLOSURE_MUTANT_CASES = (
     (
         "system-gate-identity-revalidation-check-disabled",
         "scripts/validate_system_delivery_bundle.py",
-        "    gate_issues, reviewer_agent_ids, reviewer_run_ids = validate_module_gate_actors(\n        evidence, module, root, host_attestation_verifier,\n    )",
+        "    gate_issues, reviewer_agent_ids, reviewer_run_ids = validate_module_gate_actors(\n        evidence, module, root, host_attestation_verifier, stage=stage,\n    )",
         "    gate_issues, reviewer_agent_ids, reviewer_run_ids = [], frozenset(), frozenset()",
         "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_system_revalidates_gate_identity_when_module_validator_is_injected",
     ),
@@ -454,7 +461,7 @@ MODULE_CLOSURE_MUTANT_CASES = (
     (
         "system-module-closure-recheck-disabled",
         "scripts/system_actor_validation.py",
-        '    if (evidence.get("stage") != "completion"\n            or evidence.get("single_writer_run_id") != evidence.get("implementation_run_id")):',
+        '    if (evidence.get("stage") != stage\n            or evidence.get("single_writer_run_id") != evidence.get("implementation_run_id")):',
         "    if False:",
         "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_injected_module_validator_cannot_bypass_open_disagreement_or_stage",
     ),
@@ -477,10 +484,12 @@ MODULE_CLOSURE_MUTANT_CASES = (
         "system-production-test-seam-exposed",
         "scripts/validate_system_delivery_bundle.py",
         "def validate_system_delivery_bundle(\n"
-        "    *, manifest_path: Path, project_root: Path, allow_passwords: bool = False,\n"
+        "    *, manifest_path: Path, project_root: Path, stage: str = \"completion\",\n"
+        "    allow_passwords: bool = False,\n"
         ") -> list[Issue]:",
         "def validate_system_delivery_bundle(\n"
-        "    *, manifest_path: Path, project_root: Path, allow_passwords: bool = False,\n"
+        "    *, manifest_path: Path, project_root: Path, stage: str = \"completion\",\n"
+        "    allow_passwords: bool = False,\n"
         "    _test_only_module_validator: Callable[..., list[object]] | None = None,\n"
         "    host_attestation_verifier: HostAttestationVerifier | None = None,\n"
         ") -> list[Issue]:",

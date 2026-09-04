@@ -51,10 +51,10 @@ def validate_system_actors(
 
 def validate_module_gate_actors(
     evidence: dict[str, object], module: str, root: Path,
-    verifier: HostAttestationVerifier | None,
+    verifier: HostAttestationVerifier | None, *, stage: str = "completion",
 ) -> tuple[list[Issue], frozenset[str], frozenset[str]]:
     """Re-attest gate actors even when a caller injects a custom module validator."""
-    issues = _validate_module_closure(evidence)
+    issues = _validate_module_closure(evidence, stage)
     used_agents = {str(evidence.get("implementation_agent_id", ""))}
     used_runs = {str(evidence.get("implementation_run_id", ""))}
     reviewer_agents: set[str] = set()
@@ -79,8 +79,8 @@ def validate_module_gate_actors(
     return issues, frozenset(reviewer_agents), frozenset(reviewer_runs)
 
 
-def _validate_module_closure(evidence: dict[str, object]) -> list[Issue]:
-    """Recheck the non-delegable completion invariants at system scope."""
+def _validate_module_closure(evidence: dict[str, object], stage: str) -> list[Issue]:
+    """Recheck the non-delegable closure invariants at system scope."""
     issues: list[Issue] = []
     candidate_sha256 = evidence.get("candidate_sha256")
     if (not isinstance(candidate_sha256, str) or len(candidate_sha256) != 64
@@ -89,11 +89,11 @@ def _validate_module_closure(evidence: dict[str, object]) -> list[Issue]:
             "error", "module-candidate-binding-invalid",
             "模块候选绑定必须是 64 位 SHA-256，并由独立门禁输出精确回显",
         ))
-    if (evidence.get("stage") != "completion"
+    if (evidence.get("stage") != stage
             or evidence.get("single_writer_run_id") != evidence.get("implementation_run_id")):
         issues.append(Issue(
             "error", "module-not-closed",
-            "模块多 Agent 证据必须处于 completion 且绑定唯一实现 run",
+            f"模块多 Agent 证据必须处于 {stage} 且绑定唯一实现 run",
         ))
     if evidence.get("open_disagreements") != []:
         issues.append(Issue(
@@ -104,7 +104,7 @@ def _validate_module_closure(evidence: dict[str, object]) -> list[Issue]:
     if not isinstance(gates, list) or not gates:
         issues.append(Issue(
             "error", "module-gates-incomplete",
-            "completion 模块必须包含至少一个独立门禁及其封闭 receipt 输出；严格模式追加宿主证明",
+            f"{stage} 模块必须包含至少一个独立门禁及其封闭 receipt 输出；严格模式追加宿主证明",
         ))
         return issues
     roles = [raw.get("role") for raw in gates if isinstance(raw, dict)]
@@ -112,12 +112,12 @@ def _validate_module_closure(evidence: dict[str, object]) -> list[Issue]:
             or len(roles) != len(set(roles))):
         issues.append(Issue(
             "error", "module-gates-incomplete",
-            "completion 模块的独立门禁角色必须非空且唯一",
+            f"{stage} 模块的独立门禁角色必须非空且唯一",
         ))
     if any(not isinstance(raw, dict) or raw.get("verdict") != "pass" for raw in gates):
         issues.append(Issue(
             "error", "module-gate-not-pass",
-            "completion 模块的每个独立门禁 verdict 必须精确为 pass",
+            f"{stage} 模块的每个独立门禁 verdict 必须精确为 pass",
         ))
     return issues
 

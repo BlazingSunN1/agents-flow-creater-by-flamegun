@@ -294,8 +294,8 @@ def _validate_frontend_bundle(
             evidence, trace_path=trace, command_manifest=commands, project_root=root,
         )
     ]
-    if stage == "completion":
-        found.extend(_validate_frontend_black_box_binding(evidence, agents))
+    if stage in {"closure_candidate", "completion"}:
+        found.extend(_validate_frontend_black_box_binding(evidence, agents, required=stage == "completion"))
     return found
 
 
@@ -423,7 +423,7 @@ def _metadata_binding_issues(
     return issues
 
 
-def _validate_frontend_black_box_binding(frontend_path: Path, multi_agent_path: Path) -> list[Issue]:
+def _validate_frontend_black_box_binding(frontend_path: Path, multi_agent_path: Path, *, required: bool) -> list[Issue]:
     try:
         frontend = json.loads(frontend_path.read_text(encoding="utf-8"))
         agents = json.loads(multi_agent_path.read_text(encoding="utf-8"))
@@ -435,6 +435,8 @@ def _validate_frontend_black_box_binding(frontend_path: Path, multi_agent_path: 
         (gate for gate in gates if isinstance(gate, dict) and gate.get("role") == "BLACK_BOX"),
         None,
     )
+    if black_box is None and not required:
+        return []
     browser_objects = [browser]
     if isinstance(frontend, dict) and isinstance(frontend.get("mobile"), dict):
         browser_objects.append(frontend["mobile"])

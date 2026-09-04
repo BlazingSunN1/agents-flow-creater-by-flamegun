@@ -15,7 +15,7 @@ from implementation_agent_validation import (
 )
 from system_actor_validation import validate_module_gate_actors, validate_system_actors
 from system_aggregate_validation import validate_system_aggregate_sets
-from system_delivery_cli import main
+from system_delivery_cli import main as system_delivery_main
 from system_delivery_path_validation import normalized_project_path as _normalized_project_path
 from delivery_authority_binding import agents_declares_authority_binding, authority_binding_valid, receipt_repeats_authority_binding
 from system_delivery_schema import (
@@ -38,27 +38,33 @@ class ModuleResult:
     reviewer_agent_ids: frozenset[str]
     reviewer_run_ids: frozenset[str]
 def validate_system_delivery_bundle(
-    *, manifest_path: Path, project_root: Path, allow_passwords: bool = False,
+    *, manifest_path: Path, project_root: Path, stage: str = "completion",
+    allow_passwords: bool = False,
 ) -> list[Issue]:
     return _validate_system_delivery_bundle_impl(
-        manifest_path=manifest_path, project_root=project_root, allow_passwords=allow_passwords,
+        manifest_path=manifest_path, project_root=project_root, stage=stage,
+        allow_passwords=allow_passwords,
         module_validator=validate_delivery_bundle, host_attestation_verifier=None,
     )
 def _test_only_validate_system_delivery_bundle(
-    *, manifest_path: Path, project_root: Path, allow_passwords: bool = False,
+    *, manifest_path: Path, project_root: Path, stage: str = "completion",
+    allow_passwords: bool = False,
     _test_only_module_validator: Callable[..., list[object]],
     _test_only_host_attestation_verifier: HostAttestationVerifier,
 ) -> list[Issue]:
     return _validate_system_delivery_bundle_impl(
-        manifest_path=manifest_path, project_root=project_root, allow_passwords=allow_passwords,
+        manifest_path=manifest_path, project_root=project_root, stage=stage,
+        allow_passwords=allow_passwords,
         module_validator=_test_only_module_validator,
         host_attestation_verifier=_test_only_host_attestation_verifier,
     )
 def _validate_system_delivery_bundle_impl(
-    *, manifest_path: Path, project_root: Path, allow_passwords: bool,
+    *, manifest_path: Path, project_root: Path, stage: str, allow_passwords: bool,
     module_validator: Callable[..., list[object]],
     host_attestation_verifier: HostAttestationVerifier | None,
 ) -> list[Issue]:
+    if stage not in {"closure_candidate", "completion"}:
+        return [_issue("system-stage-invalid", "系统聚合阶段只能是 closure_candidate 或 completion", manifest_path)]
     root = project_root.resolve()
     manifest, issues = _read_object(manifest_path, "system-delivery-bundle")
     if issues:
@@ -89,7 +95,7 @@ def _validate_system_delivery_bundle_impl(
         return _deduplicate(issues)
     affected, changed_files = _affected_modules(manifest, canonical, issues)
     results = _validate_module_entries(
-        manifest, root, canonical, allow_passwords, module_validator, issues,
+        manifest, root, canonical, stage, allow_passwords, module_validator, issues,
         host_attestation_verifier,
     )
     issues.extend(
@@ -179,7 +185,7 @@ def _affected_modules(
     return affected, normalized_files
 def _validate_module_entries(
     value: dict[str, object], root: Path, canonical: dict[str, tuple[tuple[str, ...], str]],
-    allow_passwords: bool, module_validator: Callable[..., list[object]], issues: list[Issue],
+    stage: str, allow_passwords: bool, module_validator: Callable[..., list[object]], issues: list[Issue],
     host_attestation_verifier: HostAttestationVerifier | None,
 ) -> list[ModuleResult]:
     results: list[ModuleResult] = []
@@ -187,7 +193,7 @@ def _validate_module_entries(
     seen_hashes: set[str] = set()
     for entry in value.get("module_bundles", []):
         result = _validate_module_entry(
-            entry, value, root, canonical, allow_passwords, module_validator,
+            entry, value, root, canonical, stage, allow_passwords, module_validator,
             seen_paths, seen_hashes, issues, host_attestation_verifier,
         )
         if result is not None:
@@ -195,7 +201,7 @@ def _validate_module_entries(
     return results
 def _validate_module_entry(
     entry: object, system: dict[str, object], root: Path,
-    canonical: dict[str, tuple[tuple[str, ...], str]], allow_passwords: bool,
+    canonical: dict[str, tuple[tuple[str, ...], str]], stage: str, allow_passwords: bool,
     module_validator: Callable[..., list[object]], seen_paths: set[Path],
     seen_hashes: set[str], issues: list[Issue],
     host_attestation_verifier: HostAttestationVerifier | None,
@@ -227,17 +233,17 @@ def _validate_module_entry(
         return None
     bundle, read_issues = _read_object(path, str(path))
     issues.extend(read_issues)
-    if read_issues or _validate_module_shape(bundle, str(path), issues):
+    if read_issues or _validate_module_shape(bundle, str(path), stage, issues):
         return None
     return _run_module_bundle(
-        entry, bundle, system, root, canonical, allow_passwords, module_validator,
+        entry, bundle, system, root, canonical, stage, allow_passwords, module_validator,
         path, issues, host_attestation_verifier,
     )
-def _validate_module_shape(value: dict[str, object], source: str, issues: list[Issue]) -> bool:
+def _validate_module_shape(value: dict[str, object], source: str, stage: str, issues: list[Issue]) -> bool:
     before = len(issues)
     issues.extend(_exact_fields(value, MODULE_FIELDS, "system-module-bundle-schema", source))
-    if type(value.get("schema_version")) is not int or value.get("schema_version") != 2 or value.get("stage") != "completion":
-        issues.append(_issue("system-module-not-complete", "模块交付包必须是 completion 阶段 schema_version 2", source))
+    if type(value.get("schema_version")) is not int or value.get("schema_version") != 2 or value.get("stage") != stage:
+        issues.append(_issue("system-module-not-complete", f"模块交付包必须是 {stage} 阶段 schema_version 2", source))
     if not authority_binding_valid(value.get("authority_binding"), "module"):
         issues.append(_issue(
             "system-module-authority-binding",
@@ -264,7 +270,8 @@ def _validate_module_shape(value: dict[str, object], source: str, issues: list[I
     return len(issues) != before
 def _run_module_bundle(
     entry: dict[str, object], bundle: dict[str, object], system: dict[str, object], root: Path,
-    canonical: dict[str, tuple[tuple[str, ...], str]], allow_passwords: bool, module_validator: Callable[..., list[object]],
+    canonical: dict[str, tuple[tuple[str, ...], str]], stage: str, allow_passwords: bool,
+    module_validator: Callable[..., list[object]],
     source: Path, issues: list[Issue], host_attestation_verifier: HostAttestationVerifier | None,
 ) -> ModuleResult | None:
     module = str(bundle["module"]).casefold()
@@ -283,8 +290,7 @@ def _run_module_bundle(
     paths = _bound_module_artifacts(bundle, system, root, source, issues)
     if paths is None:
         return None
-    verifier_kw = {} if host_attestation_verifier is None else {
-        "_test_only_host_attestation_verifier": host_attestation_verifier}
+    verifier_kw = {} if host_attestation_verifier is None else {"_test_only_host_attestation_verifier": host_attestation_verifier}
     try:
         module_issues = module_validator(
             agents_path=paths["agents"], trace_path=paths["trace"], context_path=paths["context"],
@@ -295,7 +301,7 @@ def _run_module_bundle(
             requirement_questions_sha256=bundle["artifacts"]["requirement_questions_sha256"],
             requirement_baseline_version=bundle["requirement_baseline_version"],
             requirement_baseline_sha256=bundle["requirement_baseline_sha256"],
-            project_root=root, stage="completion", allow_passwords=allow_passwords,
+            project_root=root, stage=stage, allow_passwords=allow_passwords,
             **verifier_kw,
         )
     except Exception as error:  # external/custom validators must fail closed
@@ -306,7 +312,7 @@ def _run_module_bundle(
         return None
     try:
         return _module_result(
-            bundle, paths["context"], paths["multi_agent_evidence"], module, root,
+            bundle, paths["context"], paths["multi_agent_evidence"], module, root, stage,
             issues, host_attestation_verifier,
         )
     except (OSError, UnicodeError, json.JSONDecodeError, AttributeError, TypeError, ValueError) as error:
@@ -368,7 +374,7 @@ def _artifact_paths(value: object, root: Path, issues: list[Issue]) -> dict[str,
     return paths
 def _module_result(
     bundle: dict[str, object], context_path: Path, evidence_path: Path, module: str,
-    root: Path, issues: list[Issue],
+    root: Path, stage: str, issues: list[Issue],
     host_attestation_verifier: HostAttestationVerifier | None,
 ) -> ModuleResult:
     context, duplicates = _parse_metadata(context_path.read_text(encoding="utf-8"))
@@ -400,7 +406,7 @@ def _module_result(
             context_path,
         ))
     gate_issues, reviewer_agent_ids, reviewer_run_ids = validate_module_gate_actors(
-        evidence, module, root, host_attestation_verifier,
+        evidence, module, root, host_attestation_verifier, stage=stage,
     )
     issues.extend(_issue(f"system-{item.code}", item.message, evidence_path) for item in gate_issues)
     return ModuleResult(
@@ -481,5 +487,9 @@ def _deduplicate(issues: list[Issue]) -> list[Issue]:
     return list({(item.code, item.message, item.source): item for item in issues}.values())
 
 
+def main() -> int:
+    return system_delivery_main(validate_system_delivery_bundle)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main(validate_system_delivery_bundle))
+    raise SystemExit(main())

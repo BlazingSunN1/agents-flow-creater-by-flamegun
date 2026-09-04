@@ -470,8 +470,8 @@ REVIEW_FIX_MUTANT_CASES = (
     (
         "module-boolean-schema-alias-check-disabled",
         "scripts/validate_system_delivery_bundle.py",
-        '    if type(value.get("schema_version")) is not int or value.get("schema_version") != 2 or value.get("stage") != "completion":',
-        '    if value.get("stage") != "completion":',
+        '    if type(value.get("schema_version")) is not int or value.get("schema_version") != 2 or value.get("stage") != stage:',
+        '    if value.get("stage") != stage:',
         "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_boolean_module_schema_version_is_rejected",
     ),
     (

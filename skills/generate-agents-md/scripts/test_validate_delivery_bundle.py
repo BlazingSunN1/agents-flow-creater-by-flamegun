@@ -1130,6 +1130,39 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         self.frontend.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("frontend-black-box-run-mismatch", self.codes())
 
+    def test_closure_candidate_frontend_browser_must_bind_independent_black_box_run(self) -> None:
+        self.progress.write_text(
+            self.progress.read_text(encoding="utf-8").replace(
+                "- Status: completed", "- Status: in_progress",
+            ),
+            encoding="utf-8",
+        )
+        self.module_run.write_text(
+            self.module_run.read_text(encoding="utf-8").replace(
+                "- Status: completed", "- Status: in_progress",
+            ),
+            encoding="utf-8",
+        )
+        agents = json.loads(self.multi_agent.read_text(encoding="utf-8"))
+        agents["stage"] = "closure_candidate"
+        self.multi_agent.write_text(json.dumps(agents), encoding="utf-8")
+        frontend = json.loads(self.frontend.read_text(encoding="utf-8"))
+        transcript_path = self.root / frontend["browser"]["transcript_path"]
+        transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
+        transcript["verifier_agent_run_id"] = "implementation-run"
+        transcript_path.write_text(json.dumps(transcript), encoding="utf-8")
+        frontend["browser"]["verifier_agent_run_id"] = "implementation-run"
+        frontend["browser"]["transcript_sha256"] = hashlib.sha256(
+            transcript_path.read_bytes(),
+        ).hexdigest()
+        self.frontend.write_text(json.dumps(frontend), encoding="utf-8")
+        self._write_delivery_contract(stage="closure_candidate")
+
+        self.assertIn(
+            "frontend-black-box-run-mismatch",
+            self.codes(stage="closure_candidate"),
+        )
+
     def test_mobile_browser_must_bind_independent_black_box_run(self) -> None:
         trace = self.trace_fixture.matrix.read_text(encoding="utf-8").replace(
             "Change surfaces: ui,user-visible", "Change surfaces: ui,user-visible,mobile"

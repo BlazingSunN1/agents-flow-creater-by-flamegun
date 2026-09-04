@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import unittest
@@ -21,6 +22,11 @@ class FlowctlTests(unittest.TestCase):
             (["plan", "contract.json"], "plan_delivery_gates", ["contract.json"]),
             (["check", "frontend", "evidence.json"], "validate_frontend_evidence", ["evidence.json"]),
             (["check", "module-close", "bundle.json"], "validate_delivery_bundle", ["bundle.json"]),
+            (
+                ["check", "system-close", "--stage", "closure_candidate"],
+                "validate_system_delivery_bundle",
+                ["--stage", "closure_candidate"],
+            ),
         )
         for arguments, module_name, delegated in cases:
             with self.subTest(arguments=arguments), mock.patch.object(
@@ -47,6 +53,7 @@ class FlowctlTests(unittest.TestCase):
     def test_process_level_black_box_routes_public_and_optional_commands(self) -> None:
         cases = (
             (["check", "agents", "--help"], "校验项目 AGENTS.md 或脱敏公共模板"),
+            (["check", "system-close", "--help"], "--stage"),
             (["strict", "validate-lease", "--help"], "usage:"),
         )
         for arguments, expected in cases:
@@ -61,6 +68,56 @@ class FlowctlTests(unittest.TestCase):
                 )
                 self.assertEqual(0, completed.returncode, completed.stdout)
                 self.assertIn(expected, completed.stdout)
+
+    def test_process_level_system_close_forwards_explicit_stage(self) -> None:
+        from test_validate_system_delivery_bundle import SystemDeliveryBundleTests
+
+        fixture = SystemDeliveryBundleTests(
+            methodName="test_closure_candidate_aggregates_same_stage_module_bundles",
+        )
+        fixture.setUp()
+        try:
+            for path in fixture.bundle_paths:
+                bundle = json.loads(path.read_text(encoding="utf-8"))
+                bundle["stage"] = "closure_candidate"
+                evidence_path = fixture.root / bundle["artifacts"]["multi_agent_evidence"]
+                evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+                evidence["stage"] = "closure_candidate"
+                evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+                path.write_text(json.dumps(bundle, sort_keys=True), encoding="utf-8")
+            fixture._write_system_manifest()
+
+            def issue_codes(extra: list[str]) -> set[str]:
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        str(SCRIPT_ROOT / "flowctl.py"),
+                        "check",
+                        "system-close",
+                        "--manifest",
+                        str(fixture.manifest),
+                        "--project-root",
+                        str(fixture.root),
+                        "--json",
+                        *extra,
+                    ],
+                    cwd=SCRIPT_ROOT,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    check=False,
+                )
+                self.assertEqual(1, completed.returncode, completed.stdout)
+                payload = json.loads(completed.stdout)
+                return {item["code"] for item in payload["issues"]}
+
+            self.assertNotIn(
+                "system-module-not-complete",
+                issue_codes(["--stage", "closure_candidate"]),
+            )
+            self.assertIn("system-module-not-complete", issue_codes([]))
+        finally:
+            fixture.tearDown()
 
 
 if __name__ == "__main__":

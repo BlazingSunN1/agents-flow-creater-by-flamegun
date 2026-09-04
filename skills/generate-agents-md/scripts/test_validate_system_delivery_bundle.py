@@ -273,9 +273,9 @@ class SystemDeliveryBundleTests(unittest.TestCase):
         value["aggregation_spawn_receipt_sha256"] = hashlib.sha256(self.aggregation_receipt.read_bytes()).hexdigest()
         self.manifest.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
 
-    def codes(self, validator=lambda **_: []) -> set[str]:
+    def codes(self, validator=lambda **_: [], *, stage: str = "completion") -> set[str]:
         return {item.code for item in _test_only_validate_system_delivery_bundle(
-            manifest_path=self.manifest, project_root=self.root,
+            manifest_path=self.manifest, project_root=self.root, stage=stage,
             _test_only_module_validator=validator,
             _test_only_host_attestation_verifier=lambda *_: True,
         )}
@@ -292,6 +292,28 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             )
         }
         self.assertIn("system-dispatcher-receipt-not-validated", strict_codes)
+
+    def test_closure_candidate_aggregates_same_stage_module_bundles(self) -> None:
+        calls: list[dict[str, object]] = []
+        for path in self.bundle_paths:
+            bundle = json.loads(path.read_text(encoding="utf-8"))
+            bundle["stage"] = "closure_candidate"
+            evidence_path = self.root / bundle["artifacts"]["multi_agent_evidence"]
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            evidence["stage"] = "closure_candidate"
+            evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+            path.write_text(json.dumps(bundle, sort_keys=True), encoding="utf-8")
+        self._write_system_manifest()
+
+        self.assertEqual(
+            set(),
+            self.codes(lambda **kwargs: calls.append(kwargs) or [], stage="closure_candidate"),
+        )
+        self.assertEqual({"closure_candidate"}, {call["stage"] for call in calls})
+
+    def test_requested_stage_rejects_mismatched_or_invalid_system_aggregation(self) -> None:
+        self.assertIn("system-module-not-complete", self.codes(stage="closure_candidate"))
+        self.assertEqual({"system-stage-invalid"}, self.codes(stage="draft"))
 
     def test_old_module_without_requirement_closure_fields_fails_closed(self) -> None:
         bundle = json.loads(self.bundle_paths[0].read_text(encoding="utf-8"))
