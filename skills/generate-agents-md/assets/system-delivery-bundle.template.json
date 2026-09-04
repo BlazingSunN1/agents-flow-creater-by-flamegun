@@ -1,5 +1,6 @@
 {
   "schema_version": 2,
+  "runtime_receipt_schema_version": 2,
   "dispatcher_mode": "read-only",
   "authority_binding": {
     "locator": "AGENTS.md#machine-enforced-authority-matrix",
@@ -16,6 +17,7 @@
   "dispatcher_run_id": "{{DISPATCHER_RUN_ID}}",
   "dispatcher_spawn_receipt": "{{DISPATCHER_SPAWN_RECORD_PATH}}",
   "dispatcher_spawn_receipt_sha256": "{{DISPATCHER_SPAWN_RECORD_SHA256}}",
+  "dispatcher_owned_paths": [],
   "aggregation_writer_role": "SYSTEM_AGGREGATION",
   "aggregation_writer_title": "System Aggregation Writer",
   "aggregation_writer_provider": "codex-native-agent",
@@ -24,9 +26,12 @@
   "aggregation_writer_run_id": "{{AGGREGATION_RUN_ID}}",
   "aggregation_spawn_receipt": "{{AGGREGATION_SPAWN_RECORD_PATH}}",
   "aggregation_spawn_receipt_sha256": "{{AGGREGATION_SPAWN_RECORD_SHA256}}",
+  "aggregation_writer_owned_paths": ["{{SYSTEM_MANIFEST_PROJECT_RELATIVE_PATH}}"],
   "requirement_ids": ["{{SYSTEM_REQUIREMENT_ID}}"],
   "code_version": "{{CODE_VERSION}}",
   "build_id": "{{BUILD_ID}}",
+  "baseline_sha256": "{{BASELINE_SHA256}}",
+  "candidate_sha256": "{{CANDIDATE_SHA256}}",
   "agents_path": "AGENTS.md",
   "agents_sha256": "{{AGENTS_SHA256}}",
   "system_changed_files": ["{{CHANGED_FILE}}"],

@@ -37,6 +37,10 @@ class SwimlaneHtmlContractTests(unittest.TestCase):
         self.assertGreaterEqual(HTML.count('class="flow"'), 7)
         self.assertGreaterEqual(HTML.count('class="module-flow"'), 30)
 
+    def test_current_write_and_release_boundaries_are_visible(self) -> None:
+        self.assertIn("写前校验模块写域", HTML)
+        self.assertIn("干净 Git 提交", HTML)
+
     def test_page_is_self_contained_and_uses_required_palette_and_weight(self) -> None:
         self.assertIsNone(re.search(r'<(?:script|link|img)[^>]+(?:src|href)="https?://', HTML))
         self.assertIn('<link rel="icon" href="data:,">', HTML)

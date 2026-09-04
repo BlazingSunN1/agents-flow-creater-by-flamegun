@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "receipt_kind": "codex-native-spawn-result",
   "provider": "codex-native-agent",
   "requested_model": "gpt-5.6-sol",
@@ -10,5 +10,12 @@
   "run_id": "{{INDEPENDENT_GATE_RUN_ID}}",
   "role": "{{LOWERCASE_GATE_ROLE}}-gate",
   "module": "{{MODULE_NAME}}",
-  "maintainer_title": "{{UPPERCASE_GATE_ROLE}} Gate Reviewer"
+  "maintainer_title": "{{UPPERCASE_GATE_ROLE}} Gate Reviewer",
+  "read_only": true,
+  "authority_matrix_sha256": "{{AUTHORITY_MATRIX_SHA256}}",
+  "owned_paths": ["{{OWNED_PROJECT_RELATIVE_PATH}}"],
+  "baseline_sha256": "{{BASELINE_SHA256}}",
+  "code_version": "{{CODE_VERSION}}",
+  "build_id": "{{BUILD_ID}}",
+  "candidate_sha256": "{{CANDIDATE_SHA256}}"
 }

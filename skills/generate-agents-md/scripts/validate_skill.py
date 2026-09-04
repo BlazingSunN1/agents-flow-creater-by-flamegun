@@ -107,6 +107,7 @@ def _distribution_command(
     command = [
         sys.executable, "scripts/validate_plugin_distribution.py",
         "--source-plugin-root", str(root.parent.parent),
+        "--require-source-provenance",
     ]
     if installed_plugin_root:
         command.extend(("--installed-plugin-root", installed_plugin_root))
@@ -219,7 +220,9 @@ def effective_mode(root: Path, mode: str, changed_files: tuple[str, ...]) -> str
     return "full" if must_escalate else "affected"
 
 
-def run_check(name: str, command: list[str], root: Path) -> CheckResult:
+def run_check(
+    name: str, command: list[str], root: Path, *, timeout_seconds: float = 600.0,
+) -> CheckResult:
     started = time.monotonic()
     try:
         result = subprocess.run(
@@ -228,10 +231,20 @@ def run_check(name: str, command: list[str], root: Path) -> CheckResult:
             text=True,
             capture_output=True,
             check=False,
+            timeout=timeout_seconds,
             env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
         output = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part.strip())
         returncode = result.returncode
+    except subprocess.TimeoutExpired as error:
+        captured = "\n".join(
+            part.decode(errors="replace") if isinstance(part, bytes) else (part or "")
+            for part in (error.stdout, error.stderr)
+        ).strip()
+        output = f"check timed out after {timeout_seconds:g}s"
+        if captured:
+            output += "\n" + captured[-3500:]
+        returncode = 124
     except OSError as error:
         output, returncode = str(error), 127
     return CheckResult(name, command, returncode, round(time.monotonic() - started, 3), output[-4000:])
@@ -249,6 +262,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--installed-plugin-root", help="覆盖自动推导的当前插件缓存目录")
     parser.add_argument("--direct-skills-root", help="覆盖 ~/.codex/skills 直接安装目录")
     parser.add_argument(
+        "--check-timeout-seconds", type=float, default=600.0,
+        help="每个子检查的超时秒数（默认 600）",
+    )
+    parser.add_argument(
         "--require-direct-skills", action="store_true",
         help="分发校验时要求插件内每个 Skill 都有同名直接安装副本",
     )
@@ -256,27 +273,39 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    parser = build_parser()
-    args = parser.parse_args()
+def _validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if args.mode == "affected" and not args.changed_files:
         parser.error("--affected requires at least one --changed-file")
     if args.distribution and args.mode != "full":
         parser.error("--distribution requires --full")
     if args.require_direct_skills and not args.distribution:
         parser.error("--require-direct-skills requires --distribution")
-    resolved_mode = effective_mode(SKILL_ROOT, args.mode, tuple(args.changed_files))
-    results = [
-        run_check(name, command, SKILL_ROOT)
-        for name, command in build_checks(
+    if args.check_timeout_seconds <= 0:
+        parser.error("--check-timeout-seconds must be positive")
+
+
+def _execute_checks(args: argparse.Namespace) -> list[CheckResult]:
+    results: list[CheckResult] = []
+    for name, command in build_checks(
             mode=args.mode,
             changed_files=tuple(args.changed_files),
             distribution=args.distribution,
             require_direct_skills=args.require_direct_skills,
             installed_plugin_root=args.installed_plugin_root,
             direct_skills_root=args.direct_skills_root,
-        )
-    ]
+        ):
+        if not args.json:
+            print(f"RUN {name}", flush=True)
+        results.append(run_check(
+            name, command, SKILL_ROOT,
+            timeout_seconds=args.check_timeout_seconds,
+        ))
+    return results
+
+
+def _emit_results(
+    args: argparse.Namespace, results: list[CheckResult], resolved_mode: str,
+) -> None:
     valid = all(item.returncode == 0 for item in results)
     if args.json:
         print(
@@ -302,6 +331,16 @@ def main() -> int:
                 print(item.output_tail)
         suffix = " reason=unknown-affected-mapping" if resolved_mode != args.mode else ""
         print(f"valid={str(valid).lower()} requested={args.mode} effective={resolved_mode} checks={len(results)}{suffix}")
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    _validate_cli_args(parser, args)
+    resolved_mode = effective_mode(SKILL_ROOT, args.mode, tuple(args.changed_files))
+    results = _execute_checks(args)
+    valid = all(item.returncode == 0 for item in results)
+    _emit_results(args, results, resolved_mode)
     return 0 if valid else 1
 
 

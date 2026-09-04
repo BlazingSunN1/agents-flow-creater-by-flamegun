@@ -23,6 +23,8 @@
 
 根 AGENTS.md 必须内嵌唯一的 `Machine-Enforced Authority Matrix`，并由 Machine Policy 以规范定位符和 canonical JSON SHA-256 绑定。矩阵使用封闭枚举，为每行绑定单一 actor/action/object、repository scope、注册模块键和本地协调或宿主证明 receipt；固定 `deny` 不得被自然语言、委派、控制动词或行序覆盖。实际 Agent/run、完成状态、精确 `pass` verdict、receipt/candidate SHA-256、代码版本和 Build ID 来自结构化门禁证明；严格模式追加宿主结果。矩阵缺失、重复键、未知字段、固定行漂移或 path/SHA 漂移均失败关闭。
 
+`schema_version=2` 的封闭 `expanded-authority-matrix-v1` 声明只是同一 96 行 v1 权限矩阵的紧凑编码。兼容适配器必须先按闭集合同展开为 v1，再对展开结果计算并核对声明的 canonical SHA-256；不得把紧凑 v2 JSON 的原始哈希误当成权限身份。既有完整 v1 表仍可验证；未知合同、未知字段、重复键、展开结果或声明哈希漂移一律失败关闭。
+
 每次被 Dispatcher 派发的模块维护实现 run 和独立门禁 run 必须使用不同的 Codex 原生 `gpt-5.6-sol` Agent/run；实现/维护固定 `reasoning_effort=high`，审核、黑盒和独立验收固定 `reasoning_effort=xhigh`。默认本地协调 receipt 精确绑定请求配置、Agent/run、角色、模块、owned paths、input/output SHA-256、baseline/code/build 和 verdict，但不证明宿主实际运行身份；严格模式再由可信宿主校验器复核。Dispatcher、聚合写者、维护者和门禁审查者的 Agent/run 必须全局唯一；身份复用、配置替换、记录漂移或失败门禁均阻塞，默认模式不会仅因缺宿主校验器而阻塞。
 
 稳定标题是长期规则；provider、模型、thread ID、session ID、一次性 run ID、在线状态和当前任务队列都是运行时事实，只能放运行时登记或证据。公共模板使用占位符，真实项目必须解析为经验证值。
@@ -66,9 +68,12 @@ Dispatcher 角色始终只读，不得修改业务代码，不得写共享计划
 - 其他模块维护 Agent 只读提供边界意见；独立 UI/UX、验收用例、需求一致性、领域、变更审查和黑盒 Agent 对代码和共享记录只读。
 - Dispatcher 组织全流程验证并核对证据绑定，不代替独立结论。实现 Agent 和 Dispatcher 都不得自证独立门禁。
 - 每个已启动的独立门禁必须分别保存 spawn receipt 和 output result。completion 阶段仅有 spawn receipt 必须 fail closed；implementation 阶段尚未启动且不适用的门禁仍按阶段规则省略，不得伪造空结果占位。
+- 新 receipt 必须遵循 `role-specific-local-receipts.md` 的 schema v2 closed contract：实现 spawn 独占 `active_write_lease`，门禁 spawn/output 只读且绑定同一 candidate；outer evidence 明示 authority SHA、精确 owned paths 和 lease，禁止验证器从当前文件隐式补值。schema v1 仅为 legacy 兼容。
 - 共享记录由唯一实现 Agent 使用项目规定的锁、期望哈希和原子更新命令写入；多个 Agent 不得并发写入。
 - 原子更新命令写入前重新解析根 AGENTS.md canonical ownership，并逐项匹配 module key、稳定标题、Agent/run、精确 target/owned paths、当前 AGENTS/authority-matrix SHA-256 与唯一活动协调租约。默认本地模式校验结构、哈希、锁与 CAS；严格模式再校验宿主证明。缺租约、跨模块目标或 identity/ownership/lease 漂移时不得创建目录或替换文件。
 - 机器强制范围仅覆盖经 `update_project_record.py` 或严格模式 guarded updater 的受控写入；本 Skill 无法归因或阻止绕过入口的同一 OS 用户 shell/直接文件写入。需要文件系统级强制时，必须另用隔离 worktree、容器或 OS 权限；默认模式不得声称已提供该隔离。
+- 项目 Agent 的写入还必须通过 `scripts/validate_task_write_scope.py` 限定在规范项目根/分配 worktree 与自有路径内。全局 Skill/插件源码、缓存和直装副本对项目任务只读；只有当前用户请求显式授权的专用 Skill-maintainer run 才可写一个精确维护源码根，且不得把项目租约或层级关系当成该授权。
+- Skill/插件缓存与直装副本是派生产物，只能从获授权源码根经验证、cachebuster 和重装流程生成，不得直接编辑。目标校验器只检查声明路径，不能提供 OS 级隔离；真实强制仍需宿主沙箱、独立 worktree、容器或 OS 权限。
 - 跨模块或系统级任务只有在每个受影响模块都关闭当前需求 ID、代码/构建、定向测试、独立验收、模块 run/latest 与适用流程变化泳道证据，且没有开放 finding 后才能完成；Dispatcher 只能聚合核对，不能替任何模块补签。
 
 跨模块时，每个维护 Agent 用 `assets/module-delivery-bundle.template.json` 声明完成包并运行模块门禁。包必须绑定 canonical 疑问清单及当前需求基线；每个未答项保持非阻塞 P2，伪造 `ANSWERED`、基线/哈希漂移或失败门禁才失败关闭。所有模块关闭后，不同的原生 Sol `SYSTEM_AGGREGATION` 写者生成并哈希绑定系统清单，只读 Dispatcher 调用 `scripts/validate_system_delivery_bundle.py`。默认本地模式重验逐模块交付、身份分离、规范化模块集合、需求/变更并集、所有权、code/build、清单哈希与零开放缺陷；严格模式再复核全部宿主 provenance。
@@ -93,10 +98,13 @@ Dispatcher 角色始终只读，不得修改业务代码，不得写共享计划
 
 - 映射表中的模块键和稳定标题均唯一，拥有路径/边界不重叠或已明确共享协调方式。
 - 根文件只包含唯一 canonical authority matrix，Machine Policy 定位符和 SHA-256 与其一致；稳定能力不混入 run 事实，固定 deny 未被项目文字改写。
+- 若根文件或发布模板使用 `expanded-authority-matrix-v1`，兼容适配器已先展开闭集 v2，再核对展开 v1 的 canonical SHA-256；没有使用紧凑 JSON 的原始哈希替代权限身份。
 - 每个大功能模块都满足稳定能力、独立可测入口/输出和非重叠边界定义；辅助文件没有被错误拆成长期 Agent。
 - 每个大功能模块的需求到验收、证据与维护闭环均绑定当前身份；维护 Agent 没有自验自己的实现。
 - Dispatcher 角色始终只读；需要实现时使用不同 implementation Agent/run，且不得复用 Dispatcher 的 Agent ID 或 run ID；严格模式追加宿主证明。
 - 主、父、子层级没有固有写权；每项实现任务只有一个与模块、身份、owned paths 和唯一活动模块写租约完全匹配的写者。
+- 项目 Agent 的全部写目标已通过 `validate_task_write_scope.py` 解析为规范项目根/分配 worktree 内的自有路径；全局 Skill/插件源码、缓存和直装副本保持只读。
+- 若任务明确维护 Skill/插件，当前用户请求已授权一个精确维护源码根，专用 Skill-maintainer run 未写兄弟根或直接修改缓存/直装副本；未把声明目标校验冒充 OS 级隔离。
 - 系统清单由独立 `SYSTEM_AGGREGATION` 写者生成并用 output receipt 绑定候选正文，Dispatcher 只读调用；所有参与者的 `agent_id` 与 `run_id` 全局唯一，严格模式追加宿主证明。
 - 每项实现任务只有一个写者，所有审查和验收角色只读。
 - 交接包字段完整且没有完整聊天、无关历史或其他 Agent 推理。

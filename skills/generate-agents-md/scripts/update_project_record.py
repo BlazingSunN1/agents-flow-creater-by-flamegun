@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import os
 import secrets
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - exercised through the explicit platform guard
+    fcntl = None
 
 from implementation_agent_validation import HostAttestationVerifier
 from project_record_authorization import (
@@ -66,6 +70,8 @@ def _update_record_impl(
     lease_path: Path, lease_sha256: str, verifier: HostAttestationVerifier | None,
     authorization_mode: str,
 ) -> str:
+    if fcntl is None:
+        raise RuntimeError("native-windows-unsupported-use-wsl")
     root = project_root.resolve()
     expected_root = os.stat(root, follow_symlinks=False)
     _resolve_target(target, root)

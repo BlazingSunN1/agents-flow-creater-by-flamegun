@@ -18,30 +18,10 @@ from system_aggregate_validation import validate_system_aggregate_sets
 from system_delivery_cli import main
 from system_delivery_path_validation import normalized_project_path as _normalized_project_path
 from delivery_authority_binding import agents_declares_authority_binding, authority_binding_valid, receipt_repeats_authority_binding
-SYSTEM_FIELDS = {
-    "schema_version", "dispatcher_mode", "requirement_ids", "code_version", "build_id",
-    "agents_path", "agents_sha256", "system_changed_files", "affected_modules",
-    "module_bundles", "open_findings", "dispatcher_title", "dispatcher_provider",
-    "dispatcher_model", "dispatcher_agent_id", "dispatcher_run_id",
-    "dispatcher_spawn_receipt", "dispatcher_spawn_receipt_sha256", "aggregation_writer_role",
-    "aggregation_writer_title", "aggregation_writer_provider", "aggregation_writer_model",
-    "aggregation_writer_agent_id", "aggregation_writer_run_id",
-    "aggregation_spawn_receipt", "aggregation_spawn_receipt_sha256", "authority_binding",
-}
-ENTRY_FIELDS = {"module", "bundle_manifest_path", "bundle_manifest_sha256"}
-MODULE_FIELDS = {
-    "schema_version", "module", "requirement_ids", "code_version", "build_id",
-    "requirement_baseline_version", "requirement_baseline_sha256",
-    "maintainer_title", "maintainer_provider", "maintainer_model", "maintainer_reasoning_effort",
-    "maintainer_agent_id", "maintainer_spawn_receipt",
-    "maintainer_spawn_receipt_sha256", "implementation_run_id", "stage",
-    "open_findings", "artifacts", "authority_binding",
-}
-ARTIFACT_FIELDS = {
-    "agents", "trace", "context", "command_manifest", "multi_agent_evidence", "swimlane_evidence", "frontend_evidence",
-    "requirement_questions", "requirement_questions_sha256",
-}
-ARTIFACT_HASH_FIELDS = {"requirement_questions_sha256"}
+from system_delivery_schema import (
+    ARTIFACT_FIELDS, ARTIFACT_HASH_FIELDS, ENTRY_FIELDS, LEGACY_SYSTEM_FIELDS,
+    MODULE_FIELDS, SYSTEM_FIELDS,
+)
 @dataclass(frozen=True)
 class Issue:
     severity: str
@@ -126,7 +106,15 @@ def _read_object(path: Path, source: str) -> tuple[dict[str, object], list[Issue
         return {}, [_issue("system-bundle-invalid-json", "交付清单必须是单一 JSON 对象", source)]
     return value, []
 def _validate_system_shape(value: dict[str, object], source: str) -> list[Issue]:
-    issues = _exact_fields(value, SYSTEM_FIELDS, "system-bundle-schema", source)
+    runtime_receipt_schema = value.get("runtime_receipt_schema_version")
+    expected_fields = SYSTEM_FIELDS if runtime_receipt_schema == 2 else LEGACY_SYSTEM_FIELDS
+    issues = _exact_fields(value, expected_fields, "system-bundle-schema", source)
+    if runtime_receipt_schema is not None and runtime_receipt_schema != 2:
+        issues.append(_issue(
+            "system-runtime-receipt-schema",
+            "runtime_receipt_schema_version 省略时使用 legacy receipt schema 1；显式值只能为 2",
+            source,
+        ))
     if (type(value.get("schema_version")) is not int or value.get("schema_version") != 2
             or value.get("dispatcher_mode") != "read-only"
             or value.get("aggregation_writer_role") != "SYSTEM_AGGREGATION"):

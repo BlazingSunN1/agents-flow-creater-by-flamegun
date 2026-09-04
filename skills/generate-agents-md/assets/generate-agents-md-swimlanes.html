@@ -130,7 +130,7 @@
 
   <section id="system-overview" aria-labelledby="overview-title">
     <h2 id="overview-title">系统总览</h2>
-    <p>验证分层：迭代使用 <code>validate_skill.py --quick</code>；已知标准影响闭环使用 <code>validate_skill.py --affected --changed-file &lt;path&gt;</code>；发布、高风险、跨模块或未知映射使用 <code>validate_skill.py --full</code>，快速结果不能提升为完成证据。</p>
+    <p>验证分层：迭代使用 <code>validate_skill.py --quick</code>；已知标准影响闭环使用 <code>validate_skill.py --affected --changed-file &lt;path&gt;</code>；发布、高风险、跨模块或未知映射使用 <code>validate_skill.py --full</code>，快速结果不能提升为完成证据。发布分发还要求源码来自干净 Git 提交，并与安装副本一致。</p>
     <div class="diagram">
       <svg viewBox="0 0 960 940" role="img" aria-labelledby="overview-svg-title overview-svg-desc">
         <title id="overview-svg-title">Agents Flow Creater by FlameGun 系统总览</title>
@@ -243,13 +243,13 @@
   <details id="module-m03" class="module-detail" aria-labelledby="module-m03-title">
     <summary><span id="module-m03-title" role="heading" aria-level="2">M03 实现与持续规范</span></summary>
     <div class="diagram"><svg viewBox="0 0 960 1365" role="img" aria-labelledby="m03-svg-title m03-svg-desc" style="--module-arrow: url(#module-arrow-m03)">
-      <title id="m03-svg-title">M03 实现与持续规范模块细化图</title><desc id="m03-svg-desc">唯一实现 Agent 先把批准追踪项从真实入口跑到可观测业务结果，冻结代码、构建、验收命令和证据身份后才进行非必要门禁与质量打磨；每个打磨候选重放冻结验收，回归先恢复最小闭环。普通增量只累计变更和证据，模块形成闭环候选或人工主动要求时才审查当前指纹。</desc>
+      <title id="m03-svg-title">M03 实现与持续规范模块细化图</title><desc id="m03-svg-desc">唯一实现 Agent 写入前先校验当前模块拥有路径，再把批准追踪项从真实入口跑到可观测业务结果，冻结代码、构建、验收命令和证据身份后才进行非必要门禁与质量打磨；每个打磨候选重放冻结验收，回归先恢复最小闭环。普通增量只累计变更和证据，模块形成闭环候选或人工主动要求时才审查当前指纹。</desc>
       <defs><marker id="module-arrow-m03" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="currentColor"></path></marker></defs>
       <rect class="lane" x="0" y="0" width="240" height="1365"></rect><rect class="lane alt" x="240" y="0" width="240" height="1365"></rect><rect class="lane" x="480" y="0" width="240" height="1365"></rect><rect class="lane alt" x="720" y="0" width="240" height="1365"></rect>
       <rect class="lane-head" x="0" y="0" width="240" height="60"></rect><rect class="lane-head" x="240" y="0" width="240" height="60"></rect><rect class="lane-head" x="480" y="0" width="240" height="60"></rect><rect class="lane-head" x="720" y="0" width="240" height="60"></rect>
       <g class="lane-title" text-anchor="middle"><text x="120" y="38">唯一写者 Agent</text><text x="360" y="38">真实命令 / 测试</text><text x="600" y="38">浏览器 / E2E</text><text x="840" y="38">原子记录 / 总门禁</text></g>
       <circle cx="120" cy="92" r="11" fill="var(--coral)"></circle>
-      <rect class="activity" x="42" y="125" width="156" height="62" rx="10"></rect><text class="node-label" x="120" y="152" text-anchor="middle"><tspan x="120">只实现已批准</tspan><tspan x="120" dy="20">REQ / FEAT</tspan></text>
+      <rect class="activity" x="42" y="125" width="156" height="62" rx="10"></rect><text class="node-label" x="120" y="152" text-anchor="middle"><tspan x="120">写前校验模块写域</tspan><tspan x="120" dy="20">只实现批准 REQ/FEAT</tspan></text>
       <rect id="m03-minimum-result" class="activity" x="282" y="230" width="156" height="62" rx="10"></rect><text class="node-label" x="360" y="257" text-anchor="middle"><tspan x="360">真实入口跑通</tspan><tspan x="360" dy="20">最小业务成果</tspan></text>
       <rect id="m03-affected-checks" class="activity" x="522" y="335" width="156" height="62" rx="10"></rect><text class="node-label" x="600" y="362" text-anchor="middle"><tspan x="600">通过必要受影响验证</tspan><tspan x="600" dy="20">正确执行/不可逆保护</tspan></text>
       <rect id="m03-freeze-result" class="activity" x="762" y="440" width="156" height="62" rx="10"></rect><text class="node-label" x="840" y="457" text-anchor="middle"><tspan x="840">冻结可用成果</tspan><tspan x="840" dy="18">版本/构建/验收哈希</tspan><tspan x="840" dy="18">形成可复现基线</tspan></text>
@@ -264,7 +264,7 @@
       <text class="edge-label" x="848" y="1061">是</text><text class="edge-label" x="535" y="980">否：继续实现，仅累计增量</text><text class="edge-label" x="715" y="1195">是：进入黑盒</text><text class="edge-label" x="220" y="1320">否：修复或继续实现，结论失效后重审</text>
       <path class="module-flow" d="M120 103V125"></path><path class="module-flow" d="M120 187C120 210 330 205 345 230"></path><path class="module-flow" data-from="m03-minimum-result" data-to="m03-affected-checks" d="M360 292C360 320 570 310 585 335"></path><path class="module-flow" data-from="m03-affected-checks" data-to="m03-freeze-result" d="M600 397C600 425 810 415 825 440"></path><path class="module-flow" data-from="m03-freeze-result" data-to="m03-harden-after-freeze" d="M840 502C840 530 390 520 375 545"></path><path class="module-flow" data-from="m03-harden-after-freeze" data-to="m03-mapped-verification" d="M360 607C360 635 570 625 585 650"></path><path class="module-flow" d="M600 712C600 740 810 730 825 755"></path><path class="module-flow" data-from="m03-mapped-verification" data-to="m03-regression-preservation" d="M600 712C600 820 810 820 825 860"></path><path class="module-flow" d="M840 817V860"></path><path class="module-flow" d="M840 922V945"></path><path id="m03-trigger-review" class="module-flow" d="M840 1045V1070"></path><path id="m03-trigger-continue" class="module-flow" d="M755 995H720V156H198"></path><path class="module-flow" d="M840 1132C840 1155 620 1135 600 1155"></path><path class="module-flow" d="M690 1210H822"></path><path class="module-flow" d="M510 1210H480V1340H20V156H42"></path>
     </svg></div>
-    <p>上游输入：批准的追踪项、设计和验收用例；对外输出：唯一写者先从真实入口跑通最小业务流程，通过必要受影响验证，再冻结代码版本、Build ID、验收命令、可观测结果和证据 SHA-256；随后生成无回归的打磨候选、真实命令结果、原子同步证据，以及绑定当前需求基线与权限矩阵的模块/系统交付包。下游依赖：风险触发独立验收。</p>
+    <p>上游输入：批准的追踪项、设计和验收用例；对外输出：唯一写者先校验当前模块拥有路径，再从真实入口跑通最小业务流程，通过必要受影响验证，并冻结代码版本、Build ID、验收命令、可观测结果和证据 SHA-256；随后生成无回归的打磨候选、真实命令结果、原子同步证据，以及绑定当前需求基线与权限矩阵的模块/系统交付包。下游依赖：风险触发独立验收。</p>
     <p><strong>成果先行与精确触发：</strong>冻结后才启动非必要门禁、重构、代码质量、性能或体验打磨；每个打磨候选必须重放冻结验收，发生回归时先恢复最小业务闭环，治理完整或门禁通过不能替代业务成果。门禁规划器只读输出，由唯一租约写者 CAS 合并；每个可执行门禁 receipt 绑定当前输入指纹、真实输出及哈希，最终聚合校验只在闭环或完成阶段接收同一交付契约并逐项绑定实际工件，实时执行且无自引用 receipt。迭代使用 quick / affected / full，未知影响自动升 full。移动 Web 运行浏览器移动门禁，原生移动运行 native_mobile_tests，跨端变更同时运行两套门禁；普通用户可见文本不自动启动 UI/UX 原型 Agent。人工触发由独立审查者执行，只要求当前阶段已经到达的业务 receipt 与审查 receipt，不提前触发最终聚合；先判定 swimlane_applicable，再三态判定 flow_impact：无适用泳道时无图无门禁，有适用泳道且无流程变化才运行 swimlane_freshness，changed 稳定候选批量写图。审查当前指纹最多3轮/同错2次。</p>
     <a class="back-link" href="#system-overview">返回系统总览</a>
   </details>

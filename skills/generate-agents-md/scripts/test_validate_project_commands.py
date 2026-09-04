@@ -64,6 +64,20 @@ class ProjectCommandValidatorTests(unittest.TestCase):
     def test_public_template_structure_passes(self) -> None:
         self.assertEqual([], validate_project_commands(PUBLIC_TEMPLATE, project_root=SKILL_ROOT, template=True))
 
+    def test_write_scope_command_is_required_and_not_constant_success(self) -> None:
+        self.assertIn("task_write_scope", REQUIRED_COMMANDS)
+        data = json.loads(PUBLIC_TEMPLATE.read_text(encoding="utf-8"))
+        command = next(item for item in data["commands"] if item["id"] == "task_write_scope")
+        self.assertEqual("scripts/validate_task_write_scope.py", command["source"])
+        self.assertIn("--module-key", command["argv"])
+        self.assertIn("--target", command["argv"])
+        command["argv"] = ["true"]
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        codes = {item.code for item in validate_project_commands(
+            self.path, project_root=self.root, template=True,
+        )}
+        self.assertIn("unsafe-command", codes)
+
     def test_template_mode_rejects_nested_unsafe_command(self) -> None:
         data = json.loads(PUBLIC_TEMPLATE.read_text(encoding="utf-8"))
         data["commands"][0]["argv"] = ["sh", "-c", "exit 0"]

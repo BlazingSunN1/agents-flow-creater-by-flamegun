@@ -7,7 +7,10 @@ from pathlib import Path
 from implementation_agent_validation import (
     HostAttestationVerifier,
     Issue,
+    ReceiptReplayState,
+    _v2_expected_bindings,
     validate_native_spawn_record,
+    validate_v2_binding_source,
 )
 from native_gate_agent_validation import validate_native_gate_agent
 
@@ -40,8 +43,9 @@ def validate_system_actors(
     verifier: HostAttestationVerifier | None,
 ) -> list[Issue]:
     issues: list[Issue] = []
-    issues.extend(_validate_dispatcher(value, root, verifier))
-    issues.extend(_validate_aggregation_writer(value, root, verifier))
+    state = ReceiptReplayState.empty()
+    issues.extend(_validate_dispatcher(value, root, verifier, state))
+    issues.extend(_validate_aggregation_writer(value, root, verifier, state))
     return issues
 
 
@@ -55,6 +59,7 @@ def validate_module_gate_actors(
     used_runs = {str(evidence.get("implementation_run_id", ""))}
     reviewer_agents: set[str] = set()
     reviewer_runs: set[str] = set()
+    receipt_state = ReceiptReplayState.empty()
     gates = evidence.get("gates")
     if not isinstance(gates, list):
         return [Issue("error", "system-module-gates-invalid", "模块 gates 必须是数组")], frozenset(), frozenset()
@@ -65,6 +70,7 @@ def validate_module_gate_actors(
         role = str(raw.get("role", ""))
         issues.extend(validate_native_gate_agent(
             raw, role, module, root, used_agents, used_runs, verifier, evidence,
+            receipt_state,
         ))
         if isinstance(raw.get("agent_id"), str):
             reviewer_agents.add(str(raw["agent_id"]))
@@ -119,6 +125,7 @@ def _validate_module_closure(evidence: dict[str, object]) -> list[Issue]:
 def _validate_dispatcher(
     value: dict[str, object], root: Path,
     verifier: HostAttestationVerifier | None,
+    state: ReceiptReplayState,
 ) -> list[Issue]:
     issues: list[Issue] = []
     if any(value.get(f"dispatcher_{key}") != expected for key, expected in DISPATCHER_IDENTITY.items()):
@@ -129,6 +136,8 @@ def _validate_dispatcher(
     expected = _base_expected(
         value, prefix="dispatcher", receipt_kind="codex-native-spawn-result",
         role="dispatcher", title=DISPATCHER_IDENTITY["title"],
+        read_only=True, owned_paths_field="dispatcher_owned_paths",
+        reasoning_effort="xhigh", root=root, issues=issues,
     )
     issues.extend(validate_native_spawn_record(
         data=value, root=root, expected=expected,
@@ -136,6 +145,7 @@ def _validate_dispatcher(
         hash_field="dispatcher_spawn_receipt_sha256",
         code_prefix="system-dispatcher", label="Dispatcher",
         host_attestation_verifier=verifier,
+        receipt_replay_state=state,
     ))
     return issues
 
@@ -143,6 +153,7 @@ def _validate_dispatcher(
 def _validate_aggregation_writer(
     value: dict[str, object], root: Path,
     verifier: HostAttestationVerifier | None,
+    state: ReceiptReplayState,
 ) -> list[Issue]:
     issues: list[Issue] = []
     if (value.get("aggregation_writer_role") != "SYSTEM_AGGREGATION"
@@ -155,6 +166,8 @@ def _validate_aggregation_writer(
     expected = _base_expected(
         value, prefix="aggregation_writer", receipt_kind="codex-native-output-result",
         role="system-aggregation", title=AGGREGATION_IDENTITY["title"],
+        read_only=False, owned_paths_field="aggregation_writer_owned_paths",
+        reasoning_effort="high", root=root, issues=issues,
     )
     expected["candidate_payload_sha256"] = system_candidate_payload_sha256(value)
     expected["authority_binding"] = value.get("authority_binding")
@@ -164,16 +177,21 @@ def _validate_aggregation_writer(
         hash_field="aggregation_spawn_receipt_sha256",
         code_prefix="system-aggregation", label="系统聚合写者",
         host_attestation_verifier=verifier,
+        receipt_replay_state=state,
     ))
     return issues
 
 
 def _base_expected(
     value: dict[str, object], *, prefix: str, receipt_kind: str,
-    role: str, title: str,
+    role: str, title: str, read_only: bool, owned_paths_field: str,
+    reasoning_effort: str, root: Path, issues: list[Issue],
 ) -> dict[str, object]:
-    return {
-        "schema_version": 1,
+    # The system bundle itself has long used schema_version=2.  Receipt schema
+    # evolution is explicit so old bundles continue to validate as receipt v1.
+    schema_version = value.get("runtime_receipt_schema_version", 1)
+    expected = {
+        "schema_version": schema_version,
         "receipt_kind": receipt_kind,
         "provider": "codex-native-agent",
         "requested_model": "gpt-5.6-sol",
@@ -184,3 +202,27 @@ def _base_expected(
         "module": "system",
         "maintainer_title": title,
     }
+    if schema_version == 2:
+        authority = value.get("authority_binding")
+        source = {
+            "authority_matrix_sha256": (
+                authority.get("sha256") if isinstance(authority, dict) else None
+            ),
+            "owned_paths": value.get(owned_paths_field),
+            "baseline_sha256": value.get("baseline_sha256"),
+            "code_version": value.get("code_version"),
+            "build_id": value.get("build_id"),
+            "candidate_sha256": value.get("candidate_sha256"),
+        }
+        issues.extend(validate_v2_binding_source(
+            source, root, require_active_lease=False,
+            allow_empty_owned_paths=read_only, code_prefix=f"system-{role}",
+        ))
+        expected.update(_v2_expected_bindings(
+            source, read_only=read_only, include_active_lease=False,
+        ))
+        expected.update({
+            "requested_reasoning_effort": reasoning_effort,
+            "recorded_reasoning_effort": reasoning_effort,
+        })
+    return expected

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -89,6 +90,56 @@ def _package_symlink_issues(plugin_root: Path) -> list[Issue]:
     return issues
 
 
+def _source_provenance_issues(source_plugin: Path) -> list[Issue]:
+    try:
+        top_result = subprocess.run(
+            ["git", "-C", str(source_plugin), "rev-parse", "--show-toplevel"],
+            text=True, capture_output=True, check=False,
+        )
+    except OSError as error:
+        return [Issue("source-git-unavailable", str(source_plugin), str(error))]
+    if top_result.returncode != 0:
+        return [Issue(
+            "source-not-git-versioned", str(source_plugin),
+            "release source must be inside a Git repository with a committed revision",
+        )]
+    repository_root = Path(top_result.stdout.strip()).resolve()
+    try:
+        relative = source_plugin.resolve().relative_to(repository_root)
+    except ValueError:
+        return [Issue(
+            "source-not-git-versioned", str(source_plugin),
+            "release source is outside the discovered Git repository",
+        )]
+    head_result = subprocess.run(
+        ["git", "-C", str(repository_root), "rev-parse", "--verify", "HEAD"],
+        text=True, capture_output=True, check=False,
+    )
+    if head_result.returncode != 0:
+        return [Issue(
+            "source-missing-commit", str(source_plugin),
+            "release source has no committed Git revision",
+        )]
+    status_result = subprocess.run(
+        [
+            "git", "-C", str(repository_root), "status", "--porcelain",
+            "--untracked-files=all", "--", relative.as_posix() or ".",
+        ],
+        text=True, capture_output=True, check=False,
+    )
+    if status_result.returncode != 0:
+        return [Issue(
+            "source-git-status-failed", str(source_plugin),
+            status_result.stderr.strip() or "git status failed",
+        )]
+    if status_result.stdout.strip():
+        return [Issue(
+            "dirty-source-package", str(source_plugin),
+            "release source contains tracked or untracked package changes not bound to HEAD",
+        )]
+    return []
+
+
 def _tree_issues(expected: dict[str, str], actual: dict[str, str], code: str, root: Path) -> list[Issue]:
     missing = sorted(set(expected) - set(actual))
     extra = sorted(set(actual) - set(expected))
@@ -123,16 +174,25 @@ def _direct_skill_issues(
 
 def validate_distribution(
     source_plugin: Path, installed_plugin: Path, direct_skills_root: Path,
-    require_direct_skills: bool = False,
+    require_direct_skills: bool = False, require_source_provenance: bool = False,
 ) -> list[Issue]:
+    provenance_issues = (
+        _source_provenance_issues(source_plugin) if require_source_provenance else []
+    )
     if not installed_plugin.is_dir():
-        return [Issue("missing-installed-plugin", str(installed_plugin), "installed plugin cache is missing")]
+        return [*provenance_issues, Issue(
+            "missing-installed-plugin", str(installed_plugin), "installed plugin cache is missing",
+        )]
     try:
         source_manifest = _manifest(source_plugin)
         installed_manifest = _manifest(installed_plugin)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         return [Issue("invalid-plugin-manifest", str(installed_plugin), str(error))]
-    issues = [*_package_symlink_issues(source_plugin), *_package_symlink_issues(installed_plugin)]
+    issues = [
+        *provenance_issues,
+        *_package_symlink_issues(source_plugin),
+        *_package_symlink_issues(installed_plugin),
+    ]
     for field in ("name", "version"):
         if source_manifest.get(field) != installed_manifest.get(field):
             issues.append(Issue(
@@ -164,6 +224,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-direct-skills", action="store_true",
         help="要求源码中的每个 Skill 都存在同名直接安装副本",
     )
+    parser.add_argument(
+        "--require-source-provenance", action="store_true",
+        help="要求发布源码来自干净且已有 HEAD 的 Git 工作树",
+    )
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -178,7 +242,9 @@ def main() -> int:
             if args.installed_plugin_root else _default_installed(source)
         )
         issues = validate_distribution(
-            source, installed, direct, require_direct_skills=args.require_direct_skills,
+            source, installed, direct,
+            require_direct_skills=args.require_direct_skills,
+            require_source_provenance=args.require_source_provenance,
         )
     except (OSError, ValueError, json.JSONDecodeError) as error:
         issues = [Issue(

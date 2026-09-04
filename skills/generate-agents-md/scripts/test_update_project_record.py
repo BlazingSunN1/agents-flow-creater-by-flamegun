@@ -133,6 +133,14 @@ class AtomicProjectRecordTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._update(Path("../outside.md"), content=b"bad", expected_sha256=MISSING_SHA)
 
+    def test_native_windows_fails_with_actionable_wsl_message(self) -> None:
+        arguments = self._arguments(self.root, Path("records/progress.md"))
+        with mock.patch.object(update_project_record, "fcntl", None):
+            with self.assertRaisesRegex(RuntimeError, "native-windows-unsupported-use-wsl"):
+                update_project_record._test_only_update_record(
+                    **arguments, content=b"bad", expected_sha256=MISSING_SHA,
+                )
+
     def test_symlinked_parent_cannot_redirect_write_outside_project(self) -> None:
         outside = Path(tempfile.mkdtemp())
         (self.root / "records").mkdir()

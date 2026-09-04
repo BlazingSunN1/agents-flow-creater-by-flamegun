@@ -94,8 +94,8 @@ def _traceability_risk_checks(section: str, path_pattern: str) -> tuple[tuple[bo
     ),
     (
     _section_has_line(section, (r"small|小型", r"standard|标准", r"high-risk|高风险", r"reason|evidence|原因|依据"))
-    and _section_has_line(section, (r"small|小型", r"known impact|影响面已知", r"externally observable|外部可观测", r"contract|契约", r"flow|流程", r"targeted verification|目标验证"))
-    and _section_has_line(section, (r"small|小型", r"no extra Agent|starts no extra Agent|does not create a new Agent|不启动额外 Agent|不创建新 Agent", r"prototype|原型", r"swimlane|泳道", r"full multi-artifact chain|完整多产物链"))
+    and _section_has_line(section, (r"small|小型", r"known impact|影响面已知", r"(?:externally )?observable|外部可观测", r"contract|契约", r"flow|流程", r"targeted verification|目标验证"))
+    and _section_has_line(section, (r"small|小型", r"reuses?.*registered.*module maintenance Agent|复用.*模块维护 Agent", r"no extra review|不新增审查", r"prototype|原型", r"swimlane|泳道", r"full (?:multi-artifact )?chain|全链产物"))
     and _section_has_line(section, (r"standard|标准", r"mapped|risk mapping|映射", r"changed behavior|改变行为"))
     and _section_has_line(section, (r"high-risk|高风险", r"multi-Agent|多 Agent", r"concurrent major modules|并发大模块", r"independence|compliance|独立性|合规")),
     "missing-risk-tier-policy",

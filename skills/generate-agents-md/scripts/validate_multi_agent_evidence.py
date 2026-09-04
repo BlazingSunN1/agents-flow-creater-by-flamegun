@@ -10,7 +10,10 @@ from validate_context_manifest import _parse_metadata as parse_context_metadata
 from validate_context_manifest import _split_paths
 from validate_traceability import GATE_COLUMNS, LINK_RE, TRACE_COLUMNS, _parse_metadata, _parse_table
 from template_schema_validation import multi_agent_issues as _multi_agent_template_issues
-from implementation_agent_validation import HostAttestationVerifier, _test_only_validate_implementation_agent, validate_implementation_agent
+from implementation_agent_validation import (
+    HostAttestationVerifier, ReceiptReplayState,
+    _validate_implementation_agent_impl,
+)
 from native_gate_agent_validation import validate_native_gate_agent
 from multi_agent_input_validation import validate_gate_input
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
@@ -20,13 +23,17 @@ STANDARD_ROLES = {"CHANGE_REVIEW"}
 HIGH_RISK_ROLES = {"REQUIREMENT_REVIEW", "SPECIALIST_REVIEW"}
 UI_ROLES = {"UI_UX"}
 KNOWN_ROLES = BASE_ROLES | STANDARD_ROLES | HIGH_RISK_ROLES | UI_ROLES
-TOP_LEVEL_FIELDS = {"schema_version", "stage", "baseline_version", "baseline_sha256", "code_version", "candidate_sha256",
+V1_TOP_LEVEL_FIELDS = {"schema_version", "stage", "baseline_version", "baseline_sha256", "code_version", "candidate_sha256",
                     "build_id", "implementation_agent_title", "implementation_run_id",
                     "implementation_agent_provider", "implementation_agent_model",
                     "implementation_agent_reasoning_effort",
                     "implementation_agent_id", "implementation_spawn_receipt",
                     "implementation_spawn_receipt_sha256",
                     "single_writer_run_id", "gates", "open_disagreements"}
+V2_RUNTIME_BINDING_FIELDS = {
+    "authority_matrix_sha256", "owned_paths", "active_write_lease",
+}
+TOP_LEVEL_FIELDS = V1_TOP_LEVEL_FIELDS | V2_RUNTIME_BINDING_FIELDS
 GATE_FIELDS = {
     "role", "run_id", "provider", "agent_model", "agent_reasoning_effort", "agent_id",
     "spawn_receipt", "spawn_receipt_sha256", "output_receipt", "output_receipt_sha256", "focus", "input_manifest", "input_sha256",
@@ -65,9 +72,10 @@ def _validate_multi_agent_evidence_impl(
         issues.append(Issue("error", "placeholder", "多 Agent 证据包含未解析占位符"))
     root = project_root.resolve()
     context, forbidden_outputs = _agent_context(context_path, root, issues)
-    validator = validate_implementation_agent if verifier is None else _test_only_validate_implementation_agent
-    verifier_kw = {} if verifier is None else {"_test_only_host_attestation_verifier": verifier}
-    implementation_issues = validator(data, context, root, **verifier_kw)
+    receipt_replay_state = ReceiptReplayState.empty()
+    implementation_issues = _validate_implementation_agent_impl(
+        data, context, root, verifier, receipt_replay_state,
+    )
     issues.extend(Issue(item.severity, item.code, item.message) for item in implementation_issues)
     requirement_ids = {
         item.strip() for item in context.get("Requirement IDs", "").split(",") if item.strip()
@@ -82,7 +90,7 @@ def _validate_multi_agent_evidence_impl(
     _validate_gates(
         data, metadata, trace_gates, root, stage, context, allowed_inputs,
         forbidden_outputs, verifier, expected_requirement_questions_locator,
-        expected_requirement_questions_sha256, issues,
+        expected_requirement_questions_sha256, receipt_replay_state, issues,
     )
     disagreements = data.get("open_disagreements")
     if disagreements != []:
@@ -97,8 +105,10 @@ def _read_json(path: Path) -> tuple[dict[str, object] | None, list[Issue]]:
         return None, [Issue("error", "invalid-agent-evidence", "多 Agent 证据根节点必须是对象")]
     return data, []
 def _validate_structure(data: dict[str, object], issues: list[Issue], *, template: bool = False) -> None:
-    if type(data.get("schema_version")) is not int or data.get("schema_version") != 1:
-        issues.append(Issue("error", "invalid-schema-version", "schema_version 必须是 1"))
+    schema_version = data.get("schema_version")
+    if type(schema_version) is not int or schema_version not in {1, 2}:
+        issues.append(Issue("error", "invalid-schema-version", "schema_version 必须是整数 1 或 2"))
+    expected_fields = TOP_LEVEL_FIELDS if schema_version == 2 else V1_TOP_LEVEL_FIELDS
     for field in (
         "stage", "baseline_version", "baseline_sha256", "code_version", "build_id",
         "candidate_sha256",
@@ -112,7 +122,11 @@ def _validate_structure(data: dict[str, object], issues: list[Issue], *, templat
             issues.append(Issue("error", "missing-field", f"缺少多 Agent 证据字段：{field}"))
     if not isinstance(data.get("gates"), list):
         issues.append(Issue("error", "invalid-gates", "gates 必须是数组"))
-    identity_fields = TOP_LEVEL_FIELDS - {"schema_version", "gates", "open_disagreements"}
+    if schema_version == 2:
+        for field in V2_RUNTIME_BINDING_FIELDS:
+            if field not in data:
+                issues.append(Issue("error", "missing-field", f"缺少多 Agent 证据字段：{field}"))
+    identity_fields = V1_TOP_LEVEL_FIELDS - {"schema_version", "gates", "open_disagreements"}
     if any(type(data.get(field)) is not str or not data.get(field, "").strip() for field in identity_fields):
         issues.append(Issue("error", "invalid-agent-evidence-types", "多 Agent 身份、版本、构建和阶段字段必须是非空字符串"))
     if type(data.get("open_disagreements")) is not list:
@@ -121,7 +135,7 @@ def _validate_structure(data: dict[str, object], issues: list[Issue], *, templat
     if (type(candidate_sha) is not str
             or (SHA256_RE.fullmatch(candidate_sha) is None and not (template and PLACEHOLDER_RE.fullmatch(candidate_sha)))):
         issues.append(Issue("error", "invalid-candidate-sha256", "candidate_sha256 必须是 64 位 SHA-256"))
-    if set(data) != TOP_LEVEL_FIELDS:
+    if set(data) != expected_fields:
         issues.append(Issue("error", "invalid-agent-evidence-fields", "多 Agent 证据含缺失、重复或未知字段"))
 def _read_trace(
     path: Path, requirement_ids: set[str], issues: list[Issue],
@@ -206,6 +220,7 @@ def _validate_gates(
     host_attestation_verifier: HostAttestationVerifier | None,
     expected_requirement_questions_locator: str | None,
     expected_requirement_questions_sha256: str | None,
+    receipt_replay_state: ReceiptReplayState,
     issues: list[Issue],
 ) -> None:
     gates = data.get("gates")
@@ -235,7 +250,7 @@ def _validate_gates(
             role, raw, data, trace_gates, run_ids, agent_ids, module, artifact_identities,
             artifact_hashes, context, allowed_inputs, forbidden_outputs, root, issues,
             host_attestation_verifier, expected_requirement_questions_locator,
-            expected_requirement_questions_sha256,
+            expected_requirement_questions_sha256, receipt_replay_state,
         )
     required = _required_roles(metadata, stage)
     for role in required - set(role_map):
@@ -260,11 +275,13 @@ def _validate_gate(
     host_attestation_verifier: HostAttestationVerifier | None,
     expected_requirement_questions_locator: str | None,
     expected_requirement_questions_sha256: str | None,
+    receipt_replay_state: ReceiptReplayState,
 ) -> None:
     raw_run_id = gate.get("run_id")
     run_id = raw_run_id.strip() if isinstance(raw_run_id, str) else ""
     issues.extend(Issue(item.severity, item.code, item.message) for item in validate_native_gate_agent(
-        gate, role, module, root, agent_ids, run_ids, host_attestation_verifier, evidence,
+        gate, role, module, root, agent_ids, run_ids, host_attestation_verifier,
+        evidence, receipt_replay_state,
     ))
     trace_row = trace_gates.get(role)
     if trace_row and run_id != trace_row.get("Agent run ID", "").strip():

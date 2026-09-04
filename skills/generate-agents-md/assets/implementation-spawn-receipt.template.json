@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "receipt_kind": "codex-native-spawn-result",
   "provider": "codex-native-agent",
   "requested_model": "gpt-5.6-sol",
@@ -10,5 +10,17 @@
   "run_id": "{{IMPLEMENTATION_RUN_ID}}",
   "role": "module-maintainer",
   "module": "{{MODULE_KEY}}",
-  "maintainer_title": "{{MODULE_AGENT_TITLE}}"
+  "maintainer_title": "{{MODULE_AGENT_TITLE}}",
+  "read_only": false,
+  "authority_matrix_sha256": "{{AUTHORITY_MATRIX_SHA256}}",
+  "owned_paths": ["{{OWNED_PROJECT_RELATIVE_PATH}}"],
+  "active_write_lease": {
+    "lease_id": "{{ACTIVE_WRITE_LEASE_ID}}",
+    "path": "{{ACTIVE_WRITE_LEASE_PROJECT_RELATIVE_PATH}}",
+    "sha256": "{{ACTIVE_WRITE_LEASE_SHA256}}"
+  },
+  "baseline_sha256": "{{BASELINE_SHA256}}",
+  "code_version": "{{CODE_VERSION}}",
+  "build_id": "{{BUILD_ID}}",
+  "candidate_sha256": "{{CANDIDATE_SHA256}}"
 }

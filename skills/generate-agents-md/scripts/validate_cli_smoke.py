@@ -29,6 +29,7 @@ CLI_SCRIPTS = (
     "validate_skill.py",
     "validate_swimlane_evidence.py",
     "validate_system_delivery_bundle.py",
+    "validate_task_write_scope.py",
     "validate_traceability.py",
 )
 

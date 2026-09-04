@@ -38,7 +38,7 @@ class DeliveryContractValidatorTests(unittest.TestCase):
             "automated_review", "code_standards", "context_manifest", "delivery_bundle",
             "delivery_contract", "multi_agent_evidence", "swimlane_evidence", "swimlane_freshness",
             "native_mobile_tests", "targeted_tests", "traceability", "full_test_or_build",
-            "atomic_record_update", "real_entry_acceptance",
+            "atomic_record_update", "real_entry_acceptance", "task_write_scope",
         )
         source_command = "python3 -m unittest"
         (self.root / "docs/commands.txt").write_text(source_command, encoding="utf-8")

@@ -372,7 +372,7 @@ MODULE_CLOSURE_MUTANT_CASES = (
     (
         "system-dispatcher-host-attestation-check-disabled",
         "scripts/system_actor_validation.py",
-        "    issues.extend(_validate_dispatcher(value, root, verifier))",
+        "    issues.extend(_validate_dispatcher(value, root, verifier, state))",
         "    issues.extend(())",
         "scripts.test_validate_system_delivery_bundle.SystemDeliveryBundleTests.test_valid_cross_module_closures_pass_read_only_aggregation",
     ),
@@ -432,6 +432,7 @@ MODULE_CLOSURE_MUTANT_CASES = (
         '        host_attestation_verifier=host_attestation_verifier,\n'
         '        record_label="output result",\n'
         '        invalid_code="invalid-gate-output-receipt",\n'
+        '        receipt_replay_state=receipt_replay_state,\n'
         '    ))',
         '    issues.extend(())',
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_gate_output_tamper_fails_after_project_hash_is_recomputed",

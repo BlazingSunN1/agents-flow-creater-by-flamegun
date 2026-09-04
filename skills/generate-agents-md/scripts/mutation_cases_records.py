@@ -423,8 +423,8 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "multi-agent-bool-schema-check-disabled", "scripts/validate_multi_agent_evidence.py",
-        'if type(data.get("schema_version")) is not int or data.get("schema_version") != 1:',
-        'if data.get("schema_version") != 1:',
+        'if type(schema_version) is not int or schema_version not in {1, 2}:',
+        'if schema_version not in {1, 2}:',
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_boolean_schema_version_is_rejected",
     ),
     (
@@ -453,7 +453,7 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "multi-agent-top-level-exact-fields-check-disabled", "scripts/validate_multi_agent_evidence.py",
-        "if set(data) != TOP_LEVEL_FIELDS:",
+        "if set(data) != expected_fields:",
         "if False:",
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_top_level_and_gate_unknown_or_duplicate_fields_fail_closed",
     ),

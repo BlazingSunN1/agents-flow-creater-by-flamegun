@@ -12,7 +12,7 @@ SKILL_ROOT = SCRIPT_DIR.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from validate_skill import AFFECTED_ASSET_TESTS, build_checks, build_parser, effective_mode
+from validate_skill import AFFECTED_ASSET_TESTS, build_checks, build_parser, effective_mode, run_check
 
 
 class SkillValidationTests(unittest.TestCase):
@@ -43,6 +43,23 @@ class SkillValidationTests(unittest.TestCase):
         self.assertEqual("full", parser.parse_args(["--full"]).mode)
         with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
             parser.parse_args(["--quick", "--full"])
+
+    def test_each_check_has_a_bounded_timeout(self) -> None:
+        result = run_check(
+            "timeout-probe",
+            [sys.executable, "-c", "import time; time.sleep(1)"],
+            SKILL_ROOT,
+            timeout_seconds=0.05,
+        )
+        self.assertEqual(124, result.returncode)
+        self.assertIn("timed out", result.output_tail)
+
+        parser = build_parser()
+        self.assertEqual(600.0, parser.parse_args([]).check_timeout_seconds)
+        self.assertEqual(
+            30.0,
+            parser.parse_args(["--check-timeout-seconds", "30"]).check_timeout_seconds,
+        )
 
     def test_affected_gate_selects_targeted_tests_and_shared_contract_escalates(self) -> None:
         checks = dict(build_checks(
@@ -210,6 +227,7 @@ class SkillValidationTests(unittest.TestCase):
         self.assertIn("plugin-distribution", checks)
         command = checks["plugin-distribution"]
         self.assertIn("validate_plugin_distribution.py", " ".join(command))
+        self.assertIn("--require-source-provenance", command)
         self.assertIn("--require-direct-skills", command)
         with self.assertRaises(ValueError):
             build_checks(mode="quick", distribution=True)
@@ -287,8 +305,10 @@ class SkillValidationTests(unittest.TestCase):
         skill_path = SKILL_ROOT / "SKILL.md"
         skill = skill_path.read_text(encoding="utf-8")
         root_template = (SKILL_ROOT / "assets" / "AGENTS.template.md").read_text(encoding="utf-8")
-        self.assertLessEqual(len(skill.encode("utf-8")), 12_000)
-        self.assertLessEqual(len(root_template.encode("utf-8")), 48_000)
+        # SKILL.md is loaded on every invocation; keep meaningful headroom.
+        self.assertLessEqual(len(skill.encode("utf-8")), 10_000)
+        # Generated AGENTS.md becomes project context, so retain growth headroom.
+        self.assertLessEqual(len(root_template.encode("utf-8")), 46_000)
         self.assertLessEqual(max(map(len, skill.splitlines())), 900)
         for relative in (
             "references/multi-model-review-policy.md",
@@ -348,8 +368,8 @@ class SkillValidationTests(unittest.TestCase):
             "factual evidence",
             "removal condition",
             "无映射就不得新增或启动",
-            "Small work starts no extra Agent",
-            "小型任务不启动额外 Agent",
+            "Dispatcher reuses the registered module maintenance Agent",
+            "Dispatcher 复用已登记模块维护 Agent",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, combined)
@@ -416,6 +436,43 @@ class SkillValidationTests(unittest.TestCase):
             "正向证明独立审查/验收已经通过、完成或成功的先决条件才能豁免",
             governance,
         )
+
+    def test_compact_authority_matrix_uses_expanded_v1_hash_identity(self) -> None:
+        governance = (
+            SKILL_ROOT / "references" / "module-agent-governance.md"
+        ).read_text(encoding="utf-8")
+        checklist = (
+            SKILL_ROOT / "references" / "extraction-checklist.md"
+        ).read_text(encoding="utf-8")
+        for surface in (governance, checklist):
+            self.assertIn("expanded-authority-matrix-v1", surface)
+            self.assertIn("展开", surface)
+            self.assertIn("canonical SHA-256", surface)
+        self.assertIn("不得把紧凑 v2 JSON 的原始哈希误当成权限身份", governance)
+        self.assertIn("未知合同", governance)
+
+    def test_task_write_boundary_is_documented_and_executable(self) -> None:
+        boundary = (
+            SKILL_ROOT / "references" / "task-write-boundary.md"
+        ).read_text(encoding="utf-8")
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        checklist = (
+            SKILL_ROOT / "references" / "extraction-checklist.md"
+        ).read_text(encoding="utf-8")
+        smoke = (
+            SKILL_ROOT / "scripts" / "validate_cli_smoke.py"
+        ).read_text(encoding="utf-8")
+        for surface in (boundary, skill, checklist):
+            self.assertIn("validate_task_write_scope.py", surface)
+        for required in (
+            "当前用户请求",
+            "精确维护源码根",
+            "缓存和直装副本",
+            "不能提供 OS 级隔离",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, boundary)
+        self.assertIn('"validate_task_write_scope.py"', smoke)
 
     def test_traceability_template_never_turns_unanswered_risk_into_a_blocker(self) -> None:
         traceability = (

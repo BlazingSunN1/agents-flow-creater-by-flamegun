@@ -5,7 +5,10 @@ from pathlib import Path
 from implementation_agent_validation import (
     HostAttestationVerifier,
     Issue,
+    ReceiptReplayState,
+    _v2_expected_bindings,
     validate_native_spawn_record,
+    validate_v2_binding_source,
 )
 
 
@@ -14,6 +17,7 @@ def validate_native_gate_agent(
     agent_ids: set[str], run_ids: set[str],
     host_attestation_verifier: HostAttestationVerifier | None,
     evidence: dict[str, object],
+    receipt_replay_state: ReceiptReplayState | None = None,
 ) -> list[Issue]:
     issues: list[Issue] = []
     run_id = _unique_identity(
@@ -33,9 +37,36 @@ def validate_native_gate_agent(
     if gate.get("agent_reasoning_effort") != "xhigh":
         issues.append(Issue("error", "invalid-gate-agent-effort",
                             f"{role} 必须使用 reasoning_effort=xhigh"))
-    slug = role.casefold().replace("_", "-")
-    expected = {
-        "schema_version": 1,
+    schema_version = evidence.get("schema_version", 1)
+    expected = _gate_expected(role, module, agent_id, run_id, schema_version)
+    if schema_version == 2:
+        gate_bindings = dict(evidence)
+        gate_bindings.pop("active_write_lease", None)
+        issues.extend(validate_v2_binding_source(
+            gate_bindings, root, require_active_lease=False,
+            allow_empty_owned_paths=False, code_prefix="gate",
+        ))
+        expected.update(_v2_expected_bindings(
+            evidence, read_only=True, include_active_lease=False,
+        ))
+    elif schema_version != 1:
+        issues.append(Issue(
+            "error", "invalid-gate-runtime-binding",
+            "独立 gate receipt schema_version 必须是整数 1 或 2",
+        ))
+    issues.extend(_validate_gate_receipts(
+        gate, role, root, expected, evidence, host_attestation_verifier,
+        receipt_replay_state,
+    ))
+    return issues
+
+
+def _gate_expected(
+    role: str, module: str | None, agent_id: str, run_id: str,
+    schema_version: object,
+) -> dict[str, object]:
+    return {
+        "schema_version": schema_version,
         "receipt_kind": "codex-native-spawn-result",
         "provider": "codex-native-agent",
         "requested_model": "gpt-5.6-sol",
@@ -44,20 +75,17 @@ def validate_native_gate_agent(
         "recorded_reasoning_effort": "xhigh",
         "agent_id": agent_id,
         "run_id": run_id,
-        "role": f"{slug}-gate",
+        "role": f"{role.casefold().replace('_', '-')}-gate",
         "module": module,
         "maintainer_title": f"{role} Gate Reviewer",
     }
-    issues.extend(_validate_gate_receipts(
-        gate, role, root, expected, evidence, host_attestation_verifier,
-    ))
-    return issues
 
 
 def _validate_gate_receipts(
     gate: dict[str, object], role: str, root: Path,
     expected: dict[str, object], evidence: dict[str, object],
     host_attestation_verifier: HostAttestationVerifier | None,
+    receipt_replay_state: ReceiptReplayState | None,
 ) -> list[Issue]:
     issues = validate_native_spawn_record(
         data=gate,
@@ -68,6 +96,7 @@ def _validate_gate_receipts(
         code_prefix="gate",
         label=f"{role} 独立验收 Agent",
         host_attestation_verifier=host_attestation_verifier,
+        receipt_replay_state=receipt_replay_state,
     )
     output_expected = {
         **expected,
@@ -91,6 +120,7 @@ def _validate_gate_receipts(
         host_attestation_verifier=host_attestation_verifier,
         record_label="output result",
         invalid_code="invalid-gate-output-receipt",
+        receipt_replay_state=receipt_replay_state,
     ))
     return issues
 

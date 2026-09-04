@@ -105,6 +105,7 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 - **需求追踪与交付门禁**：规定需求基线、稳定编号、风险等级、独立 UI/UX 与验收职责、变更控制和黑盒完成门禁。
 - **自动代码审查**：规定每次模块修改后的自动命令、真实影响面、发现格式、修复回路、证据路径和失败关闭条件。
 - **模块 Agent 所有权与调度**：规定 Dispatcher 用户入口、模块到稳定维护 Agent 与拥有边界的映射、层级中立的唯一活动模块协调租约、唯一实现写者、最小充分上下文交接、独立全流程验证和新模块先建 Agent 后实现。默认本地协调；严格模式才追加宿主证明。
+- **schema-v2 角色 receipt**：outer evidence 必须明示当前 authority matrix SHA、精确 owned paths 和唯一活动写租约；实现 spawn 独占租约，gate spawn/output `read_only=true` 且绑定同一 baseline/code/build/candidate。严格 JSON、canonical locator+小写 SHA、身份/receipt replay 均 fail closed；strict-security 只在完整本地校验后追加宿主证明，schema v1 仅 legacy。
 - **本机受控授权**：默认宿主路径不变；只有 `project` 模式、本轮显式用户授权并选择 `authorization-mode=local-controlled-same-user` 时启用，绝不 fallback。bootstrap v1 保持旧义；v2 仅绑定并更新既有 `AGENTS.md` 与 `docs/agents/module-agent-governance.md`，签名两 target 的 pre/post hash+size、M11 registration、pre/post policy+authority hash 与 bootstrap candidate，缺失 owned leaf 只做最近祖先/case/symlink/overlap 验证且不创建。普通模块租约使用独立签名域、固定外部 registry、精确 identity/owned paths/targets/baseline/policy/authority/candidate/code/build、15 分钟 TTL，只代表同用户边界内授权与完整性，不证明 runtime、host-native、host-attested 或不可伪造。
 - **租约 registry 与 guarded apply**：registry closed schema、no-follow lock、可重算 hash chain；receipt/nonce/lease ID 分别全局唯一，`(project,module)` 唯一 active，Agent/run 不跨模块 active，换 registry 在创建前失败。每次单文件 apply 重验签名/expiry/active/policy/authority/ownership/pre-post hash/fd-inode-parent，禁止 review/acceptance/black-box/aggregate/close。业务文件成功而 registry 失败必须 `PARTIAL/incomplete`，不得声称原子或成功。v1 无撤销字段，依靠不续签、唯一 active 与最短 TTL。
 - **唯一 replay ledger**：签名 payload 闭集必须固定一个 canonical 外部 `replay_state_path`；CLI 参数和实际 guard 路径必须在任何 lock/ledger 创建或修改前精确匹配，禁止同一 envelope 换 ledger 再消费。
@@ -263,14 +264,17 @@ AGENTS.md 不能覆盖系统、开发者或当前用户指令。多个 AGENTS.md
 - [ ] 已规定风险分级、小型任务的跳过条件，以及标准/高风险任务的完整流程。
 - [ ] 已分离 UI/UX、验收用例和黑盒 Agent 职责；禁止自行扩需求、修改实现或由实现 Agent 自证。
 - [ ] 已规定主、父、子层级无固有写权，唯一实现写者必须持有匹配 module、Agent/run、owned paths 的唯一活动协调租约；独立 Agent 只读，并机器校验证据哈希与分歧关闭；严格模式才追加宿主证明。
+- [ ] 已用 `scripts/validate_task_write_scope.py` 区分项目 Agent 与专用 Skill-maintainer：项目写入只在规范项目根/分配 worktree 自有路径；全局 Skill/插件源码、缓存和直装副本只读；维护任务有当前用户请求显式授权和一个精确维护源码根；声明目标校验未被描述为 OS 隔离。
 - [ ] 已明确模块键、稳定维护 Agent 标题和拥有路径/边界的一一映射，且长期 AGENTS.md 不含 thread/session ID。
 - [ ] 已限制 Dispatcher 角色始终只读，只做入口、路由、上下文传递、验证编排和新模块 Agent 创建，禁止写业务代码与共享记录；需要实现时使用不同的 implementation Agent/run，且不得复用 Dispatcher 的 Agent ID 或 run ID；严格模式才追加宿主证明。
 - [ ] 系统清单由独立 `SYSTEM_AGGREGATION` 写者生成；其 run 与 Dispatcher、模块实现及门禁审查 run 均不同，默认本地模式绑定封闭 receipt，严格模式才由宿主可信运行时复核。
+- [ ] 新运行证据使用 schema-v2 role-specific receipt；outer expected fields 不从当前 AGENTS、ownership 或 lease 文件隐式补全，implementation/gates/system actors 均通过 exact-field、同候选与 replay 检查。
 - [ ] 上下文交接包覆盖目标、批准需求/约束、模块边界、输入输出、依赖风险、验证验收和证据；不传完整聊天、无关历史或其他 Agent 推理。
 - [ ] 稳定新模块在实现前已建立唯一键、非重叠 ownership 和独立长期维护 Agent/会话。
 - [ ] 若启用本机受控治理 bootstrap，已有 project 模式、显式 authorization-mode 与风险接受；v1 未被解释为 v2；v2 精确绑定两份既有治理 target、M11 registration、pre/post policy+authority 与 bootstrap candidate，missing owned leaf 仅验证不创建，完成后只接受本机受控 module lease。
 - [ ] 若启用本机受控普通模块租约，独立 domain/closed schema、固定外部 registry、15 分钟 TTL、全局独立 ID、唯一 active、跨模块 Agent/run 排斥、严格角色 deny、每次 apply 的 policy/authority/ownership/hash/path-race 重验与 PARTIAL 报告测试均通过；未虚构撤销。
 - [ ] canonical matrix 中只有 `system-governance-bootstrap/bootstrap_system_governance/system-governance` 为 `external-explicit-only`；其他 bootstrap/actor 行固定 deny，普通角色分离、单 writer、review/acceptance/black-box 独立门禁没有降低。
+- [ ] `expanded-authority-matrix-v1` 紧凑 v2 已先按闭集展开，再以展开 v1 的 canonical SHA-256 核对权限身份；直接哈希紧凑 JSON、接受未知字段或未知合同均失败关闭。
 - [ ] 已要求冻结后按变更面映射执行代码规范；首个成果前只保留正确性、受影响验收和不可逆保护，新增行为先更新追踪产物。
 - [ ] 已指定小型索引、模块日志和系统级日志路径。
 - [ ] 已区分 `run_id` 与 `code_version`，并规定单次日志必填字段。

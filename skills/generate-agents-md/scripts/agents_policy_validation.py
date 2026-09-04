@@ -39,6 +39,7 @@ def _validate_root_policies(text: str, mode: str) -> list[Issue]:
     issues.extend(_validate_modular_execution_log_policy(text, mode=mode))
     issues.extend(_validate_frontend_verification_policy(text))
     issues.extend(_validate_execution_evidence_policy(text, mode=mode))
+    issues.extend(_validate_task_write_boundary_policy(text))
     issues.extend(_validate_external_multi_model_policy(text))
     return issues
 
@@ -75,7 +76,7 @@ def _validate_execution_evidence_policy(text: str, *, mode: str) -> list[Issue]:
             "缺少实现 Agent 单写者及独立 Agent 只读隔离边界",
         ),
         (
-            _section_has_line(text, (r"small|小型", r"no extra Agent|starts no extra Agent|不启动额外 Agent"))
+            _section_has_line(text, (r"small|小型", r"reuses?.*registered.*module maintenance Agent|复用.*模块维护 Agent", r"no extra review|不新增审查"))
             and _section_has_line(text, (r"standard|标准", r"independent acceptance|black-box|独立验收|黑盒", r"risk mapping|风险映射"))
             and _section_has_line(text, (r"high-risk|高风险", r"change-review|变更审查", r"requirement-consistency|需求一致", r"domain-specialist|领域专项", r"mapping|映射")),
             "missing-risk-triggered-agent-roles",
@@ -98,6 +99,48 @@ def _validate_execution_evidence_policy(text: str, *, mode: str) -> list[Issue]:
             and _section_has_line(text, (r"stale hashes?|过期哈希", r"console errors?|控制台错误", r"failed requests?|请求失败", r"block|阻断")),
             "missing-frontend-evidence-gate",
             "缺少结构化前端证据路径及失败关闭校验规则",
+        ),
+    )
+    return [Issue("error", code, message) for matched, code, message in checks if not matched]
+
+
+def _validate_task_write_boundary_policy(text: str) -> list[Issue]:
+    checks = (
+        (
+            _section_has_line(text, (
+                r"project task|项目任务", r"canonical project root|规范项目根",
+                r"isolated worktree|隔离 worktree", r"owned paths|拥有路径",
+                r"validat|校验", r"`task_write_scope`", r"symlink escape|符号链接.*逃逸",
+            )),
+            "missing-project-task-write-boundary",
+            "缺少项目任务仅能写规范项目根/隔离 worktree 自有路径及 realpath 逃逸校验规则",
+        ),
+        (
+            _section_has_line(text, (
+                r"global Skill/plugin source roots|全局.*Skill.*插件.*源码根",
+                r"read-only|只读", r"dedicated Skill-maintainer task|专用.*Skill.*维护任务",
+                r"current user request|当前用户请求", r"exact canonical maintenance source root|精确.*维护源码根",
+            )),
+            "missing-skill-maintainer-write-boundary",
+            "缺少全局 Skill/插件只读及当前请求显式授权的专用维护任务边界",
+        ),
+        (
+            _section_has_line(text, (
+                r"cache|缓存", r"direct Skill installs?|Skill.*直装",
+                r"derived outputs|派生产物", r"cachebuster|缓存版本",
+                r"reinstall|重装", r"never edit.*directly|不得直接编辑",
+            )),
+            "missing-derived-install-boundary",
+            "缺少缓存与直装副本只作为派生产物的更新规则",
+        ),
+        (
+            _section_has_line(text, (
+                r"write-scope validator|写入范围校验器", r"declared canonical targets|声明.*规范目标",
+                r"does not intercept|不能拦截", r"same-user shell|同用户.*shell",
+                r"filesystem-level isolation|文件系统级隔离", r"host enforces|宿主.*强制",
+            )),
+            "missing-write-boundary-runtime-caveat",
+            "缺少声明目标校验不等于宿主文件系统隔离的边界说明",
         ),
     )
     return [Issue("error", code, message) for matched, code, message in checks if not matched]

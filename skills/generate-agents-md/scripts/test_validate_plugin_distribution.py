@@ -35,6 +35,17 @@ class PluginDistributionTests(unittest.TestCase):
             )
         return source
 
+    def _commit_source(self, source: Path) -> None:
+        subprocess.run(["git", "init", "-q", str(source)], check=True)
+        subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(source), "-c", "user.name=Test",
+                "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture",
+            ],
+            check=True,
+        )
+
     def test_matching_cache_and_direct_duplicate_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -44,6 +55,41 @@ class PluginDistributionTests(unittest.TestCase):
             shutil.copytree(source, installed)
             shutil.copytree(source / "skills" / "generate-agents-md", direct / "generate-agents-md")
             self.assertEqual([], validate_distribution(source, installed, direct))
+
+    def test_release_provenance_requires_git_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self._source(root)
+            installed = root / "installed"
+            shutil.copytree(source, installed)
+            codes = {
+                issue.code for issue in validate_distribution(
+                    source, installed, root / "direct", require_source_provenance=True,
+                )
+            }
+            self.assertIn("source-not-git-versioned", codes)
+
+    def test_release_provenance_rejects_dirty_source_and_accepts_clean_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self._source(root)
+            self._commit_source(source)
+            installed = root / "installed"
+            shutil.copytree(source, installed, ignore=shutil.ignore_patterns(".git"))
+            self.assertEqual(
+                [],
+                validate_distribution(
+                    source, installed, root / "direct", require_source_provenance=True,
+                ),
+            )
+            marker = source / "skills" / "generate-agents-md" / "SKILL.md"
+            marker.write_text(marker.read_text(encoding="utf-8") + "\nchanged\n", encoding="utf-8")
+            codes = {
+                issue.code for issue in validate_distribution(
+                    source, installed, root / "direct", require_source_provenance=True,
+                )
+            }
+            self.assertIn("dirty-source-package", codes)
 
     def test_stale_cache_and_direct_duplicate_fail_with_precise_codes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

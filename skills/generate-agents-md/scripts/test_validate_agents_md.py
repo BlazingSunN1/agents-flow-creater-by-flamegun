@@ -177,6 +177,70 @@ class ValidatorRegressionTests(unittest.TestCase):
             error_codes(weakened, mode="public-template", scope="root"),
         )
 
+    def test_project_agent_write_boundary_is_required(self) -> None:
+        rule = (
+            "A project task may write only inside the canonical project root or its assigned "
+            "isolated worktree and only within its owned paths. Before a write, validate every "
+            "declared target with registered command ID `task_write_scope`; a resolved target "
+            "outside that boundary, including a symlink escape, fails before mutation."
+        )
+        self.assertIn(rule, ROOT_TEMPLATE)
+        weakened = ROOT_TEMPLATE.replace(rule, "Project Agents may write anywhere.")
+        self.assertIn(
+            "missing-project-task-write-boundary",
+            error_codes(weakened, mode="public-template", scope="root"),
+        )
+
+    def test_write_scope_policy_cannot_be_replaced_by_constant_success(self) -> None:
+        weakened = ROOT_TEMPLATE.replace("`task_write_scope`", "`true`")
+        self.assertIn(
+            "missing-project-task-write-boundary",
+            error_codes(weakened, mode="public-template", scope="root"),
+        )
+
+    def test_skill_maintenance_requires_a_dedicated_authorized_task(self) -> None:
+        rule = (
+            "For project tasks, global Skill/plugin source roots, Codex plugin caches, and direct "
+            "Skill installation roots are read-only. Editing one requires a separate dedicated "
+            "Skill-maintainer task, explicit authorization in the current user request, and one "
+            "exact canonical maintenance source root; prior authorization, Agent hierarchy, or a "
+            "project lease does not grant it."
+        )
+        self.assertIn(rule, ROOT_TEMPLATE)
+        weakened = ROOT_TEMPLATE.replace(rule, "A project Agent may maintain global Skills.")
+        self.assertIn(
+            "missing-skill-maintainer-write-boundary",
+            error_codes(weakened, mode="public-template", scope="root"),
+        )
+
+    def test_plugin_cache_and_direct_installs_are_derived_outputs(self) -> None:
+        rule = (
+            "Plugin cache and direct Skill installs are derived outputs: update authorized source, "
+            "validate, use cachebuster/reinstall; never edit those copies directly."
+        )
+        self.assertIn(rule, ROOT_TEMPLATE)
+        weakened = ROOT_TEMPLATE.replace(rule, "Update the cached plugin directly.")
+        self.assertIn(
+            "missing-derived-install-boundary",
+            error_codes(weakened, mode="public-template", scope="root"),
+        )
+
+    def test_write_scope_validator_cannot_claim_os_isolation(self) -> None:
+        rule = (
+            "The write-scope validator checks declared canonical targets and does not intercept a "
+            "same-user shell that bypasses it. Claim filesystem-level isolation only when the host "
+            "enforces a workspace write sandbox, isolated worktree, container, or OS permissions."
+        )
+        self.assertIn(rule, ROOT_TEMPLATE)
+        weakened = ROOT_TEMPLATE.replace(
+            rule,
+            "The write-scope validator provides complete filesystem isolation.",
+        )
+        self.assertIn(
+            "missing-write-boundary-runtime-caveat",
+            error_codes(weakened, mode="public-template", scope="root"),
+        )
+
     def test_major_module_requires_stable_capability_definition(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
             "A major functional module is a stable business capability with an independently testable entry, output contract, and non-overlapping ownership boundary; helpers and temporary task slices remain inside their owning module and do not create extra maintenance Agents.",
