@@ -76,7 +76,7 @@ Dispatcher 角色始终只读，不得修改业务代码，不得写共享计划
 - Skill/插件缓存与直装副本是派生产物，只能从获授权源码根经验证、cachebuster 和重装流程生成，不得直接编辑。目标校验器只检查声明路径，不能提供 OS 级隔离；真实强制仍需宿主沙箱、独立 worktree、容器或 OS 权限。
 - 跨模块或系统级任务只有在每个受影响模块都关闭当前需求 ID、代码/构建、定向测试、独立验收、模块 run/latest 与适用流程变化泳道证据，且没有开放 finding 后才能完成；Dispatcher 只能聚合核对，不能替任何模块补签。
 
-跨模块时，每个维护 Agent 用 `assets/module-delivery-bundle.template.json` 声明完成包并运行模块门禁。包必须绑定 canonical 疑问清单及当前需求基线；每个未答项保持非阻塞 P2，伪造 `ANSWERED`、基线/哈希漂移或失败门禁才失败关闭。所有模块关闭后，不同的原生 Sol `SYSTEM_AGGREGATION` 写者生成并哈希绑定系统清单，只读 Dispatcher 调用 `scripts/validate_system_delivery_bundle.py`。默认本地模式重验逐模块交付、身份分离、规范化模块集合、需求/变更并集、所有权、code/build、清单哈希与零开放缺陷；严格模式再复核全部宿主 provenance。
+跨模块时，每个维护 Agent 用 `assets/module-delivery-bundle.template.json` 声明完成包并运行模块门禁。包必须绑定 delivery contract、canonical 疑问清单及当前需求基线；泳道记录、路径和审查重跑项只来自 contract 的 gate plan，未规划 `swimlane_evidence` 时该工件路径为 `null`。每个未答项保持非阻塞 P2，伪造 `ANSWERED`、基线/哈希漂移或失败门禁才失败关闭。所有模块关闭后，不同的原生 Sol `SYSTEM_AGGREGATION` 写者生成并哈希绑定系统清单，只读 Dispatcher 调用 `scripts/validate_system_delivery_bundle.py`。默认本地模式重验逐模块交付、身份分离、规范化模块集合、需求/变更并集、所有权、code/build、清单哈希与零开放缺陷；严格模式再复核全部宿主 provenance。
 
 ## 5. 可选严格安全路由
 

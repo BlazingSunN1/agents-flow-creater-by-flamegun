@@ -7,5 +7,5 @@
 - Record: {{CURRENT_MODULE_RUN_RECORD_PATH}}
 - Delivered result: {{DELIVERED_RESULT}}
 - Verification evidence: {{VERIFICATION_EVIDENCE_PATHS}}
-- Swimlane evidence: {{SWIMLANE_EVIDENCE_PATH}}
+{{GATE_PLAN_SWIMLANE_EVIDENCE_RECORD_OR_OMIT}}
 - Remaining risks: {{NONE_OR_CLOSED}}

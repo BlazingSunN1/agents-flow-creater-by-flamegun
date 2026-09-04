@@ -325,6 +325,21 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             self.assertEqual("req-v1", call["requirement_baseline_version"])
             self.assertRegex(str(call["requirement_baseline_sha256"]), r"^[0-9a-f]{64}$")
 
+    def test_module_validator_receives_optional_contract_and_swimlane_path(self) -> None:
+        bundle = json.loads(self.bundle_paths[0].read_text(encoding="utf-8"))
+        contract = self.root / "evidence/module-a-delivery-contract.json"
+        contract.write_text(json.dumps({"gate_plan": {"required_command_ids": []}}), encoding="utf-8")
+        bundle["artifacts"]["delivery_contract"] = "evidence/module-a-delivery-contract.json"
+        bundle["artifacts"]["swimlane_evidence"] = None
+        self.bundle_paths[0].write_text(json.dumps(bundle), encoding="utf-8")
+        self._write_system_manifest()
+        calls: list[dict[str, object]] = []
+
+        self.assertEqual(set(), self.codes(lambda **kwargs: calls.append(kwargs) or []))
+        module_a = next(call for call in calls if call["context_path"].name == "module-a-context.md")
+        self.assertEqual(contract.resolve(), module_a["delivery_contract_path"])
+        self.assertIsNone(module_a["swimlane_evidence_path"])
+
     def test_production_api_does_not_expose_module_validator_override(self) -> None:
         parameters = inspect.signature(validate_system_delivery_bundle).parameters
         self.assertNotIn("_test_only_module_validator", parameters)

@@ -28,4 +28,5 @@ ARTIFACT_FIELDS = {
     "agents", "trace", "context", "command_manifest", "multi_agent_evidence", "swimlane_evidence", "frontend_evidence",
     "requirement_questions", "requirement_questions_sha256",
 }
+OPTIONAL_ARTIFACT_FIELDS = {"delivery_contract"}
 ARTIFACT_HASH_FIELDS = {"requirement_questions_sha256"}

@@ -17,7 +17,7 @@
     "targeted_tests": 0,
     "code_standards": 0,
     "traceability": 0,
-    "swimlane_evidence": 0,
+    "{{GATE_PLAN_SWIMLANE_RERUN_ID_OR_REMOVE_ENTRY}}": 0,
     "automated_review": 0
   }
 }

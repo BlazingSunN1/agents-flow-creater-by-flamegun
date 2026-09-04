@@ -14,10 +14,10 @@
 - Context workset manifest and reused evidence fingerprints: {{CONTEXT_MANIFEST_AND_REUSED_EVIDENCE}}
 - Automated review evidence: {{AUTOMATED_REVIEW_EVIDENCE_PATH}}
 - Independent review evidence: {{UI_UX_ACCEPTANCE_AND_BLACK_BOX_AGENT_RUN_IDS_AND_EVIDENCE}}
-- Swimlane evidence: {{SWIMLANE_EVIDENCE_PATH}}
+{{GATE_PLAN_SWIMLANE_EVIDENCE_RECORD_OR_OMIT}}
 - Frontend evidence: {{FRONTEND_EVIDENCE_PATH_OR_NA}}
 - Classified findings and routes: {{FINDING_IDS_CLASSES_STATUS_ROUTES_AND_EVIDENCE}}
 - Verification evidence: {{VERIFICATION_COMMANDS_AND_RESULTS_OR_PATHS}}
 - Frontend interaction evidence: {{FRONTEND_EVIDENCE_PATH_BROWSER_AND_E2E_RUN_IDS}}
-- Swimlane diagrams and validated evidence: {{SWIMLANE_DIAGRAM_PATHS_AND_EVIDENCE_JSON}}
+{{GATE_PLAN_SWIMLANE_DIAGRAM_RECORD_OR_OMIT}}
 - Remaining risks: {{REMAINING_RISKS}}

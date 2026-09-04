@@ -20,7 +20,7 @@ from system_delivery_path_validation import normalized_project_path as _normaliz
 from delivery_authority_binding import agents_declares_authority_binding, authority_binding_valid, receipt_repeats_authority_binding
 from system_delivery_schema import (
     ARTIFACT_FIELDS, ARTIFACT_HASH_FIELDS, ENTRY_FIELDS, LEGACY_SYSTEM_FIELDS,
-    MODULE_FIELDS, SYSTEM_FIELDS,
+    MODULE_FIELDS, OPTIONAL_ARTIFACT_FIELDS, SYSTEM_FIELDS,
 )
 @dataclass(frozen=True)
 class Issue:
@@ -258,13 +258,14 @@ def _validate_module_shape(value: dict[str, object], source: str, issues: list[I
         if not isinstance(value.get(field), str) or not value[field].strip():
             issues.append(_issue("system-module-identity-invalid", f"{field} 必须是非空字符串", source))
     artifacts = value.get("artifacts")
-    if not isinstance(artifacts, dict) or set(artifacts) != ARTIFACT_FIELDS:
+    if (not isinstance(artifacts, dict) or not ARTIFACT_FIELDS <= set(artifacts)
+            or not set(artifacts) <= ARTIFACT_FIELDS | OPTIONAL_ARTIFACT_FIELDS):
         issues.append(_issue("system-module-artifacts-schema", "模块 artifacts 字段不完整或含未知字段", source))
     return len(issues) != before
 def _run_module_bundle(
     entry: dict[str, object], bundle: dict[str, object], system: dict[str, object], root: Path,
-    canonical: dict[str, tuple[tuple[str, ...], str]], allow_passwords: bool,
-    module_validator: Callable[..., list[object]], source: Path, issues: list[Issue], host_attestation_verifier: HostAttestationVerifier | None,
+    canonical: dict[str, tuple[tuple[str, ...], str]], allow_passwords: bool, module_validator: Callable[..., list[object]],
+    source: Path, issues: list[Issue], host_attestation_verifier: HostAttestationVerifier | None,
 ) -> ModuleResult | None:
     module = str(bundle["module"]).casefold()
     if str(entry["module"]).casefold() != module or module not in canonical:
@@ -282,14 +283,14 @@ def _run_module_bundle(
     paths = _bound_module_artifacts(bundle, system, root, source, issues)
     if paths is None:
         return None
-    verifier_kw = ({} if host_attestation_verifier is None else {
-        "_test_only_host_attestation_verifier": host_attestation_verifier,
-    })
+    verifier_kw = {} if host_attestation_verifier is None else {
+        "_test_only_host_attestation_verifier": host_attestation_verifier}
     try:
         module_issues = module_validator(
             agents_path=paths["agents"], trace_path=paths["trace"], context_path=paths["context"],
             command_manifest_path=paths["command_manifest"], multi_agent_evidence_path=paths["multi_agent_evidence"],
             swimlane_evidence_path=paths["swimlane_evidence"], frontend_evidence_path=paths["frontend_evidence"],
+            delivery_contract_path=paths["delivery_contract"],
             requirement_questions_path=paths["requirement_questions"],
             requirement_questions_sha256=bundle["artifacts"]["requirement_questions_sha256"],
             requirement_baseline_version=bundle["requirement_baseline_version"],
@@ -336,7 +337,7 @@ def _artifact_paths(value: object, root: Path, issues: list[Issue]) -> dict[str,
     if not isinstance(value, dict):
         return None
     paths: dict[str, Path | None] = {}
-    for key in ARTIFACT_FIELDS:
+    for key in ARTIFACT_FIELDS | OPTIONAL_ARTIFACT_FIELDS:
         raw = value.get(key)
         if key in ARTIFACT_HASH_FIELDS:
             if not isinstance(raw, str) or re.fullmatch(r"[0-9a-f]{64}", raw) is None:
@@ -347,7 +348,7 @@ def _artifact_paths(value: object, root: Path, issues: list[Issue]) -> dict[str,
                 ))
                 return None
             continue
-        if key == "frontend_evidence" and raw is None:
+        if key in {"delivery_contract", "frontend_evidence", "swimlane_evidence"} and raw is None:
             paths[key] = None
             continue
         path, issue = _project_file(root, raw, key)

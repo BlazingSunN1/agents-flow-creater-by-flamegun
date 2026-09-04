@@ -32,10 +32,14 @@ class Issue:
 
 
 STABLE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+SWIMLANE_GATE_IDS = frozenset({"swimlane_evidence", "swimlane_freshness"})
+
+
 def validate_declared_records(
     agents_path: Path, trace: dict[str, str], context: dict[str, str], root: Path,
     stage: str, multi_agent_path: Path, swimlane_path: Path | None,
     frontend_path: Path | None, command_manifest_path: Path, context_path: Path,
+    planned_command_ids: set[str] | None,
 ) -> list[Issue]:
     try:
         text = agents_path.read_text(encoding="utf-8")
@@ -44,15 +48,19 @@ def validate_declared_records(
     issues = _validate_plan_progress(text, trace, context, root, stage)
     evidence_paths = {
         "Independent review evidence": _relative_path(multi_agent_path, root),
-        "Swimlane evidence": _relative_path(swimlane_path, root),
     }
+    if _swimlane_evidence_required(planned_command_ids):
+        evidence_paths["Swimlane evidence"] = _relative_path(swimlane_path, root)
     if frontend_path is not None:
         evidence_paths["Frontend evidence"] = _relative_path(frontend_path, root)
     module_paths, module_issues = _validate_module_records(
         text, trace, context, context_path, root, stage, evidence_paths, swimlane_path,
+        planned_command_ids,
     )
     issues.extend(module_issues)
-    issues.extend(_validate_review_record(text, context, root, command_manifest_path))
+    issues.extend(_validate_review_record(
+        text, context, root, command_manifest_path, planned_command_ids,
+    ))
     issues.extend(_validate_progress_index(text, context, root, stage, module_paths))
     issues.extend(_record_alias_issues(text, module_paths, root))
     return issues
@@ -89,6 +97,7 @@ def _validate_module_records(
     text: str, trace: dict[str, str], context: dict[str, str], context_path: Path,
     root: Path, stage: str,
     evidence_paths: dict[str, str], swimlane_path: Path | None,
+    planned_command_ids: set[str] | None,
 ) -> tuple[dict[str, tuple[str, str]], list[Issue]]:
     section = extract_heading_section(text, MODULAR_LOG_HEADING_RE) or ""
     template = _declared_path(section, r"immutable module runs|模块.*运行|模块.*run")
@@ -111,6 +120,7 @@ def _validate_module_records(
         issues.extend(_module_record_issues(
             text, trace, context, context_path, root, stage, module, run_path, latest_path,
             evidence_paths, swimlane_path, statuses,
+            planned_command_ids,
         ))
     return paths, issues
 
@@ -120,37 +130,41 @@ def _module_record_issues(
     root: Path, stage: str, module: str,
     run_path: str, latest_path: str, evidence_paths: dict[str, str],
     swimlane_path: Path | None, statuses: set[str],
+    planned_command_ids: set[str] | None,
 ) -> list[Issue]:
     expected = _module_run_expected(
         text, trace, context, context_path, root, module, evidence_paths,
     )
-    issues = _validate_record(
-        run_path, root, "execution-run", expected,
-        ("Context cache key", "Baseline version and SHA-256", "Build ID and acceptance environment",
-         "Context workset manifest and reused evidence fingerprints",
-         "Risk level and reason", "Delivered result", "Verification evidence",
-         "Swimlane diagrams and validated evidence", "Remaining risks", "Status"),
-        statuses, "Remaining risks" if stage == "completion" else None,
-    )
-    required_paths = {
-        "Verification evidence": {
-            value for key, value in evidence_paths.items()
-            if key in {"Swimlane evidence", "Frontend evidence"} and value
-        },
-        "Swimlane diagrams and validated evidence": {
-            evidence_paths.get("Swimlane evidence", ""), *_swimlane_diagram_paths(swimlane_path),
-        },
+    required_fields = ["Context cache key", "Baseline version and SHA-256", "Build ID and acceptance environment",
+                       "Context workset manifest and reused evidence fingerprints", "Risk level and reason",
+                       "Delivered result", "Verification evidence", "Remaining risks", "Status"]
+    if _swimlane_evidence_required(planned_command_ids):
+        required_fields.append("Swimlane diagrams and validated evidence")
+    issues = _validate_record(run_path, root, "execution-run", expected, tuple(required_fields),
+                              statuses, "Remaining risks" if stage == "completion" else None)
+    verification_paths = {
+        value for key, value in evidence_paths.items()
+        if key in {"Swimlane evidence", "Frontend evidence"} and value
     }
+    required_paths = {"Verification evidence": verification_paths} if verification_paths else {}
+    if _swimlane_evidence_required(planned_command_ids):
+        required_paths["Swimlane diagrams and validated evidence"] = {
+            evidence_paths.get("Swimlane evidence", ""), *_swimlane_diagram_paths(swimlane_path),
+        }
     if not _record_paths_include(run_path, root, required_paths):
         issues.append(Issue("error", "bundle-execution-run-evidence-stale", "模块 run 未绑定当前验证和泳道路径", run_path))
     if stage != "completion":
         return issues
+    latest_expected = {"Module": module, "Run ID": context.get("Run ID", ""),
+                       "Code version": context.get("Code version", ""), "Status": "completed",
+                       "Record": run_path}
+    latest_required = ["Delivered result", "Verification evidence", "Remaining risks"]
+    if _swimlane_evidence_required(planned_command_ids):
+        latest_expected["Swimlane evidence"] = evidence_paths.get("Swimlane evidence", "")
+        latest_required.append("Swimlane evidence")
     issues.extend(_validate_record(
         latest_path, root, "module-latest",
-        {"Module": module, "Run ID": context.get("Run ID", ""),
-         "Code version": context.get("Code version", ""), "Status": "completed",
-         "Record": run_path, "Swimlane evidence": evidence_paths.get("Swimlane evidence", "")},
-        ("Delivered result", "Verification evidence", "Swimlane evidence", "Remaining risks"),
+        latest_expected, tuple(latest_required),
         {"completed"}, "Remaining risks",
     ))
     latest_verification = {
@@ -200,6 +214,7 @@ def _module_requirement_ids(context: dict[str, str], module: str) -> str:
 
 def _validate_review_record(
     text: str, context: dict[str, str], root: Path, command_manifest_path: Path,
+    planned_command_ids: set[str] | None,
 ) -> list[Issue]:
     path = _review_path(text)
     issues = _validate_record(
@@ -218,8 +233,10 @@ def _validate_review_record(
         return issues
     _, payload = _read_record(path, root, "automated-review")
     fields, _, _, _ = _record_fields(payload)
-    if (not _review_scope_valid(fields) or not _review_trigger_valid(fields)
-            or not _review_execution_valid(fields, command_manifest_path, root)):
+    if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)
+            or not _review_execution_valid(
+                fields, command_manifest_path, root, planned_command_ids,
+            )):
         return [Issue(
             "error", "bundle-automated-review-unexecuted",
             "自动审查命令和重跑结果必须明确执行成功", path,
@@ -234,18 +251,25 @@ def _review_trigger_valid(fields: dict[str, str]) -> bool:
             or (trigger == "human_requested" and bool(reference) and reference.casefold() != "n/a"))
 
 
-def _review_scope_valid(fields: dict[str, str]) -> bool:
+def _review_scope_valid(
+    fields: dict[str, str], planned_command_ids: set[str] | None,
+) -> bool:
     scope = fields.get("scope", "")
     negative = r"(?i)\b(?:n/?a|none|skipped?|not\s+(?:run|executed)|unexecuted|without\s+execution|never\s+executed|(?:no\s+)?execution\s+omitted|no\s+execution)\b"
     if re.search(negative, scope):
         return False
     normalized = {item.strip().casefold() for item in re.split(r"[,;]", scope) if item.strip()}
-    required = {"callers", "callees", "interfaces", "configuration", "tests", "traceability", "swimlanes"}
+    required = {"callers", "callees", "interfaces", "configuration", "tests", "traceability"}
+    if _planned_swimlane_gates(planned_command_ids):
+        required.add("swimlanes")
     changed = {item.strip().casefold() for item in fields.get("changed files", "").split(",") if item.strip()}
     return required <= normalized and changed <= normalized
 
 
-def _review_execution_valid(fields: dict[str, str], manifest_path: Path, root: Path) -> bool:
+def _review_execution_valid(
+    fields: dict[str, str], manifest_path: Path, root: Path,
+    planned_command_ids: set[str] | None,
+) -> bool:
     try:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -263,9 +287,22 @@ def _review_execution_valid(fields: dict[str, str], manifest_path: Path, root: P
     if fields.get("review exit code") != "0" or not _artifact_matches(fields, root):
         return False
     rerun_ids = {item.strip() for item in fields.get("rerun command ids", "").split(",") if item.strip()}
-    required = {"targeted_tests", "code_standards", "traceability", "swimlane_evidence", "automated_review"}
+    planned_swimlane = _planned_swimlane_gates(planned_command_ids)
+    required = {"targeted_tests", "code_standards", "traceability", "automated_review", *planned_swimlane}
     exit_codes = _key_value_list(fields.get("rerun exit codes", ""))
-    return required <= rerun_ids <= set(command_map) and set(exit_codes) == rerun_ids and set(exit_codes.values()) == {"0"}
+    return (rerun_ids & SWIMLANE_GATE_IDS == planned_swimlane
+            and required <= rerun_ids <= set(command_map)
+            and set(exit_codes) == rerun_ids and set(exit_codes.values()) == {"0"})
+
+
+def _planned_swimlane_gates(planned_command_ids: set[str] | None) -> set[str]:
+    if planned_command_ids is None:
+        return {"swimlane_evidence"}
+    return set(SWIMLANE_GATE_IDS & planned_command_ids)
+
+
+def _swimlane_evidence_required(planned_command_ids: set[str] | None) -> bool:
+    return "swimlane_evidence" in _planned_swimlane_gates(planned_command_ids)
 
 
 def _argv_hash(value: object) -> str:

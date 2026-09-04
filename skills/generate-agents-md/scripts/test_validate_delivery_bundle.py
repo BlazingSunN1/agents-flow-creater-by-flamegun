@@ -762,6 +762,55 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         self._bind_contract_gate_plan(data, str(data["stage"]))
         self.contract.write_text(json.dumps(data), encoding="utf-8")
 
+    def _apply_swimlane_gate_plan_to_records(self) -> None:
+        contract = json.loads(self.contract.read_text(encoding="utf-8"))
+        planned = set(contract["gate_plan"]["required_command_ids"])
+        swimlane_reruns = sorted(planned & {"swimlane_evidence", "swimlane_freshness"})
+        review_output = self.root / "evidence/automated-review.json"
+        payload = json.loads(review_output.read_text(encoding="utf-8"))
+        payload["reruns"].pop("swimlane_evidence")
+        payload["reruns"].update({command_id: 0 for command_id in swimlane_reruns})
+        review_output.write_text(json.dumps(payload), encoding="utf-8")
+        output_sha = hashlib.sha256(review_output.read_bytes()).hexdigest()
+        review = self.review.read_text(encoding="utf-8")
+        if not swimlane_reruns:
+            review = review.replace("; swimlanes\n", "\n")
+        rerun_ids = sorted({"automated_review", "code_standards", "targeted_tests", "traceability", *swimlane_reruns})
+        review = re.sub(
+            r"(?m)^- Rerun command IDs: .+$",
+            f"- Rerun command IDs: {', '.join(rerun_ids)}",
+            review,
+        )
+        review = re.sub(
+            r"(?m)^- Rerun exit codes: .+$",
+            f"- Rerun exit codes: {', '.join(f'{command_id}=0' for command_id in rerun_ids)}",
+            review,
+        )
+        review = re.sub(
+            r"(?m)^- Review evidence SHA-256: .+$",
+            f"- Review evidence SHA-256: {output_sha}",
+            review,
+        )
+        self.review.write_text(review, encoding="utf-8")
+        module_run = self.module_run.read_text(encoding="utf-8")
+        module_run = module_run.replace(
+            "- Verification evidence: swimlane.json, frontend.json\n",
+            "- Verification evidence: frontend.json\n",
+        )
+        module_run = re.sub(
+            r"(?m)^- Swimlane (?:evidence|diagrams and validated evidence): .+\n",
+            "",
+            module_run,
+        )
+        self.module_run.write_text(module_run, encoding="utf-8")
+        latest = self.module_latest.read_text(encoding="utf-8")
+        latest = latest.replace(
+            "- Verification evidence: swimlane.json, frontend.json\n",
+            "- Verification evidence: frontend.json\n",
+        )
+        latest = re.sub(r"(?m)^- Swimlane evidence: .+\n", "", latest)
+        self.module_latest.write_text(latest, encoding="utf-8")
+
     def _assert_valid_contract_change_drift_is_rejected(self, field: str, value: object) -> None:
         self._rewrite_contract_change(field, value)
         standalone = {
@@ -994,6 +1043,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
     def test_non_applicable_swimlane_does_not_require_evidence(self) -> None:
         self._rewrite_contract_change("flow_impact", "none")
         self._rewrite_contract_change("swimlane_applicable", False)
+        self._apply_swimlane_gate_plan_to_records()
         issues = _test_only_validate_delivery_bundle(
             delivery_contract_path=self.contract,
             agents_path=self.agents, trace_path=self.trace_fixture.matrix,
@@ -1008,7 +1058,26 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             ).hexdigest(),
             project_root=self.root, _test_only_host_attestation_verifier=lambda *_: True,
         )
-        self.assertNotIn("missing-swimlane-evidence", {item.code for item in issues})
+        self.assertEqual([], [item for item in issues if item.severity == "error"])
+
+    def test_swimlane_freshness_gate_drives_review_without_evidence_path(self) -> None:
+        self._rewrite_contract_change("flow_impact", "none")
+        self._apply_swimlane_gate_plan_to_records()
+        issues = _test_only_validate_delivery_bundle(
+            delivery_contract_path=self.contract,
+            agents_path=self.agents, trace_path=self.trace_fixture.matrix,
+            context_path=self.context, command_manifest_path=self.commands,
+            multi_agent_evidence_path=self.multi_agent, swimlane_evidence_path=None,
+            frontend_evidence_path=self.frontend,
+            requirement_questions_path=self.requirement_questions,
+            requirement_questions_sha256=self.requirement_questions_sha256,
+            requirement_baseline_version="req-v1",
+            requirement_baseline_sha256=hashlib.sha256(
+                (self.root / "requirements/baseline.md").read_bytes()
+            ).hexdigest(),
+            project_root=self.root, _test_only_host_attestation_verifier=lambda *_: True,
+        )
+        self.assertEqual([], [item for item in issues if item.severity == "error"])
 
     def test_frontend_browser_must_bind_independent_black_box_run(self) -> None:
         data = json.loads(self.frontend.read_text(encoding="utf-8"))
@@ -1653,6 +1722,23 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         self.assertIn("{{MODULE_OWNED_REQUIREMENT_IDS}}", template)
         self.assertNotIn("{{REQ_FLOW_FEAT_UI_UT_AT_MOD_BB_IDS}}", template)
 
+    def test_swimlane_templates_delegate_records_paths_and_reruns_to_gate_plan(self) -> None:
+        assets = Path(__file__).resolve().parent.parent / "assets"
+        agents = (assets / "AGENTS.template.md").read_text(encoding="utf-8")
+        review = (assets / "automated-review-evidence.template.md").read_text(encoding="utf-8")
+        output = (assets / "automated-review-output.template.json").read_text(encoding="utf-8")
+        module_bundle = (assets / "module-delivery-bundle.template.json").read_text(encoding="utf-8")
+        execution = (assets / "execution-run.template.md").read_text(encoding="utf-8")
+        latest = (assets / "module-latest.template.md").read_text(encoding="utf-8")
+        self.assertIn("synchronize only applicable and mapped design, swimlane, UI, test, and acceptance artifacts selected by the gate plan", agents)
+        self.assertIn("{{GATE_PLAN_SWIMLANE_SCOPE_SUFFIX_OR_EMPTY}}", review)
+        self.assertIn("{{TARGETED_TESTS_CODE_STANDARDS_TRACEABILITY_AUTOMATED_REVIEW_AND_GATE_PLAN_SWIMLANE_IDS}}", review)
+        self.assertIn("{{GATE_PLAN_SWIMLANE_RERUN_ID_OR_REMOVE_ENTRY}}", output)
+        self.assertIn("{{GATE_PLAN_SWIMLANE_EVIDENCE_PATH_OR_NULL}}", module_bundle)
+        self.assertIn("{{GATE_PLAN_SWIMLANE_EVIDENCE_RECORD_OR_OMIT}}", execution)
+        self.assertIn("{{GATE_PLAN_SWIMLANE_DIAGRAM_RECORD_OR_OMIT}}", execution)
+        self.assertIn("{{GATE_PLAN_SWIMLANE_EVIDENCE_RECORD_OR_OMIT}}", latest)
+
     def test_agents_content_drift_breaks_bundle_binding(self) -> None:
         self.agents.write_text(self.agents.read_text(encoding="utf-8") + "\n## Project Identity\n\n- Repository: unrelated-project\n", encoding="utf-8")
         self.assertTrue({"context-stale-effective-agents-fingerprint", "bundle-agents-mismatch"} <= self.codes())
@@ -1669,6 +1755,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         implementation_run = self._module_run_record(status="in_progress")
         self.module_run.write_text(implementation_run, encoding="utf-8")
         self._write_delivery_contract(stage="implementation")
+        self._apply_swimlane_gate_plan_to_records()
         issues = _test_only_validate_delivery_bundle(
             delivery_contract_path=self.contract,
             agents_path=self.agents, trace_path=self.trace_fixture.matrix, context_path=self.context,

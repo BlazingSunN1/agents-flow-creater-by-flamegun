@@ -31,6 +31,8 @@ from delivery_contract_bundle_validation import (
     validate_contract_bundle_binding,
     validate_requirement_questions_bundle,
 )
+
+
 @dataclass(frozen=True)
 class Issue:
     severity: str
@@ -106,6 +108,7 @@ def _validate_delivery_bundle_impl(
     delivery_contract_path: Path | None,
     verifier: HostAttestationVerifier | None,
 ) -> list[Issue]:
+    planned_command_ids = _planned_command_ids(delivery_contract_path)
     issues = _validate_agents(agents_path, allow_passwords)
     issues.extend(_validate_contract_and_questions(
         delivery_contract_path, agents_path, trace_path, context_path, command_manifest_path,
@@ -120,7 +123,7 @@ def _validate_delivery_bundle_impl(
     ))
     issues.extend(_validate_swimlane_bundle(
         swimlane_evidence_path, trace_path, context_path, project_root,
-        delivery_contract_path,
+        planned_command_ids,
     ))
     issues.extend(_validate_frontend_bundle(
         frontend_evidence_path, command_manifest_path, trace_path,
@@ -129,7 +132,7 @@ def _validate_delivery_bundle_impl(
     issues.extend(_validate_cross_artifact_binding(
         agents_path, trace_path, context_path, command_manifest_path,
         multi_agent_evidence_path, swimlane_evidence_path, frontend_evidence_path,
-        project_root, stage,
+        project_root, stage, planned_command_ids,
     ))
     issues.extend(_validate_module_ownership_binding(
         agents_path, context_path, multi_agent_evidence_path,
@@ -247,11 +250,11 @@ def _validate_core_evidence(
 
 def _validate_swimlane_bundle(
     evidence: Path | None, trace: Path, context: Path, root: Path,
-    delivery_contract_path: Path | None,
+    planned_command_ids: set[str] | None,
 ) -> list[Issue]:
+    if planned_command_ids is not None and "swimlane_evidence" not in planned_command_ids:
+        return []
     if evidence is None:
-        if not _swimlane_gate_required(delivery_contract_path):
-            return []
         return [Issue("error", "missing-swimlane-evidence", "代码交付缺少系统/模块泳道同步证据", "delivery-bundle")]
     return [
         Issue(item.severity, f"swimlane-{item.code}", item.message, str(evidence))
@@ -261,19 +264,19 @@ def _validate_swimlane_bundle(
     ]
 
 
-def _swimlane_gate_required(delivery_contract_path: Path | None) -> bool:
-    """Fail closed unless the validated contract deterministically omits both swimlane gates."""
+def _planned_command_ids(delivery_contract_path: Path | None) -> set[str] | None:
+    """Return the gate plan command set, or None so callers fail closed."""
     if delivery_contract_path is None:
-        return True
+        return None
     try:
         contract = json.loads(delivery_contract_path.read_text(encoding="utf-8"))
         plan = contract.get("gate_plan") if isinstance(contract, dict) else None
         commands = plan.get("required_command_ids") if isinstance(plan, dict) else None
     except (OSError, UnicodeError, json.JSONDecodeError):
-        return True
+        return None
     if not isinstance(commands, list) or any(not isinstance(item, str) for item in commands):
-        return True
-    return bool({"swimlane_evidence", "swimlane_freshness"} & set(commands))
+        return None
+    return set(commands)
 
 
 def _validate_frontend_bundle(
@@ -315,15 +318,10 @@ def _frontend_applicable(path: Path, trace_path: Path, stage: str, issues: list[
 
 
 def _validate_cross_artifact_binding(
-    agents_path: Path,
-    trace_path: Path,
-    context_path: Path,
-    command_manifest_path: Path,
-    multi_agent_evidence_path: Path,
-    swimlane_evidence_path: Path | None,
-    frontend_evidence_path: Path | None,
-    project_root: Path,
-    stage: str,
+    agents_path: Path, trace_path: Path, context_path: Path, command_manifest_path: Path,
+    multi_agent_evidence_path: Path, swimlane_evidence_path: Path | None,
+    frontend_evidence_path: Path | None, project_root: Path, stage: str,
+    planned_command_ids: set[str] | None,
 ) -> list[Issue]:
     try:
         trace_text = trace_path.read_text(encoding="utf-8")
@@ -339,7 +337,7 @@ def _validate_cross_artifact_binding(
     issues.extend(validate_declared_records(
         agents_path, trace, record_context, project_root, stage,
         multi_agent_evidence_path, swimlane_evidence_path, frontend_evidence_path,
-        command_manifest_path, context_path,
+        command_manifest_path, context_path, planned_command_ids,
     ))
     expected_manifest = context.get("Command manifest fingerprint", "").casefold()
     raw_manifest_path = context.get("Command manifest", "")
@@ -460,7 +458,7 @@ def main() -> int:
     parser.add_argument("--context", type=Path, required=True)
     parser.add_argument("--command-manifest", type=Path, required=True)
     parser.add_argument("--multi-agent-evidence", type=Path, required=True)
-    parser.add_argument("--swimlane-evidence", type=Path, required=True)
+    parser.add_argument("--swimlane-evidence", type=Path)
     parser.add_argument("--frontend-evidence", type=Path)
     parser.add_argument("--requirement-questions", type=Path, required=True)
     parser.add_argument("--requirement-questions-sha256", required=True)

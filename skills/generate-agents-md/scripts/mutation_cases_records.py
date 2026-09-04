@@ -53,14 +53,14 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "module-latest-record-binding-disabled", "scripts/delivery_record_validation.py",
-        '         "Record": run_path, "Swimlane evidence": evidence_paths.get("Swimlane evidence", "")},',
-        '         "Swimlane evidence": evidence_paths.get("Swimlane evidence", "")},',
+        '                       "Record": run_path',
+        "",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_module_latest_must_link_current_run_record",
     ),
     (
         "module-latest-swimlane-binding-disabled", "scripts/delivery_record_validation.py",
-        '         "Record": run_path, "Swimlane evidence": evidence_paths.get("Swimlane evidence", "")},',
-        '         "Record": run_path},',
+        '        latest_expected["Swimlane evidence"] = evidence_paths.get("Swimlane evidence", "")',
+        "        pass",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_module_latest_must_bind_current_swimlane_evidence",
     ),
     (
@@ -94,13 +94,13 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "module-run-open-risk-check-disabled", "scripts/delivery_record_validation.py",
-        '"Remaining risks" if stage == "completion" else None,', "None,",
+        'statuses, "Remaining risks" if stage == "completion" else None)', "statuses, None)",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_completion_rejects_open_module_risks",
     ),
     (
         "automated-review-execution-result-check-disabled", "scripts/delivery_record_validation.py",
-        "if (not _review_scope_valid(fields) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(fields, command_manifest_path, root)):",
-        "if (not _review_scope_valid(fields) or not _review_trigger_valid(fields)):",
+        "if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids,\n            )):",
+        "if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)):",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_unexecuted_automated_review_cannot_claim_pass",
     ),
     (
@@ -279,8 +279,8 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "automated-review-scope-binding-disabled", "scripts/delivery_record_validation.py",
-        "if (not _review_scope_valid(fields) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(fields, command_manifest_path, root)):",
-        "if (not _review_trigger_valid(fields)\n            or not _review_execution_valid(fields, command_manifest_path, root)):",
+        "if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids,\n            )):",
+        "if (not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids,\n            )):",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_review_scope_must_cover_changed_files_and_dependency_surfaces",
     ),
     (

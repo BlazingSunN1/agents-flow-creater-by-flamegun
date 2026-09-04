@@ -31,9 +31,10 @@
     "requirement_questions": "{{REQUIREMENT_QUESTIONS_PATH}}",
     "requirement_questions_sha256": "{{REQUIREMENT_QUESTIONS_SHA256}}",
     "context": "{{MODULE_CONTEXT_PATH}}",
+    "delivery_contract": "{{MODULE_DELIVERY_CONTRACT_PATH}}",
     "command_manifest": "{{COMMAND_MANIFEST_PATH}}",
     "multi_agent_evidence": "{{MODULE_MULTI_AGENT_EVIDENCE_PATH}}",
-    "swimlane_evidence": "{{MODULE_SWIMLANE_EVIDENCE_PATH}}",
+    "swimlane_evidence": "{{GATE_PLAN_SWIMLANE_EVIDENCE_PATH_OR_NULL}}",
     "frontend_evidence": null
   }
 }

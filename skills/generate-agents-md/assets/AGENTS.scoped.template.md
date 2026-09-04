@@ -37,6 +37,6 @@ These instructions apply to `{{SCOPED_DIRECTORY}}/**`.
 
 ## Local Swimlane Diagram
 
-- At a stage/task milestone completion, synchronize this scope's module swimlane at `{{SCOPED_MODULE_SWIMLANE_PATH}}` and record evidence in the parent progress record. Before the milestone, update immediately only when the change alters a flow, entry point, handoff, branch, external dependency, persistence, async/recovery behavior, or final output; flow-neutral edits do not trigger redraws.
+- When the current gate plan selects `swimlane_evidence`, synchronize this scope's module swimlane at `{{SCOPED_MODULE_SWIMLANE_PATH}}` and record the mapped evidence in the parent progress record. Before the milestone, update immediately only when the change alters a flow, entry point, handoff, branch, external dependency, persistence, async/recovery behavior, or final output; flow-neutral edits do not trigger redraws.
 - If the change alters an entry point, cross-module handoff, system boundary, external dependency, persistence, asynchronous event, or final output, update the root system overview before this module diagram.
 - Do not mark the scoped stage or task milestone complete until the synchronized interactive diagram has been opened in a browser and its affected module flow clicked through successfully.
