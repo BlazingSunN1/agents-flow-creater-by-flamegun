@@ -1058,7 +1058,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             ).hexdigest(),
             project_root=self.root, _test_only_host_attestation_verifier=lambda *_: True,
         )
-        self.assertEqual([], [item for item in issues if item.severity == "error"])
+        self.assertEqual([], issues)
 
     def test_swimlane_freshness_gate_drives_review_without_evidence_path(self) -> None:
         self._rewrite_contract_change("flow_impact", "none")
@@ -1077,7 +1077,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             ).hexdigest(),
             project_root=self.root, _test_only_host_attestation_verifier=lambda *_: True,
         )
-        self.assertEqual([], [item for item in issues if item.severity == "error"])
+        self.assertEqual([], issues)
 
     def test_frontend_browser_must_bind_independent_black_box_run(self) -> None:
         data = json.loads(self.frontend.read_text(encoding="utf-8"))
