@@ -41,6 +41,7 @@ from trace_template_validation import validate_template_tables
 from trace_stage_validation import black_box_not_started, pending_black_box_issues
 from trace_row_identity_validation import requirement_identity_issues
 from trace_baseline_validation import _validate_baseline
+from trace_workset_binding import trace_deleted_files
 
 def validate_traceability(
     path: Path,
@@ -48,6 +49,7 @@ def validate_traceability(
     project_root: Path,
     template: bool = False,
     stage: str = "completion",
+    context_path: Path | None = None,
 ) -> list[Issue]:
     issues: list[Issue] = []
     text = _read_traceability(path, issues)
@@ -68,12 +70,12 @@ def validate_traceability(
     )
     surfaces = _validate_risk(metadata, issues)
     expected_sha = _validate_baseline(metadata, root, issues)
-    _validate_trace_rows(trace_rows, trace_numbers, surfaces, root, issues)
+    deleted = trace_deleted_files(context_path, root, issues)
+    _validate_trace_rows(trace_rows, trace_numbers, surfaces, root, issues, deleted)
     gates = _validate_gate_rows(gate_rows, gate_numbers, metadata, expected_sha, surfaces, root, stage, issues)
     open_findings = _validate_finding_rows(finding_rows, finding_numbers, root, issues)
     _validate_stage(stage, trace_rows, gates, metadata, surfaces, open_findings, issues)
     return _deduplicate(issues)
-
 
 def _read_traceability(path: Path, issues: list[Issue]) -> str | None:
     try:
@@ -89,13 +91,11 @@ def _read_traceability(path: Path, issues: list[Issue]) -> str | None:
         issues.append(Issue("error", "invalid-utf8", f"追踪矩阵不是有效 UTF-8：{error.start}"))
         return None
 
-
 def _validate_document_shape(text: str, template: bool, stage: str, issues: list[Issue]) -> None:
     if not template and PLACEHOLDER_RE.search(text):
         issues.append(Issue("error", "placeholder", "项目追踪矩阵包含未解析占位符"))
     if stage not in VALIDATION_STAGES:
         issues.append(Issue("error", "invalid-stage", "stage 必须是 implementation、closure_candidate 或 completion"))
-
 
 def _validate_metadata(text: str, issues: list[Issue]) -> dict[str, str]:
     metadata = _parse_metadata(text)
@@ -130,7 +130,6 @@ def _parse_required_tables(
         trace_rows or [], trace_numbers, gate_rows or [], gate_numbers,
         finding_rows or [], finding_numbers,
     )
-
 
 def _validate_risk(metadata: dict[str, str], issues: list[Issue]) -> set[str]:
     risk = metadata.get("Risk level", "")
@@ -173,7 +172,7 @@ def _validate_risk(metadata: dict[str, str], issues: list[Issue]) -> set[str]:
     return surfaces
 
 
-def _validate_trace_rows(trace_rows: list[dict[str, str]], row_numbers: list[int], surfaces: set[str], root: Path, issues: list[Issue]) -> None:
+def _validate_trace_rows(trace_rows: list[dict[str, str]], row_numbers: list[int], surfaces: set[str], root: Path, issues: list[Issue], deleted_files: set[str] | None = None) -> None:
     artifact_ids: dict[str, tuple[str, int]] = {}
     requirement_rows: dict[str, int] = {}
     artifact_roles: dict[tuple[int, int], str] = {}
@@ -213,7 +212,8 @@ def _validate_trace_rows(trace_rows: list[dict[str, str]], row_numbers: list[int
                     )
                 else:
                     artifact_ids[artifact_id] = (normalized_path, row_number)
-                resolved = _resolve_project_path(artifact_path, root, issues, "trace-artifact", row_number)
+                deleted = column == "Code module" and artifact_path in (deleted_files or set())
+                resolved = None if deleted else _resolve_project_path(artifact_path, root, issues, "trace-artifact", row_number)
                 if resolved and resolved.is_file() and (issue := _trace_role_reuse_issue(
                     resolved, column, artifact_path, row_number, artifact_roles, artifact_content_roles,
                 )):
@@ -453,11 +453,11 @@ def _validate_stage(
     if open_findings:
         issues.append(Issue("error", "open-findings", f"仍有 open 问题，不能通过 {stage} 阶段"))
 
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="失败关闭地验证需求追踪矩阵与独立验收证据")
     parser.add_argument("path", type=Path)
     parser.add_argument("--project-root", type=Path, required=True)
+    parser.add_argument("--context", type=Path, help="显式删除 Code module 的工作集声明")
     parser.add_argument("--template", action="store_true", help="只校验公共模板结构和 UTF-8")
     parser.add_argument("--stage", choices=VALIDATION_STAGES, default="completion")
     parser.add_argument("--json", action="store_true")
@@ -471,6 +471,7 @@ def main() -> int:
         project_root=arguments.project_root,
         template=arguments.template,
         stage=arguments.stage,
+        context_path=arguments.context,
     )
     failed = any(issue.severity == "error" for issue in issues)
     if arguments.json:

@@ -99,7 +99,7 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "automated-review-execution-result-check-disabled", "scripts/delivery_record_validation.py",
-        "if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids,\n            )):",
+        "if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids, context=context,\n            )):",
         "if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)):",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_unexecuted_automated_review_cannot_claim_pass",
     ),
@@ -177,7 +177,7 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "review-output-changed-file-alias-check-disabled", "scripts/delivery_record_validation.py",
-        'if _aliases_changed_file(resolved, fields.get("changed files", ""), root):',
+        'if _aliases_changed_file(resolved, fields.get("changed files", ""), root, deleted_files=deleted):',
         "if False:",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_review_evidence_cannot_reuse_changed_source_file",
     ),
@@ -279,8 +279,8 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "automated-review-scope-binding-disabled", "scripts/delivery_record_validation.py",
-        "if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids,\n            )):",
-        "if (not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids,\n            )):",
+        "if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids, context=context,\n            )):",
+        "if (not _review_trigger_valid(fields)\n            or not _review_execution_valid(\n                fields, command_manifest_path, root, planned_command_ids, context=context,\n            )):",
         "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_review_scope_must_cover_changed_files_and_dependency_surfaces",
     ),
     (
@@ -351,7 +351,7 @@ ADDITIONAL_MUTANT_CASES = (
     ),
     (
         "module-file-unique-ownership-check-disabled", "scripts/validate_context_manifest.py",
-        "if raw_path in raw_owners or identity in owners:",
+        "if identity in owners:",
         "if False:",
         "scripts.test_validate_context_manifest.ContextManifestValidatorTests.test_module_file_ownership_rejects_overlap_and_path_aliases",
     ),

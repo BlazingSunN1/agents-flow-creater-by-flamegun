@@ -7,7 +7,8 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from validate_context_manifest import _parse_metadata as parse_context_metadata
-from validate_context_manifest import _split_paths
+from validate_context_manifest import _split_paths, _context_deleted_files
+from delivery_gate_planner import GatePlanError
 from validate_traceability import GATE_COLUMNS, LINK_RE, TRACE_COLUMNS, _parse_metadata, _parse_table
 from template_schema_validation import multi_agent_issues as _multi_agent_template_issues
 from implementation_agent_validation import (
@@ -331,8 +332,15 @@ def _agent_context(
         issues.append(Issue("error", "unreadable-agent-context", str(error)))
         return {}, set()
     identities: set[tuple[int, int]] = set()
+    try:
+        deleted = _context_deleted_files(context, root)
+    except GatePlanError as error:
+        issues.append(Issue("error", "invalid-deleted-files", str(error)))
+        deleted = set()
     for field in ("Changed files", "Configuration files", "Input files"):
         for raw_path in _split_paths(context.get(field, "")):
+            if field == "Changed files" and raw_path in deleted:
+                continue
             candidate = root / raw_path
             try:
                 identities.add((candidate.stat().st_dev, candidate.stat().st_ino))

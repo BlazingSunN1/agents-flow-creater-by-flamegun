@@ -8,7 +8,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from authority_binding_validation import authority_binding_issues, authority_metadata_issues
-from context_cache_validation import _cache_key_from_requirement_ids
+from context_cache_validation import _cache_key_from_requirement_ids, _canonical_module_file_map, _parse_module_file_map
+from delivery_gate_planner import GatePlanError, _deleted_path, validate_deleted_files
 
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
 SHA256_RE = re.compile(r"[0-9a-f]{64}", re.IGNORECASE)
@@ -203,9 +204,14 @@ def _validate_fingerprints(metadata: dict[str, str], root: Path, issues: list[Is
         if len(paths) != len(set(paths)):
             issues.append(Issue("error", "duplicate-workset-path", f"{field} 不得重复声明同一路径"))
     issues.extend(_module_mapping_issues(metadata, root))
+    try:
+        deleted = _context_deleted_files(metadata, root)
+    except GatePlanError as error:
+        issues.append(Issue("error", "invalid-deleted-files", str(error)))
+        deleted = set()
 
     calculated_fingerprints = {
-        "Code fingerprint": _paths_fingerprint(metadata["Changed files"], root, issues, "changed-file"),
+        "Code fingerprint": _paths_fingerprint(metadata["Changed files"], root, issues, "changed-file", deleted_files=deleted),
         "Command fingerprint": hashlib.sha256(metadata["Required commands"].encode("utf-8")).hexdigest(),
         "Effective AGENTS fingerprint": _paths_fingerprint(
             metadata["Effective AGENTS files"], root, issues, "agents-file"
@@ -330,16 +336,10 @@ def _validate_reuse_source_run(
         issues.append(Issue("error", "stale-reuse-source-run", "复用源 run 必须为当前缓存键下已完成且证据集合一致的记录"))
 
 
-def _parse_module_file_map(value: str) -> dict[str, set[str]]:
-    result: dict[str, set[str]] = {}
-    for item in value.split(";"):
-        module, separator, raw_paths = item.strip().partition("=")
-        path_items = [path.strip() for path in raw_paths.split(",") if path.strip()]
-        paths = set(path_items)
-        if not separator or len(path_items) != len(paths) or not STABLE_ID_RE.fullmatch(module) or module in result:
-            return {}
-        result[module] = paths
-    return result
+def _context_deleted_files(metadata: dict[str, str], root: Path) -> set[str]:
+    return validate_deleted_files({key: _split_paths(metadata.get(field, "")) for key, field in (
+        ("deleted_files", "Deleted files"), ("changed_files", "Changed files"), ("configuration_files", "Configuration files"), ("input_files", "Input files"),
+    )}, root)
 
 
 def _module_mapping_issues(metadata: dict[str, str], root: Path) -> list[Issue]:
@@ -359,19 +359,17 @@ def _module_mapping_issues(metadata: dict[str, str], root: Path) -> list[Issue]:
             candidate = Path(raw_path)
             if candidate.is_absolute() or raw_path != candidate.as_posix() or ".." in candidate.parts:
                 return [Issue("error", "unsafe-module-changed-file", f"模块文件路径必须规范且位于项目内：{raw_path}")]
+            if raw_path in raw_owners:
+                return [Issue("error", "ambiguous-module-changed-file", f"变更文件不得归属多个模块：{raw_path}")]
+            raw_owners[raw_path] = module
             try:
                 identity = ((root / candidate).stat().st_dev, (root / candidate).stat().st_ino)
             except OSError:
                 continue
-            if raw_path in raw_owners or identity in owners:
+            if identity in owners:
                 return [Issue("error", "ambiguous-module-changed-file", f"变更文件不得归属多个模块：{raw_path}")]
             raw_owners[raw_path], owners[identity] = module, module
     return []
-
-
-def _canonical_module_file_map(value: str) -> str:
-    mapping = _parse_module_file_map(value)
-    return ";".join(f'{module}={",".join(sorted(mapping[module]))}' for module in sorted(mapping))
 
 
 def _parse_metadata(text: str) -> tuple[dict[str, str], list[tuple[str, int]]]:
@@ -396,14 +394,17 @@ def _split_paths(value: str) -> list[str]:
     return [item.strip().strip("`") for item in value.split(",") if item.strip()]
 
 
-def _paths_fingerprint(
-    value: str,
-    root: Path,
-    issues: list[Issue],
-    code: str,
-) -> str:
+def _paths_fingerprint(value: str, root: Path, issues: list[Issue], code: str,
+                       *, deleted_files: set[str] | None = None) -> str:
     entries: list[str] = []
     for raw_path in sorted(_split_paths(value)):
+        if deleted_files and raw_path in deleted_files:
+            try:
+                _deleted_path(raw_path, root)
+                entries.append(f"{raw_path}\0deleted")
+            except GatePlanError as error:
+                issues.append(Issue("error", "invalid-deleted-files", str(error)))
+            continue
         resolved = _resolve_path(raw_path, root, issues, code)
         if resolved and resolved.is_file():
             entries.append(f"{raw_path}\0{hashlib.sha256(resolved.read_bytes()).hexdigest()}")

@@ -541,6 +541,19 @@ class ContextManifestValidatorTests(unittest.TestCase):
                 text = text.replace(metadata["Evidence cache key"], _cache_key(metadata))
                 self.path.write_text(text, encoding="utf-8")
                 self.assertTrue({"ambiguous-module-changed-file", "unsafe-module-changed-file"} & self.codes())
+        # Distinct canonical paths can still alias the same physical input.
+        os.link(self.root / "src/module.py", self.root / "src/linked.py")
+        metadata, _ = _parse_metadata(self._valid_manifest())
+        metadata.update({
+            "Modules": "module, module2",
+            "Changed files": "src/module.py, src/linked.py",
+            "Module changed files": "module=src/module.py; module2=src/linked.py",
+        })
+        from validate_context_manifest import _module_mapping_issues
+        self.assertEqual(
+            ["ambiguous-module-changed-file"],
+            [issue.code for issue in _module_mapping_issues(metadata, self.root.resolve())],
+        )
 
     def test_single_module_rejects_dot_path_alias(self) -> None:
         text = self._valid_manifest().replace("module=src/module.py", "module=./src/module.py")

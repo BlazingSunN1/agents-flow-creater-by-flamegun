@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from delivery_gate_planner import GatePlanError, _deleted_path
+from validate_context_manifest import _context_deleted_files
 
 from agents_policy_common import (
     AUTOMATED_REVIEW_HEADING_RE,
@@ -32,7 +34,6 @@ from delivery_record_paths import (
     modules as _modules,
     normalize_template as _normalize_template,
 )
-
 
 @dataclass(frozen=True)
 class Issue:
@@ -244,7 +245,7 @@ def _validate_review_record(
     fields, _, _, _ = _record_fields(payload)
     if (not _review_scope_valid(fields, planned_command_ids) or not _review_trigger_valid(fields)
             or not _review_execution_valid(
-                fields, command_manifest_path, root, planned_command_ids,
+                fields, command_manifest_path, root, planned_command_ids, context=context,
             )):
         return [Issue(
             "error", "bundle-automated-review-unexecuted",
@@ -274,10 +275,10 @@ def _review_scope_valid(
     changed = {item.strip().casefold() for item in fields.get("changed files", "").split(",") if item.strip()}
     return required <= normalized and changed <= normalized
 
-
 def _review_execution_valid(
     fields: dict[str, str], manifest_path: Path, root: Path,
     planned_command_ids: set[str] | None,
+    *, context: dict[str, str] | None = None,
 ) -> bool:
     try:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -293,7 +294,7 @@ def _review_execution_valid(
         return False
     if fields.get("review command argv sha-256", "") != _argv_hash(review.get("argv")):
         return False
-    if fields.get("review exit code") != "0" or not _artifact_matches(fields, root):
+    if fields.get("review exit code") != "0" or not _artifact_matches(fields, root, context=context):
         return False
     rerun_ids = {item.strip() for item in fields.get("rerun command ids", "").split(",") if item.strip()}
     planned_swimlane = _planned_swimlane_gates(planned_command_ids)
@@ -303,30 +304,30 @@ def _review_execution_valid(
             and required <= rerun_ids <= set(command_map)
             and set(exit_codes) == rerun_ids and set(exit_codes.values()) == {"0"})
 
-
 def _planned_swimlane_gates(planned_command_ids: set[str] | None) -> set[str]:
     if planned_command_ids is None:
         return {"swimlane_evidence"}
     return set(SWIMLANE_GATE_IDS & planned_command_ids)
 
-
 def _swimlane_evidence_required(planned_command_ids: set[str] | None) -> bool:
     return "swimlane_evidence" in _planned_swimlane_gates(planned_command_ids)
-
 
 def _argv_hash(value: object) -> str:
     if not isinstance(value, list) or not value or any(not isinstance(item, str) for item in value):
         return ""
     return hashlib.sha256("\0".join(value).encode("utf-8")).hexdigest()
 
-
-def _artifact_matches(fields: dict[str, str], root: Path) -> bool:
+def _artifact_matches(fields: dict[str, str], root: Path, *, context: dict[str, str] | None = None) -> bool:
     raw_path = fields.get("review evidence path", "")
     candidate = Path(raw_path)
     if not raw_path or candidate.is_absolute() or _has_symlink_component(root.resolve(), candidate):
         return False
     resolved = (root.resolve() / candidate).resolve()
-    if _aliases_changed_file(resolved, fields.get("changed files", ""), root):
+    try:
+        deleted = _context_deleted_files(context or {}, root)
+    except GatePlanError:
+        return False
+    if _aliases_changed_file(resolved, fields.get("changed files", ""), root, deleted_files=deleted):
         return False
     try:
         resolved.relative_to(root.resolve())
@@ -357,7 +358,6 @@ def _artifact_matches(fields: dict[str, str], root: Path) -> bool:
     }
     return _review_transcript_matches(data, expected) and _valid_time_range(data)
 
-
 def _review_transcript_matches(data: object, expected: dict[str, object]) -> bool:
     required_keys = {*expected, "started_at", "ended_at"}
     if not isinstance(data, dict) or set(data) != required_keys:
@@ -375,13 +375,18 @@ def _review_transcript_matches(data: object, expected: dict[str, object]) -> boo
         return False
     return all(data.get(key) == value for key, value in expected.items())
 
-
-def _aliases_changed_file(evidence: Path, raw_changed: str, root: Path) -> bool:
+def _aliases_changed_file(evidence: Path, raw_changed: str, root: Path, *, deleted_files: set[str] | None = None) -> bool:
     try:
         evidence_identity = (evidence.stat().st_dev, evidence.stat().st_ino)
     except OSError:
         return True
     for raw_path in (item.strip() for item in raw_changed.split(",") if item.strip()):
+        if raw_path in (deleted_files or set()):
+            try:
+                _deleted_path(raw_path, root)
+            except GatePlanError:
+                return True
+            continue
         candidate = root.resolve() / raw_path
         try:
             if (candidate.stat().st_dev, candidate.stat().st_ino) == evidence_identity:
@@ -389,7 +394,6 @@ def _aliases_changed_file(evidence: Path, raw_changed: str, root: Path) -> bool:
         except OSError:
             return True
     return False
-
 
 def _key_value_list(value: str) -> dict[str, str]:
     result: dict[str, str] = {}
@@ -462,7 +466,6 @@ def _validate_progress_index(
         )
         required = ("Module latest records",)
     return _validate_record(progress, root, "progress-index", expected, required)
-
 
 def _review_path(text: str, context: dict[str, str]) -> str:
     section = extract_heading_section(text, AUTOMATED_REVIEW_HEADING_RE) or ""

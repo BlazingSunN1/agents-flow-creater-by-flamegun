@@ -153,6 +153,9 @@ def _change_issues(
     change = data.get("change")
     if not isinstance(change, dict):
         return []
+    if change.get("deleted_files", []) != _split_paths(context.get("Deleted files", "")):
+        return [Finding("error", "contract-change-identity-mismatch",
+                        "delivery contract 删除集与工作集不一致", str(contract_path))]
     expected = {
         "requirement_ids": [item.strip() for item in context.get("Requirement IDs", "").split(",") if item.strip()],
         "modules": [item.strip() for item in context.get("Modules", "").split(",") if item.strip()],

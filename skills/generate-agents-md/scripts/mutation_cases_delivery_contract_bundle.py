@@ -3,6 +3,30 @@ from __future__ import annotations
 
 DELIVERY_CONTRACT_BUNDLE_MUTANT_CASES = (
     (
+        "cypress-pending-stat-check-disabled", "scripts/frontend_report_validation.py",
+        '                and ("pending" not in stats or type(stats["pending"]) is int and stats["pending"] == 0)\n',
+        "",
+        "scripts.test_gate_review_repairs.GateReviewRepairTests.test_cypress_pending_and_total_stats_must_match_executed_results",
+    ),
+    (
+        "deleted-workset-absence-check-disabled", "scripts/delivery_gate_planner.py",
+        "        _deleted_path(raw, root)\n",
+        "        pass\n",
+        "scripts.test_gate_review_repairs.GateReviewRepairTests.test_deleted_file_and_rename_are_bound_to_contract",
+    ),
+    (
+        "business-fingerprint-stage-coupling-restored", "scripts/delivery_gate_planner.py",
+        '        "baseline_version": baseline.get("version"),\n',
+        '        "stage": contract.get("stage"),\n        "baseline_version": baseline.get("version"),\n',
+        "scripts.test_gate_review_repairs.GateReviewRepairTests.test_stage_transition_reuses_business_receipts_but_rechecks_stage_semantics",
+    ),
+    (
+        "stage-sensitive-gate-binding-disabled", "scripts/delivery_gate_planner.py",
+        '                **({"stage": stage} if command_id in {"traceability", "multi_agent_evidence"} else {}),\n',
+        "",
+        "scripts.test_gate_review_repairs.GateReviewRepairTests.test_stage_transition_reuses_business_receipts_but_rechecks_stage_semantics",
+    ),
+    (
         "gate-receipt-schema-v2-check-disabled",
         "scripts/validate_delivery_contract.py",
         'receipt.get("schema_version") != 2',

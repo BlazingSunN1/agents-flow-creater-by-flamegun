@@ -65,6 +65,8 @@ def build_gate_plan(
                 "command_id": command_id,
                 "command": command_fingerprints.get(command_id, "unbound"),
                 "planner_version": PLANNER_VERSION,
+                **({"stage": stage} if command_id in {"traceability", "multi_agent_evidence"} else {}),
+                **({"independent_roles": sorted(roles)} if command_id == "multi_agent_evidence" else {}),
             })).hexdigest()
             for command_id in receipt_commands
         },
@@ -88,6 +90,7 @@ def compute_impact_fingerprint(contract: object, project_root: Path) -> str:
     change = contract.get("change")
     if not isinstance(baseline, dict) or not isinstance(artifacts, dict) or not isinstance(change, dict):
         raise GatePlanError("contract baseline, artifacts and change must be objects")
+    deleted = validate_deleted_files(change, root)
     linked = {"baseline": _live_ref(baseline, root)}
     linked.update({
         str(key): _live_ref(value, root)
@@ -95,12 +98,12 @@ def compute_impact_fingerprint(contract: object, project_root: Path) -> str:
         if key not in {"progress", "command_manifest"}
     })
     file_sets = {
-        field: [_live_path(raw, root) for raw in change.get(field, [])]
+        field: [{"path": raw, "state": "deleted"} if field == "changed_files" and raw in deleted
+                else _live_path(raw, root) for raw in change.get(field, [])]
         for field in ("changed_files", "configuration_files", "input_files")
         if isinstance(change.get(field), list)
     }
     payload = {
-        "stage": contract.get("stage"),
         "baseline_version": baseline.get("version"),
         "linked_artifacts": linked,
         "identity": contract.get("identity"),
@@ -312,6 +315,40 @@ def _live_path(raw: object, root: Path) -> dict[str, str]:
     except ValueError as error:
         raise GatePlanError(f"project path escapes root: {raw}") from error
     return {"path": raw, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def validate_deleted_files(change: dict[str, object], root: Path) -> set[str]:
+    deleted = change.get("deleted_files", [])
+    if (not isinstance(deleted, list) or any(not isinstance(raw, str) for raw in deleted)
+            or len(deleted) != len(set(deleted))):
+        raise GatePlanError("deleted_files must be a nonduplicate path array")
+    changed = change.get("changed_files", [])
+    if any(not isinstance(change.get(field, []), list)
+           for field in ("changed_files", "configuration_files", "input_files")):
+        raise GatePlanError("changed_files, configuration_files and input_files must be arrays")
+    live_inputs = [*change.get("configuration_files", []), *change.get("input_files", [])]
+    if any(raw not in changed or raw in live_inputs for raw in deleted):
+        raise GatePlanError("deleted_files must belong to changed_files and cannot be live inputs")
+    for raw in deleted:
+        _deleted_path(raw, root)
+    return set(deleted)
+
+
+def _deleted_path(raw: str, root: Path) -> None:
+    candidate = Path(raw)
+    if (not raw or not candidate.parts or raw != raw.strip() or candidate.is_absolute() or raw != candidate.as_posix()
+            or ".." in candidate.parts or any(char in raw for char in ("\\", ",", "\n", "\r", "\0"))):
+        raise GatePlanError(f"unsafe deleted path: {raw}")
+    for depth in range(1, len(candidate.parts) + 1):
+        path = root / Path(*candidate.parts[:depth])
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise GatePlanError(f"unreadable deleted path: {raw}") from error
+        if path.is_symlink() or depth == len(candidate.parts) or not path.is_dir():
+            raise GatePlanError(f"deleted path exists or is aliased: {raw}")
 
 
 def _canonical_json(value: object) -> bytes:

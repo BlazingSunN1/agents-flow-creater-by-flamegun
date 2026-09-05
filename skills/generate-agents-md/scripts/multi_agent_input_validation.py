@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from implementation_agent_validation import HostAttestationVerifier
+from delivery_gate_planner import GatePlanError, _deleted_path
+from validate_context_manifest import _context_deleted_files
 from validate_requirement_questions import _validate_requirement_questions_impl
 
 
@@ -62,13 +64,22 @@ def validate_gate_input(
         return [Issue("error", "invalid-agent-input", f"{role} 输入字段类型不合法")]
     if any(data.get(key) != value for key, value in expected.items()):
         issues.append(Issue("error", "stale-agent-input", f"{role} 输入未绑定当前角色、run、基线或需求"))
-    if not _valid_input_artifacts(artifacts, allowed_paths, root):
-        issues.append(Issue("error", "invalid-agent-input-paths", f"{role} 输入工件必须精确覆盖角色所需路径并绑定当前 SHA-256"))
+    issues.extend(_input_artifact_issues(artifacts, allowed_paths, context, root, role))
     issues.extend(_requirement_question_issues(
         data, evidence, root, verifier, expected_requirement_questions_locator,
         expected_requirement_questions_sha256,
     ))
     return issues
+
+
+def _input_artifact_issues(artifacts, allowed_paths, context, root, role) -> list[Issue]:
+    try:
+        deleted = _context_deleted_files(context, root)
+    except GatePlanError as error:
+        return [Issue("error", "invalid-deleted-files", str(error))]
+    if not _valid_input_artifacts(artifacts, allowed_paths, root, deleted_paths=deleted):
+        return [Issue("error", "invalid-agent-input-paths", f"{role} 输入工件必须精确覆盖角色所需路径并绑定当前 SHA-256 或删除状态")]
+    return []
 
 
 def _requirement_question_issues(
@@ -100,10 +111,23 @@ def _requirement_question_issues(
     return issues
 
 
-def _valid_input_artifacts(artifacts: list[object], allowed_paths: set[str], root: Path) -> bool:
+def _valid_input_artifacts(
+    artifacts: list[object], allowed_paths: set[str], root: Path,
+    *, deleted_paths: set[str] | None = None,
+) -> bool:
     paths: list[str] = []
     identities: set[tuple[int, int]] = set()
     for artifact in artifacts:
+        if (isinstance(artifact, dict) and type(artifact.get("path")) is str
+                and artifact["path"] in (deleted_paths or set())):
+            if set(artifact) != {"path", "state"} or artifact.get("state") != "deleted":
+                return False
+            try:
+                _deleted_path(artifact["path"], root)
+            except GatePlanError:
+                return False
+            paths.append(artifact["path"])
+            continue
         if not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}:
             return False
         raw_path, expected = artifact.get("path"), artifact.get("sha256")

@@ -230,7 +230,7 @@ def _validate_core_evidence(
 ) -> list[Issue]:
     issues = [
         Issue(item.severity, f"trace-{item.code}", item.message, str(trace))
-        for item in validate_traceability(trace, project_root=root, stage=stage)
+        for item in validate_traceability(trace, project_root=root, stage=stage, context_path=context)
     ]
     agent_issues = _validate_multi_agent_evidence_impl(
         agents, trace_path=trace, context_path=context, project_root=root,

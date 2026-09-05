@@ -1,6 +1,6 @@
 {
   "name": "agents-flow-creater-by-flamegun",
-  "version": "0.2.0+codex.20260905010822",
+  "version": "0.2.0+codex.20260905033110",
   "description": "Generate stable AGENTS.md workflows with native gpt-6-astra sub-Agent review; external Kimi and DeepSeek remain paused.",
   "author": {
     "name": "FlameGun"

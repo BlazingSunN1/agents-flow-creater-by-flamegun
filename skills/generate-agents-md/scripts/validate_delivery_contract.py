@@ -10,6 +10,7 @@ from pathlib import Path
 
 from delivery_gate_planner import (
     GatePlanError, build_gate_plan, compute_command_fingerprints, compute_impact_fingerprint,
+    validate_deleted_files,
 )
 from strict_json import loads as strict_json_loads
 from validate_project_commands import validate_project_commands
@@ -96,7 +97,8 @@ def _validate_shape(data: dict[str, object], issues: list[Issue], template: bool
     _exact_object(data.get("baseline"), {"version", *REF_FIELDS}, "baseline", issues)
     _exact_object(data.get("artifacts"), ARTIFACT_FIELDS, "artifacts", issues)
     _exact_object(data.get("identity"), IDENTITY_FIELDS, "identity", issues)
-    _exact_object(data.get("change"), CHANGE_FIELDS, "change", issues)
+    change = data.get("change")
+    _exact_object(change, CHANGE_FIELDS | ({"deleted_files"} if isinstance(change, dict) and "deleted_files" in change else set()), "change", issues)
     _exact_object(data.get("repair_policy"), REPAIR_FIELDS, "repair_policy", issues)
     if not isinstance(data.get("gate_plan"), dict):
         issues.append(Issue("error", "invalid-gate-plan", "gate_plan 必须是对象"))
@@ -137,11 +139,17 @@ def _validate_refs(data: dict[str, object], root: Path, issues: list[Issue]) -> 
             issues.append(Issue("error", "stale-artifact-sha256", f"{name} 已漂移"))
     change = data["change"]
     if isinstance(change, dict):
+        try:
+            deleted = validate_deleted_files(change, root)
+        except (GatePlanError, TypeError) as error:
+            issues.append(Issue("error", "invalid-deleted-files", str(error)))
+            deleted = set()
         for field in ("changed_files", "configuration_files", "input_files"):
             values = change.get(field)
             if isinstance(values, list):
                 for raw in values:
-                    _resolve_file(raw, root, issues, field)
+                    if field != "changed_files" or not isinstance(raw, str) or raw not in deleted:
+                        _resolve_file(raw, root, issues, field)
 
 
 def _resolve_file(raw: object, root: Path, issues: list[Issue], source: str) -> Path | None:

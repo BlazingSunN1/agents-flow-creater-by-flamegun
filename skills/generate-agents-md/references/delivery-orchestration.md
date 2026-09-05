@@ -73,6 +73,14 @@ The `build` classification cannot exempt a recognizable test-framework invocatio
 
 Receipts remain immutable. Recompute current fingerprints and mark old receipts stale instead of rewriting history. Any code change after review or black-box acceptance invalidates those downstream conclusions.
 
+`change.deleted_files` is an optional, nonduplicate array of canonical project-relative paths (default `[]`), mirrored by the optional context field `Deleted files`. It is a subset of the complete `changed_files` / `Changed files` workset: a rename lists both old and new paths, with only the old path declared deleted. Deleted targets must actually be absent, with no symlink ancestors or path aliases; their absence is fingerprinted, and restoration invalidates evidence. Deleted configuration belongs in the changed/deleted workset, not the live `configuration_files` or `input_files` lists. Context code fingerprints use `_paths_fingerprint(..., deleted_files=set_of_deleted_paths)`; other fingerprint lists remain live-only. Bundle validation binds the two deletion declarations exactly. This records current absence, not historical proof of deletion or an old-content hash.
+
+Stage alone does not change the business candidate fingerprint. `traceability` and `multi_agent_evidence` additionally bind the stage because their validators have stage-specific semantics; the latter also binds the required independent-role set. Other common receipts remain reusable only while their exact command and candidate inputs stay identical. Final aggregates always execute for the new stage.
+
+Independent review input `artifacts` keep every required deleted path explicitly as `{"path":"old.py","state":"deleted"}`. Only context-declared deletions permit this shape, and current absence is rechecked; ordinary inputs retain the exact `{"path":"live.py","sha256":"..."}` shape. Deleted inputs are not silently removed from review scope.
+
+`Code module` links name files, not directories. For deletion, retain an explicit link to the old path; standalone traceability validation requires `--context` to validate its `Deleted files` declaration, and the bundle passes its canonical context. Only that exact declared absent path in the `Code module` column is exempt from live-file resolution; other columns, undeclared missing paths, and directories remain invalid. Required independent review still explicitly receives each deleted path.
+
 ## Bounded repair
 
 Automatic repair is conditional, not mandatory. Use it only for formatting, deterministic generated artifacts, or a local implementation defect constrained by a failing regression test. The contract fixes `max_rounds <= 3`, `same_failure_limit <= 2`, regression-before-fix, and completion blocking on exhaustion.

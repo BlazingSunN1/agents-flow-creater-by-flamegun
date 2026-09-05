@@ -20,7 +20,10 @@ def _native_report_counts(report: object, framework: str) -> tuple[object, objec
     if framework == "Cypress" and isinstance(report.get("results"), list):
         passes, failures = stats.get("passes"), stats.get("failures")
         observed = _cypress_results_counts(report["results"])
-        if isinstance(passes, int) and isinstance(failures, int) and passes > 0 and observed == (passes, failures):
+        if (type(passes) is int and type(failures) is int and passes > 0
+                and observed == (passes, failures)
+                and ("pending" not in stats or type(stats["pending"]) is int and stats["pending"] == 0)
+                and ("tests" not in stats or type(stats["tests"]) is int and stats["tests"] == passes + failures)):
             return passes, failures
     if framework == "Cypress" and all(isinstance(report.get(key), list) for key in ("tests", "pending", "failures", "passes")):
         passes, failures = stats.get("passes"), stats.get("failures")

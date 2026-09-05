@@ -14,7 +14,8 @@ from browser_page_validation import PAGE_IDENTITY_FIELDS, page_identity_issues
 from swimlane_html_validation import system_drilldown_issues
 
 from validate_context_manifest import _parse_metadata as parse_context_metadata
-from validate_context_manifest import _parse_module_file_map
+from validate_context_manifest import _context_deleted_files, _parse_module_file_map
+from delivery_gate_planner import GatePlanError
 from validate_traceability import _parse_metadata as parse_trace_metadata
 
 
@@ -146,6 +147,11 @@ def _validate_diagrams(
     identities: dict[tuple[int, int], str] = {}
     changed = {item.strip() for item in context.get("Changed files", "").split(",") if item.strip()}
     module_files = _parse_module_file_map(context.get("Module changed files", ""))
+    try:
+        deleted = _context_deleted_files(context, root)
+    except GatePlanError as error:
+        issues.append(Issue("error", "invalid-deleted-files", str(error)))
+        deleted = set()
     covered_changed: set[str] = set()
     for entry in raw_diagrams:
         if not isinstance(entry, dict):
@@ -160,7 +166,7 @@ def _validate_diagrams(
         diagram_map[module] = entry
         diagram, evidence_paths = _validate_diagram_entry(
             entry, module, changed if module == "system" else module_files.get(module, set()),
-            modules if module == "system" else set(), root, issues,
+            modules if module == "system" else set(), root, issues, deleted_files=deleted,
         )
         covered_changed |= evidence_paths & changed
         if diagram is not None:
@@ -180,6 +186,7 @@ def _validate_diagrams(
 def _validate_diagram_entry(
     entry: dict[str, object], module: str, expected_evidence: set[str],
     expected_modules: set[str], root: Path, issues: list[Issue],
+    *, deleted_files: set[str] | None = None,
 ) -> tuple[Path | None, set[str]]:
     diagram = _validate_hashed_file(
         entry.get("path"), entry.get("sha256"), root, "swimlane-diagram", issues,
@@ -195,7 +202,8 @@ def _validate_diagram_entry(
     elif evidence_paths != expected_evidence:
         issues.append(Issue("error", "swimlane-code-evidence-mismatch", f"{module} 未精确绑定所属变更文件"))
     for evidence_path in evidence_paths:
-        _resolve_file(evidence_path, root, "swimlane-code-evidence", issues)
+        if not deleted_files or evidence_path not in deleted_files:
+            _resolve_file(evidence_path, root, "swimlane-code-evidence", issues)
     if diagram is None:
         return None, evidence_paths
     text = diagram.read_text(encoding="utf-8", errors="replace")

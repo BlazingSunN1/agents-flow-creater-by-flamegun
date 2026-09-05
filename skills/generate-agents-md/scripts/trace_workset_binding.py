@@ -5,6 +5,22 @@ from pathlib import Path
 from traceability_common import LINK_RE, TRACE_COLUMNS
 from traceability_parsing import _parse_table
 from validate_context_manifest import _parse_module_file_map, _split_paths
+from validate_context_manifest import _parse_metadata, _context_deleted_files
+from delivery_gate_planner import GatePlanError
+from traceability_common import Issue
+
+
+def trace_deleted_files(context_path: Path | None, root: Path, issues: list[Issue]) -> set[str]:
+    if context_path is None:
+        return set()
+    try:
+        context, duplicates = _parse_metadata(context_path.read_text(encoding="utf-8"))
+        if duplicates:
+            raise GatePlanError("duplicate deletion context fields")
+        return _context_deleted_files(context, root)
+    except (OSError, UnicodeError, GatePlanError) as error:
+        issues.append(Issue("error", "invalid-deleted-files", str(error)))
+        return set()
 
 
 def binding_issue_codes(trace_text: str, context: dict[str, str], root: Path) -> set[str]:
