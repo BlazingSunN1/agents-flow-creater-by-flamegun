@@ -18,12 +18,12 @@ DELIVERY_QUESTION_MUTANT_CASES = (
         "delivery-questions-authoritative-validator-disabled", "scripts/delivery_contract_bundle_validation.py",
         "    issues.extend(Finding(item.severity, f\"questions-{item.code}\", item.message, source) for item in found)\n",
         "    issues.extend(())\n",
-        "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_requirement_questions_real_blocker_fails_delivery",
+        "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_answered_questions_reject_pre_post_or_impact_drift",
     ),
     (
         "delivery-questions-host-proof-forwarding-disabled", "scripts/delivery_contract_bundle_validation.py",
         "        if verifier is None else _test_only_validate_requirement_questions(\n",
         "        if True else _test_only_validate_requirement_questions(\n",
-        "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_answered_questions_require_bound_evidence_and_host_receipt",
+        "scripts.test_validate_delivery_bundle.DeliveryBundleValidatorTests.test_answered_questions_require_bound_evidence_and_validated_receipt",
     ),
 )

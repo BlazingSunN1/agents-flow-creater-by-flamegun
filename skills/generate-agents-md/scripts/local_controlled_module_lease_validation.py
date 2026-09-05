@@ -221,7 +221,7 @@ def _validate_lease_semantics(
         "receipt_type": "local_controlled_module_write_lease",
         "trust_mode": TRUST_MODE, "security_caveat": SECURITY_CAVEAT,
         "authorization_mode": "local-controlled-same-user",
-        "assigned_model": "gpt-5.6-sol", "assigned_reasoning_effort": "high",
+        "assigned_model": "gpt-6-astra", "assigned_reasoning_effort": "medium",
     }
     require(all(payload.get(key) == value for key, value in fixed.items()),
             "invalid-module-lease")

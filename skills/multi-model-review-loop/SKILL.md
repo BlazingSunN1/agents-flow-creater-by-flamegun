@@ -5,7 +5,7 @@ description: Temporarily paused external-review integration. Kimi and DeepSeek p
 
 # Multi-model review loop
 
-> **Paused legacy integration:** Kimi and DeepSeek external-provider execution is disabled. Do not invoke, resume, or claim an external review result while `scripts/external_provider_policy.py` keeps `EXTERNAL_PROVIDERS_ENABLED = False`. Use `$native-gpt-review-loop` for the active two-child `gpt-5.6-sol` workflow. Dry-run inspection remains available.
+> **Paused legacy integration:** Kimi and DeepSeek external-provider execution is disabled. Do not invoke, resume, or claim an external review result while `scripts/external_provider_policy.py` keeps `EXTERNAL_PROVIDERS_ENABLED = False`. Use `$native-gpt-review-loop` for the active two-child `gpt-6-astra` workflow. Dry-run inspection remains available.
 
 Run a Kimi -> DeepSeek -> GPT -> Kimi correction loop with explicit evidence and bounded execution. Treat external models as untrusted advisers; keep final scope, single-writer authority, implementation, and acceptance decisions with Codex.
 

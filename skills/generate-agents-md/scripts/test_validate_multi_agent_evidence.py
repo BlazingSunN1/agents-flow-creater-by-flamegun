@@ -62,8 +62,8 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "role": role,
             "run_id": run_id,
             "provider": "codex-native-agent",
-            "agent_model": "gpt-5.6-sol",
-            "agent_reasoning_effort": "xhigh",
+            "agent_model": "gpt-6-astra",
+            "agent_reasoning_effort": "high",
             "agent_id": agent_id,
             "spawn_receipt": receipt_path,
             "spawn_receipt_sha256": hashlib.sha256(
@@ -104,8 +104,8 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "candidate_sha256": "c" * 64,
             "implementation_agent_title": "ModuleMaintainer",
             "implementation_agent_provider": "codex-native-agent",
-            "implementation_agent_model": "gpt-5.6-sol",
-            "implementation_agent_reasoning_effort": "high",
+            "implementation_agent_model": "gpt-6-astra",
+            "implementation_agent_reasoning_effort": "medium",
             "implementation_agent_id": "module-maintainer-agent-1",
             "implementation_run_id": metadata["Implementation run ID"],
             "implementation_spawn_receipt": "evidence/implementation-spawn-receipt.json",
@@ -273,7 +273,7 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
         self.assertIn("必须声明并绑定", message)
         self.assertNotIn("必须由宿主验证", message)
         data = self.valid_data()
-        data["gates"][0]["agent_reasoning_effort"] = "high"
+        data["gates"][0]["agent_reasoning_effort"] = "medium"
         self.path.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("invalid-gate-agent-effort", self.codes())
 
@@ -304,10 +304,10 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "schema_version": 1,
             "receipt_kind": "codex-native-output-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol",
-            "requested_reasoning_effort": "xhigh",
-            "recorded_reasoning_effort": "xhigh",
+            "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra",
+            "requested_reasoning_effort": "high",
+            "recorded_reasoning_effort": "high",
             "agent_id": gate["agent_id"],
             "run_id": gate["run_id"],
             "role": f"{slug}-gate",
@@ -364,7 +364,7 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
         for field, value in (
             ("implementation_agent_provider", "external-agent"),
             ("implementation_agent_model", "gpt-5.6-terra"),
-            ("implementation_agent_reasoning_effort", "xhigh"),
+            ("implementation_agent_reasoning_effort", "high"),
             ("implementation_agent_id", "spoofed-agent"),
             ("implementation_spawn_receipt_sha256", "0" * 64),
         ):
@@ -648,7 +648,7 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
                 self.path.write_text(json.dumps(data), encoding="utf-8")
                 self.assertIn("invalid-gate-agent", self.codes())
         data = self.valid_data()
-        next(item for item in data["gates"] if item["role"] == "BLACK_BOX")["agent_reasoning_effort"] = "high"
+        next(item for item in data["gates"] if item["role"] == "BLACK_BOX")["agent_reasoning_effort"] = "medium"
         self.path.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("invalid-gate-agent-effort", self.codes())
 
@@ -676,10 +676,10 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "schema_version": 1,
             "receipt_kind": "codex-native-spawn-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol",
-            "requested_reasoning_effort": "high",
-            "recorded_reasoning_effort": "high",
+            "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra",
+            "requested_reasoning_effort": "medium",
+            "recorded_reasoning_effort": "medium",
             "agent_id": "module-maintainer-agent-1",
             "run_id": "impl-run-1",
             "role": "module-maintainer",
@@ -697,10 +697,10 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "schema_version": 1,
             "receipt_kind": "codex-native-spawn-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol",
-            "requested_reasoning_effort": "xhigh",
-            "recorded_reasoning_effort": "xhigh",
+            "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra",
+            "requested_reasoning_effort": "high",
+            "recorded_reasoning_effort": "high",
             "agent_id": agent_id,
             "run_id": run_id,
             "role": f"{role.casefold().replace('_', '-')}-gate",
@@ -735,10 +735,10 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "schema_version": 1,
             "receipt_kind": "codex-native-output-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol",
-            "requested_reasoning_effort": "xhigh",
-            "recorded_reasoning_effort": "xhigh",
+            "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra",
+            "requested_reasoning_effort": "high",
+            "recorded_reasoning_effort": "high",
             "agent_id": agent_id,
             "run_id": run_id,
             "role": f"{role.casefold().replace('_', '-')}-gate",

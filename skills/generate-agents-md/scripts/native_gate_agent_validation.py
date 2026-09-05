@@ -29,14 +29,14 @@ def validate_native_gate_agent(
         f"{role} 的 agent_id 缺失、复用或与维护 Agent 相同", issues,
     )
     if (gate.get("provider") != "codex-native-agent"
-            or gate.get("agent_model") != "gpt-5.6-sol"):
+            or gate.get("agent_model") != "gpt-6-astra"):
         issues.append(Issue(
             "error", "invalid-gate-agent",
-            f"{role} 必须声明并绑定为 Codex 原生 gpt-5.6-sol 独立 Agent；严格模式追加宿主证明",
+            f"{role} 必须声明并绑定为 Codex 原生 gpt-6-astra 独立 Agent；严格模式追加宿主证明",
         ))
-    if gate.get("agent_reasoning_effort") != "xhigh":
+    if gate.get("agent_reasoning_effort") != "high":
         issues.append(Issue("error", "invalid-gate-agent-effort",
-                            f"{role} 必须使用 reasoning_effort=xhigh"))
+                            f"{role} 必须使用 reasoning_effort=high"))
     schema_version = evidence.get("schema_version", 1)
     expected = _gate_expected(role, module, agent_id, run_id, schema_version)
     if schema_version == 2:
@@ -69,10 +69,10 @@ def _gate_expected(
         "schema_version": schema_version,
         "receipt_kind": "codex-native-spawn-result",
         "provider": "codex-native-agent",
-        "requested_model": "gpt-5.6-sol",
-        "recorded_model": "gpt-5.6-sol",
-        "requested_reasoning_effort": "xhigh",
-        "recorded_reasoning_effort": "xhigh",
+        "requested_model": "gpt-6-astra",
+        "recorded_model": "gpt-6-astra",
+        "requested_reasoning_effort": "high",
+        "recorded_reasoning_effort": "high",
         "agent_id": agent_id,
         "run_id": run_id,
         "role": f"{role.casefold().replace('_', '-')}-gate",

@@ -46,8 +46,8 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
         return {
             "schema_version": 2,
             "provider": "codex-native-agent",
-            "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol",
+            "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra",
             "requested_reasoning_effort": effort,
             "recorded_reasoning_effort": effort,
             "module": "module",
@@ -70,7 +70,7 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
             "sha256": lease_sha,
         }
         receipt = {
-            **self._common(read_only=False, effort="high"),
+            **self._common(read_only=False, effort="medium"),
             "receipt_kind": "codex-native-spawn-result",
             "agent_id": "implementation-agent",
             "run_id": "implementation-run",
@@ -82,8 +82,8 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
         return {
             "schema_version": 2,
             "implementation_agent_provider": "codex-native-agent",
-            "implementation_agent_model": "gpt-5.6-sol",
-            "implementation_agent_reasoning_effort": "high",
+            "implementation_agent_model": "gpt-6-astra",
+            "implementation_agent_reasoning_effort": "medium",
             "implementation_agent_id": "implementation-agent",
             "implementation_run_id": "implementation-run",
             "implementation_agent_title": "Module Maintainer",
@@ -161,7 +161,7 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
     def test_gate_v2_is_read_only_same_candidate_and_has_no_lease(self) -> None:
         evidence = self._implementation_data()
         spawn = {
-            **self._common(read_only=True, effort="xhigh"),
+            **self._common(read_only=True, effort="high"),
             "receipt_kind": "codex-native-spawn-result",
             "agent_id": "review-agent", "run_id": "review-run",
             "role": "change-review-gate",
@@ -176,8 +176,8 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
         output_path, output_sha = self._write("evidence/review-output.json", output)
         gate = {
             "agent_id": "review-agent", "run_id": "review-run",
-            "provider": "codex-native-agent", "agent_model": "gpt-5.6-sol",
-            "agent_reasoning_effort": "xhigh", "input_sha256": "e" * 64,
+            "provider": "codex-native-agent", "agent_model": "gpt-6-astra",
+            "agent_reasoning_effort": "high", "input_sha256": "e" * 64,
             "output_sha256": "f" * 64, "verdict": "pass",
             "spawn_receipt": spawn_path, "spawn_receipt_sha256": spawn_sha,
             "output_receipt": output_path, "output_receipt_sha256": output_sha,
@@ -207,21 +207,21 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
             "dispatcher_run_id": "dispatcher-run",
             "dispatcher_title": "System Dispatcher",
             "dispatcher_provider": "codex-native-agent",
-            "dispatcher_model": "gpt-5.6-sol",
+            "dispatcher_model": "gpt-6-astra",
             "dispatcher_owned_paths": [],
             "aggregation_writer_agent_id": "aggregation-agent",
             "aggregation_writer_run_id": "aggregation-run",
             "aggregation_writer_role": "SYSTEM_AGGREGATION",
             "aggregation_writer_title": "System Aggregation Writer",
             "aggregation_writer_provider": "codex-native-agent",
-            "aggregation_writer_model": "gpt-5.6-sol",
+            "aggregation_writer_model": "gpt-6-astra",
             "aggregation_writer_owned_paths": ["docs/evidence/system-delivery/latest.json"],
         }
         dispatcher = {
             "schema_version": 2, "receipt_kind": "codex-native-spawn-result",
-            "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol", "requested_reasoning_effort": "xhigh",
-            "recorded_reasoning_effort": "xhigh", "agent_id": "dispatcher-agent",
+            "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra", "requested_reasoning_effort": "high",
+            "recorded_reasoning_effort": "high", "agent_id": "dispatcher-agent",
             "run_id": "dispatcher-run", "role": "dispatcher", "module": "system",
             "maintainer_title": "System Dispatcher", "read_only": True,
             "authority_matrix_sha256": AUTHORITY_SHA, "owned_paths": [],
@@ -232,8 +232,8 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
             **dispatcher, "receipt_kind": "codex-native-output-result",
             "agent_id": "aggregation-agent", "run_id": "aggregation-run",
             "role": "system-aggregation", "maintainer_title": "System Aggregation Writer",
-            "requested_reasoning_effort": "high",
-            "recorded_reasoning_effort": "high",
+            "requested_reasoning_effort": "medium",
+            "recorded_reasoning_effort": "medium",
             "read_only": False,
             "owned_paths": ["docs/evidence/system-delivery/latest.json"],
             "candidate_payload_sha256": "pending", "authority_binding": value["authority_binding"],

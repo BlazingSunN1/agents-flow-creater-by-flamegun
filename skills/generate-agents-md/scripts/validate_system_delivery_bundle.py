@@ -284,10 +284,10 @@ def _run_module_bundle(
     expected_title = canonical[module][1]
     if bundle["maintainer_title"] != expected_title:
         issues.append(_issue("system-module-maintainer-mismatch", "模块维护 Agent 标题与 canonical 所有权不一致", source))
-    if bundle["maintainer_provider"] != "codex-native-agent" or bundle["maintainer_model"] != "gpt-5.6-sol":
-        issues.append(_issue("system-module-maintainer-model-mismatch", "模块维护 Agent 必须由封闭 receipt 声明并绑定为原生 gpt-5.6-sol；严格模式追加宿主证明", source))
-    if bundle["maintainer_reasoning_effort"] != "high":
-        issues.append(_issue("system-module-maintainer-effort-mismatch", "模块维护 Agent 必须使用 reasoning_effort=high", source))
+    if bundle["maintainer_provider"] != "codex-native-agent" or bundle["maintainer_model"] != "gpt-6-astra":
+        issues.append(_issue("system-module-maintainer-model-mismatch", "模块维护 Agent 必须由封闭 receipt 声明并绑定为原生 gpt-6-astra；严格模式追加宿主证明", source))
+    if bundle["maintainer_reasoning_effort"] != "medium":
+        issues.append(_issue("system-module-maintainer-effort-mismatch", "模块维护 Agent 必须使用 reasoning_effort=medium", source))
     if bundle["code_version"] != system["code_version"] or bundle["build_id"] != system["build_id"]:
         issues.append(_issue("system-module-build-mismatch", "模块 code/build 身份与系统候选不一致", source))
     paths = _bound_module_artifacts(bundle, system, root, source, issues)
@@ -432,7 +432,7 @@ def _system_maintainer_binding_issues(
     issues = [
         _issue(
             "system-module-maintainer-receipt-mismatch",
-            "模块 bundle 与 multi-agent evidence 必须绑定同一维护 Agent 原生 Sol receipt",
+            "模块 bundle 与 multi-agent evidence 必须绑定同一维护 Agent 原生 GPT-6 receipt",
             source,
         )
     ] if any(evidence.get(left) != bundle[right] for left, right in binding.items()) else []

@@ -300,7 +300,7 @@ REVIEW_FIX_MUTANT_CASES = (
     (
         "native-gate-reasoning-effort-check-disabled",
         "scripts/native_gate_agent_validation.py",
-        '    if gate.get("agent_reasoning_effort") != "xhigh":',
+        '    if gate.get("agent_reasoning_effort") != "high":',
         "    if False:",
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_external_model_cannot_satisfy_native_black_box_gate",
     ),
@@ -484,7 +484,7 @@ REVIEW_FIX_MUTANT_CASES = (
     (
         "module-maintainer-reasoning-effort-check-disabled",
         "scripts/implementation_agent_validation.py",
-        '    if data.get("implementation_agent_reasoning_effort") != "high":',
+        '    if data.get("implementation_agent_reasoning_effort") != "medium":',
         "    if False:",
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_module_maintainer_requires_bound_native_sol_receipt",
     ),

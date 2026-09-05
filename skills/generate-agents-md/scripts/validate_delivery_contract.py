@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import re
+from datetime import datetime
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from delivery_gate_planner import (
 )
 from strict_json import loads as strict_json_loads
 from validate_project_commands import validate_project_commands
+from gate_test_results import test_result_passes
 
 
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
@@ -35,8 +37,9 @@ CHANGE_FIELDS = {
 }
 REPAIR_FIELDS = {"max_rounds", "same_failure_limit", "regression_test_before_fix", "on_exhaustion"}
 GATE_RECEIPT_FIELDS = {
-    "schema_version", "command_id", "gate_input_fingerprint", "verdict", "run_id",
-    "output_path", "output_sha256",
+    "schema_version", "producer", "command_id", "gate_input_fingerprint",
+    "command_argv", "command_argv_sha256", "started_at", "ended_at", "exit_code",
+    "verdict", "run_id", "output_path", "output_sha256",
 }
 STATUS_BY_STAGE = {
     "planning": {"pending", "in_progress"},
@@ -222,17 +225,21 @@ def _validate_gate_receipts(data: dict[str, object], root: Path, issues: list[Is
             issues.append(Issue("error", "missing-gate-receipt", f"缺少当前门禁 receipt：{command_id}"))
     for command_id in sorted(supplied - expected):
         issues.append(Issue("error", "unexpected-gate-receipt", f"receipt 不属于当前门禁计划：{command_id}"))
+    registered_commands = _registered_commands(data, root)
     for command_id in sorted(expected & supplied):
         ref = receipt_refs.get(command_id)
         if not isinstance(ref, dict):
             continue
-        _validate_gate_receipt(command_id, ref, fingerprints, root, issues)
+        _validate_gate_receipt(
+            command_id, ref, fingerprints, registered_commands.get(command_id, {}), root, issues,
+        )
 
 
 def _validate_gate_receipt(
     command_id: str, ref: dict[str, object], fingerprints: dict[str, object],
-    root: Path, issues: list[Issue],
+    command: dict[str, object], root: Path, issues: list[Issue],
 ) -> None:
+    expected_argv = command.get('argv')
     receipt_path = _resolve_file(ref.get("path"), root, issues, f"gate_receipts.{command_id}")
     declared = ref.get("sha256")
     if not isinstance(declared, str) or SHA256_RE.fullmatch(declared) is None:
@@ -251,11 +258,23 @@ def _validate_gate_receipt(
     if not isinstance(receipt, dict) or set(receipt) != GATE_RECEIPT_FIELDS:
         issues.append(Issue("error", "invalid-gate-receipt", f"{command_id} receipt 字段无效"))
         return
-    if receipt.get("schema_version") != 1 or receipt.get("command_id") != command_id:
+    if (type(receipt.get("schema_version")) is not int or receipt.get("schema_version") != 2
+            or receipt.get("producer") != "flowctl-gate-runner"
+            or receipt.get("command_id") != command_id):
         issues.append(Issue("error", "invalid-gate-receipt", f"{command_id} receipt 身份无效"))
     if receipt.get("gate_input_fingerprint") != fingerprints.get(command_id):
         issues.append(Issue("error", "stale-gate-receipt", f"{command_id} receipt 未绑定当前门禁输入"))
-    if receipt.get("verdict") != "pass" or type(receipt.get("run_id")) is not str or not receipt.get("run_id", "").strip():
+    argv, argv_sha = receipt.get("command_argv"), receipt.get("command_argv_sha256")
+    observed_argv_sha = hashlib.sha256(
+        "\0".join(argv).encode("utf-8")
+    ).hexdigest() if isinstance(argv, list) and all(type(item) is str for item in argv) else None
+    if argv != expected_argv or argv_sha != observed_argv_sha:
+        issues.append(Issue("error", "gate-receipt-command-mismatch", f"{command_id} receipt 未绑定登记 argv"))
+    if not _valid_gate_interval(receipt.get("started_at"), receipt.get("ended_at")):
+        issues.append(Issue("error", "invalid-gate-receipt-time", f"{command_id} receipt 执行时间无效"))
+    if (receipt.get("verdict") != "pass" or type(receipt.get("exit_code")) is not int
+            or receipt.get("exit_code") != 0 or type(receipt.get("run_id")) is not str
+            or not receipt.get("run_id", "").strip()):
         issues.append(Issue("error", "gate-receipt-not-pass", f"{command_id} receipt 未通过或 run_id 无效"))
     output = _resolve_file(receipt.get("output_path"), root, issues, f"gate_receipt_output.{command_id}")
     output_sha = receipt.get("output_sha256")
@@ -263,6 +282,38 @@ def _validate_gate_receipt(
         issues.append(Issue("error", "invalid-gate-output-sha256", f"{command_id} 输出缺少有效 SHA-256"))
     elif output is not None and hashlib.sha256(output.read_bytes()).hexdigest() != output_sha:
         issues.append(Issue("error", "stale-gate-output", f"{command_id} 输出已漂移"))
+    elif output is not None and not test_result_passes(
+            command_id, expected_argv, output.read_bytes(), result_kind=command.get('result_kind', 'tests')):
+        issues.append(Issue("error", "gate-test-result-not-pass", f"{command_id} 缺少非零执行且全部通过的原生测试结果"))
+
+
+def _registered_commands(data: dict[str, object], root: Path) -> dict[str, dict[str, object]]:
+    artifacts = data.get("artifacts")
+    manifest_ref = artifacts.get("command_manifest") if isinstance(artifacts, dict) else None
+    path = _resolve_file(manifest_ref.get("path"), root, [], "command_manifest") if isinstance(manifest_ref, dict) else None
+    if path is None:
+        return {}
+    try:
+        manifest = strict_json_loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        return {}
+    commands = manifest.get("commands") if isinstance(manifest, dict) else None
+    return {
+        item["id"]: item
+        for item in commands if isinstance(commands, list) and isinstance(item, dict)
+        and isinstance(item.get("id"), str)
+    } if isinstance(commands, list) else {}
+
+
+def _valid_gate_interval(started: object, ended: object) -> bool:
+    if type(started) is not str or type(ended) is not str:
+        return False
+    try:
+        start = datetime.fromisoformat(started.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(ended.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return start.tzinfo is not None and end.tzinfo is not None and start <= end
 
 
 def _validate_planned_commands(data: dict[str, object], root: Path, issues: list[Issue]) -> None:

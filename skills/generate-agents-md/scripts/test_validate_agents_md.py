@@ -895,7 +895,7 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_system_completion_requires_every_affected_module_closed(self) -> None:
         weakened = ROOT_TEMPLATE.replace(
-            "Before cross-module/system completion, every affected module binds current requirement IDs, code/build, targeted tests, independent acceptance, run/latest, applicable mapped swimlane evidence and no open findings. A distinct native Sol `SYSTEM_AGGREGATION` writer emits the system manifest/receipt; Dispatcher only invokes its read-only validator.",
+            "Before cross-module/system completion, every affected module binds current requirement IDs, code/build, targeted tests, independent acceptance, run/latest, applicable mapped swimlane evidence and no open findings. A distinct native GPT-6 `SYSTEM_AGGREGATION` writer emits the system manifest/receipt; Dispatcher only invokes its read-only validator.",
             "Cross-module completion follows the Dispatcher summary.",
         )
         self.assertIn(
@@ -2408,7 +2408,7 @@ class ValidatorRegressionTests(unittest.TestCase):
             "missing-native-sol-loop-binding-policy",
             "missing-native-sol-authority-policy",
         } <= codes)
-        for effort in ("`reasoning_effort=high`", "`reasoning_effort=xhigh`"):
+        for effort in ("`reasoning_effort=medium`", "`reasoning_effort=high`"):
             with self.subTest(effort=effort):
                 weakened = ROOT_TEMPLATE.replace(effort, "`reasoning_effort=unspecified`")
                 self.assertIn(
@@ -2428,7 +2428,7 @@ class ValidatorRegressionTests(unittest.TestCase):
     def test_native_sol_roles_cannot_be_weakened(self) -> None:
         rule = next(line for line in ROOT_TEMPLATE.splitlines() if "$native-gpt-review-loop" in line)
         reversed_rule = (
-            "- Kimi and DeepSeek are disabled; use native-gpt-review-loop. gpt-5.6-sol may be substituted. "
+            "- Kimi and DeepSeek are disabled; use native-gpt-review-loop. gpt-6-astra may be substituted. "
             "The solution-author may modify code and the black-box-reviewer may write workspace files. "
             "The parent GPT need not independently adjudicate or verify. Child self-report proves model evidence. "
             "Six candidate versions lead to incomplete or blocked and retain the same candidate hash."

@@ -129,9 +129,9 @@ def _validate_recovery_receipt(
         return
     expected = {
         "schema_version": 1, "receipt_kind": "codex-native-recovery-result",
-        "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-        "recorded_model": "gpt-5.6-sol", "agent_id": bundle.get("adjudicator_agent_id"),
-        "requested_reasoning_effort": "xhigh", "recorded_reasoning_effort": "xhigh",
+        "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+        "recorded_model": "gpt-6-astra", "agent_id": bundle.get("adjudicator_agent_id"),
+        "requested_reasoning_effort": "high", "recorded_reasoning_effort": "high",
         "run_id": bundle.get("adjudicator_run_id"), "role": "coordinator-adjudicator",
         "module": bundle.get("module"), "maintainer_title": "coordinator-adjudicator",
         "workflow_id": bundle.get("workflow_id"), "round": checkpoint.get("round"),

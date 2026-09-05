@@ -381,8 +381,8 @@ def _validate_identity_assignment(payload: dict[str, object]) -> None:
         and not any(ord(character) < 32 for character in stable_title),
         "invalid-local-receipt",
     )
-    _require(payload.get("assigned_model") == "gpt-5.6-sol", "invalid-local-receipt")
-    _require(payload.get("assigned_reasoning_effort") == "high", "invalid-local-receipt")
+    _require(payload.get("assigned_model") == "gpt-6-astra", "invalid-local-receipt")
+    _require(payload.get("assigned_reasoning_effort") == "medium", "invalid-local-receipt")
     _require(payload.get("role") in {"implementation", "module-maintainer"},
              "invalid-local-receipt")
 

@@ -107,7 +107,7 @@ class BootstrapV2RuntimeTests(unittest.TestCase):
             "issuer": "local-signer-01", "key_id": "key-01",
             "key_fingerprint_sha256": self.fingerprint,
             "agent_handle": "implementation-agent-01",
-            "assigned_model": "gpt-5.6-sol", "assigned_reasoning_effort": "high",
+            "assigned_model": "gpt-6-astra", "assigned_reasoning_effort": "medium",
             "role": "implementation", "project_root": str(self.project),
             "replay_state_path": str(self.replay),
             "module_registration": {

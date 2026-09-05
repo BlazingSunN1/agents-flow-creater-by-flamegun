@@ -72,6 +72,8 @@ def _mocha_report_counts(report: dict[str, object], stats: dict[str, object]) ->
     pass_ids = _mocha_test_ids(report["passes"])
     failure_ids = _mocha_test_ids(report["failures"])
     pending_ids = _mocha_test_ids(report["pending"])
+    if pending_ids:
+        return None
     if any(items is None for items in (test_ids, pass_ids, failure_ids, pending_ids)):
         return None
     if not test_ids or Counter(test_ids) != Counter(pass_ids + failure_ids + pending_ids):
@@ -123,7 +125,7 @@ def _playwright_report_counts(suites: list[object]) -> tuple[int, int] | None:
                         return None
                     expected_status = test.get("expectedStatus", "passed")
                     actual_status = results[0].get("status")
-                    if actual_status in {"passed", "failed"} and actual_status == expected_status:
+                    if actual_status == "passed" and expected_status == "passed":
                         expected_count += 1
                     else:
                         unexpected_count += 1

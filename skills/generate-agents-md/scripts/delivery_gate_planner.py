@@ -13,7 +13,7 @@ from traceability_common import (
 
 
 ALLOWED_STAGES = {"planning", "implementation", "closure_candidate", "completion"}
-PLANNER_VERSION = "delivery-gates-v4"
+PLANNER_VERSION = "delivery-gates-v6"
 FRONTEND_SURFACES = {"ui", "mobile-web", "touch", "responsive"}
 MOBILE_WEB_SURFACES = {"mobile", "mobile-web", "touch", "responsive"}
 FINAL_AGGREGATE_COMMANDS = {"delivery_contract", "delivery_bundle", "system_delivery_bundle"}
@@ -137,8 +137,52 @@ def compute_command_fingerprints(contract: object, project_root: Path) -> dict[s
         command_id = item["id"]
         if command_id in result:
             raise GatePlanError(f"duplicate command id: {command_id}")
-        result[command_id] = hashlib.sha256(_canonical_json(item)).hexdigest()
+        result[command_id] = hashlib.sha256(_canonical_json({
+            "entry": item, "files": _command_files(item, project_root.resolve()),
+        })).hexdigest()
     return result
+
+
+def _command_files(item: dict[str, object], root: Path) -> list[dict[str, str]]:
+    paths = set()
+    source = item.get("source")
+    if isinstance(source, str) and (root / source).is_file():
+        paths.add(source)
+    base = root / str(item.get("working_directory", "."))
+    argv = item.get("argv", [])
+    if not isinstance(argv, list):
+        raise GatePlanError("command argv must be an array")
+    candidates = _command_entrypoints(argv, base)
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            paths.add(path.relative_to(root).as_posix())
+        except ValueError as error:
+            raise GatePlanError("command input escapes project root") from error
+    return [_live_path(path, root) for path in sorted(paths)]
+
+
+def _command_entrypoints(argv: list[object], base: Path) -> list[Path]:
+    if not argv or not all(isinstance(token, str) for token in argv):
+        return []
+    candidates = [base / argv[0]]
+    if not Path(argv[0]).name.casefold().startswith('python'):
+        return candidates
+    index = 1
+    while index < len(argv):
+        token = argv[index]
+        if token == '-m' and index + 1 < len(argv):
+            module = argv[index + 1].replace('.', '/')
+            return candidates + [base / (module + '.py'), base / module / '__main__.py']
+        if token in {'-c', '-'} or token.startswith('-c'):
+            return candidates
+        if token == '--' and index + 1 < len(argv):
+            return candidates + [base / argv[index + 1]]
+        if not token.startswith('-'):
+            return candidates + [base / token]
+        index += 2 if token in {'-W', '-X', '--check-hash-based-pycs'} else 1
+    return candidates
 
 
 def _validate_inputs(change: object, stage: str, fingerprint: str) -> dict[str, object]:

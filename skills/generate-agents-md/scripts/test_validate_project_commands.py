@@ -8,7 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from validate_project_commands import REQUIRED_COMMANDS, validate_project_commands
+from validate_project_commands import (
+    ALWAYS_ENABLED_COMMANDS, REQUIRED_COMMANDS, validate_project_commands,
+)
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -102,6 +104,14 @@ class ProjectCommandValidatorTests(unittest.TestCase):
 
     def test_valid_manifest_passes(self) -> None:
         self.assertEqual(set(), self.codes())
+
+    def test_always_enabled_commands_cannot_be_marked_na(self) -> None:
+        data = self._manifest()
+        for command in data["commands"]:
+            if command["id"] in ALWAYS_ENABLED_COMMANDS:
+                command["applicability"] = "N/A: disabled"
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("always-enabled-command-disabled", self.codes())
 
     def test_boolean_schema_version_is_rejected(self) -> None:
         data = self._manifest()
@@ -201,6 +211,57 @@ class ProjectCommandValidatorTests(unittest.TestCase):
         data["commands"][0]["argv"] = ["python3", "-m", "compileall"]
         self.path.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("command-declaration-mismatch", self.codes())
+
+    def test_python_script_entrypoint_must_exist_and_comment_is_not_provenance(self) -> None:
+        command = "python3 does-not-exist.py"
+        data = self._manifest()
+        data["commands"][0].update({
+            "argv": ["python3", "does-not-exist.py"],
+            "source_selector": command,
+            "source_command": command,
+        })
+        (self.root / "commands.txt").write_text(
+            "unittest\npython3 -m unittest\n<!-- python3 does-not-exist.py -->\n",
+            encoding="utf-8",
+        )
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertTrue(
+            {"missing-command-entrypoint", "undeclared-command", "command-declaration-mismatch"}
+            <= self.codes()
+        )
+
+    def test_fenced_markdown_command_is_not_provenance(self) -> None:
+        command = "python3 -m compileall"
+        data = self._manifest()
+        data["commands"][0].update({
+            "argv": ["python3", "-m", "compileall"],
+            "source": "commands.md",
+            "source_selector": command,
+            "source_command": command,
+        })
+        (self.root / "commands.md").write_text(
+            "```text\n" + command + "\n```\n",
+            encoding="utf-8",
+        )
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertTrue(
+            {"undeclared-command", "command-declaration-mismatch"} <= self.codes()
+        )
+
+    def test_literal_pipe_inside_argv_value_is_not_shell_operator(self) -> None:
+        command = "python3 -m unittest -k 'foo|bar'"
+        data = self._manifest()
+        data["commands"][0].update({
+            "argv": ["python3", "-m", "unittest", "-k", "foo|bar"],
+            "source_selector": command,
+            "source_command": command,
+        })
+        (self.root / "commands.txt").write_text(
+            "unittest\npython3 -m unittest\n" + command + "\n",
+            encoding="utf-8",
+        )
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertNotIn("unsafe-command", self.codes())
 
     def test_frontend_requires_e2e_command(self) -> None:
         data = self._manifest()

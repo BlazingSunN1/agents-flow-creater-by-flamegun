@@ -433,7 +433,7 @@ class FrontendEvidenceValidatorTests(unittest.TestCase):
         self.path.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn("browser-dom-action-mismatch", self.codes())
 
-    def test_dom_snapshot_must_match_live_page_bytes(self) -> None:
+    def test_runtime_dom_snapshot_may_differ_from_live_source_bytes(self) -> None:
         page = self.root / "index.html"
         page.write_text('<main id="entry">no controls or result</main>', encoding="utf-8")
         digest = hashlib.sha256(page.read_bytes()).hexdigest()
@@ -443,6 +443,16 @@ class FrontendEvidenceValidatorTests(unittest.TestCase):
         transcript = json.loads(self.transcript.read_text(encoding="utf-8"))
         transcript["page_artifact_sha256"] = digest
         transcript["observed_response_sha256"] = digest
+        self.transcript.write_text(json.dumps(transcript), encoding="utf-8")
+        data["browser"]["transcript_sha256"] = hashlib.sha256(self.transcript.read_bytes()).hexdigest()
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertEqual(set(), self.codes())
+
+    def test_stale_dom_snapshot_hash_is_rejected(self) -> None:
+        data = self._evidence()
+        data["browser"]["dom_snapshot_sha256"] = "0" * 64
+        transcript = json.loads(self.transcript.read_text(encoding="utf-8"))
+        transcript["dom_snapshot_sha256"] = "0" * 64
         self.transcript.write_text(json.dumps(transcript), encoding="utf-8")
         data["browser"]["transcript_sha256"] = hashlib.sha256(self.transcript.read_bytes()).hexdigest()
         self.path.write_text(json.dumps(data), encoding="utf-8")
@@ -928,6 +938,17 @@ class FrontendEvidenceValidatorTests(unittest.TestCase):
     def test_playwright_failed_terminal_state_must_match_unexpected_stats(self) -> None:
         report = json.loads(self.report.read_text(encoding="utf-8"))
         report["suites"][0]["specs"][0]["tests"][0]["results"][0]["status"] = "failed"
+        self.report.write_text(json.dumps(report), encoding="utf-8")
+        data = self._evidence()
+        data["e2e"]["report_sha256"] = hashlib.sha256(self.report.read_bytes()).hexdigest()
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("e2e-report-mismatch", self.codes())
+
+    def test_playwright_expected_failure_cannot_count_as_passed(self) -> None:
+        report = json.loads(self.report.read_text(encoding="utf-8"))
+        test = report["suites"][0]["specs"][0]["tests"][0]
+        test["expectedStatus"] = "failed"
+        test["results"][0]["status"] = "failed"
         self.report.write_text(json.dumps(report), encoding="utf-8")
         data = self._evidence()
         data["e2e"]["report_sha256"] = hashlib.sha256(self.report.read_bytes()).hexdigest()

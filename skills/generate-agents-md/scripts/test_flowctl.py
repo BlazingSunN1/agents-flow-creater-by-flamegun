@@ -21,6 +21,7 @@ class FlowctlTests(unittest.TestCase):
         cases = (
             (["doctor", "--quick"], "validate_skill", ["--quick"]),
             (["plan", "contract.json"], "plan_delivery_gates", ["contract.json"]),
+            (["gate", "contract.json", "targeted_tests"], "execute_delivery_gate", ["contract.json", "targeted_tests"]),
             (["check", "frontend", "evidence.json"], "validate_frontend_evidence", ["evidence.json"]),
             (["check", "module-close", "bundle.json"], "validate_delivery_bundle", ["bundle.json"]),
             (

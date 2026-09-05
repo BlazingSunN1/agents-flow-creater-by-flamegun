@@ -28,7 +28,7 @@ REQUIREMENT_QUESTION_MUTANT_CASES = (
         "scripts/validate_requirement_questions.py",
         '    if pre_version == baseline_version or pre_sha == baseline_sha:\n',
         '    if False:\n',
-        "scripts.test_validate_requirement_questions.RequirementQuestionValidatorTests.test_answered_requires_human_evidence_baseline_change_and_host_receipt",
+        "scripts.test_validate_requirement_questions.RequirementQuestionValidatorTests.test_answered_requires_human_evidence_baseline_change_and_closed_receipt",
     ),
     (
         "answered-question-evidence-binding-check-disabled",

@@ -15,17 +15,17 @@ def validate_native_review_role_receipts(
 ) -> list[Issue]:
     adjudicator = {
         "schema_version": 1, "receipt_kind": "codex-native-spawn-result",
-        "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-        "recorded_model": "gpt-5.6-sol", "agent_id": data.get("adjudicator_agent_id"),
-        "requested_reasoning_effort": "xhigh", "recorded_reasoning_effort": "xhigh",
+        "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+        "recorded_model": "gpt-6-astra", "agent_id": data.get("adjudicator_agent_id"),
+        "requested_reasoning_effort": "high", "recorded_reasoning_effort": "high",
         "run_id": data.get("adjudicator_run_id"), "role": "coordinator-adjudicator",
         "module": data.get("module"), "maintainer_title": "coordinator-adjudicator",
     }
     writer = {
         "schema_version": 1, "receipt_kind": "codex-native-spawn-result",
-        "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-        "recorded_model": "gpt-5.6-sol", "agent_id": data.get("writer_agent_id"),
-        "requested_reasoning_effort": "high", "recorded_reasoning_effort": "high",
+        "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+        "recorded_model": "gpt-6-astra", "agent_id": data.get("writer_agent_id"),
+        "requested_reasoning_effort": "medium", "recorded_reasoning_effort": "medium",
         "run_id": data.get("writer_run_id"), "role": data.get("writer_role"),
         "module": data.get("module"), "maintainer_title": data.get("maintainer_title"),
     }

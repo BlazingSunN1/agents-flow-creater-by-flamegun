@@ -3,6 +3,20 @@ from __future__ import annotations
 
 DELIVERY_CONTRACT_BUNDLE_MUTANT_CASES = (
     (
+        "gate-receipt-schema-v2-check-disabled",
+        "scripts/validate_delivery_contract.py",
+        'receipt.get("schema_version") != 2',
+        'receipt.get("schema_version") not in {1, 2}',
+        "scripts.test_validate_delivery_contract.DeliveryContractValidatorTests.test_legacy_gate_receipt_schema_is_rejected",
+    ),
+    (
+        "gate-receipt-argv-binding-disabled",
+        "scripts/validate_delivery_contract.py",
+        "if argv != expected_argv or argv_sha != observed_argv_sha:",
+        "if False:",
+        "scripts.test_validate_delivery_contract.DeliveryContractValidatorTests.test_gate_receipt_binds_registered_argv_exit_code_and_time",
+    ),
+    (
         "delivery-configuration-workset-binding-disabled",
         "scripts/delivery_contract_bundle_validation.py",
         '        "configuration_files": _split_paths(context.get("Configuration files", "")),\n',

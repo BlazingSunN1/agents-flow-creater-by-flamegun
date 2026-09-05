@@ -38,7 +38,7 @@ class ImplementationAgentPublicBoundaryTests(unittest.TestCase):
             for issue in validate_implementation_agent(self.data, self.context, self.fixture.root)
         }
         self.assertNotIn("implementation-receipt-not-validated", codes)
-        self.data["implementation_agent_reasoning_effort"] = "xhigh"
+        self.data["implementation_agent_reasoning_effort"] = "high"
         codes = {
             issue.code
             for issue in validate_implementation_agent(self.data, self.context, self.fixture.root)
@@ -50,8 +50,8 @@ class ImplementationAgentPublicBoundaryTests(unittest.TestCase):
             (Path(__file__).resolve().parents[1] / "assets" / "implementation-spawn-receipt.template.json")
             .read_text(encoding="utf-8")
         )
-        self.assertEqual("gpt-5.6-sol", template["recorded_model"])
-        self.assertEqual("high", template["recorded_reasoning_effort"])
+        self.assertEqual("gpt-6-astra", template["recorded_model"])
+        self.assertEqual("medium", template["recorded_reasoning_effort"])
         self.assertNotIn("machine_verified_model", template)
         self.assertNotIn("machine_verified_reasoning_effort", template)
 

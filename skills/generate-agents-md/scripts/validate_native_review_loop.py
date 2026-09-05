@@ -242,10 +242,10 @@ def _validate_child(raw: object, role: str, expected_verdict: str, version: int,
         issues.append(Issue("error", "invalid-native-loop-child", f"{role} 必须是对象"))
         return
     _closed_fields(raw, CHILD_FIELDS, "invalid-native-loop-child-fields", issues)
-    if raw.get("provider") != "codex-native-agent" or raw.get("agent_model") != "gpt-5.6-sol":
-        issues.append(Issue("error", "invalid-native-loop-model", f"{role} 必须是原生 gpt-5.6-sol"))
-    if raw.get("agent_reasoning_effort") != "xhigh":
-        issues.append(Issue("error", "invalid-native-loop-effort", f"{role} 必须使用 reasoning_effort=xhigh"))
+    if raw.get("provider") != "codex-native-agent" or raw.get("agent_model") != "gpt-6-astra":
+        issues.append(Issue("error", "invalid-native-loop-model", f"{role} 必须是原生 gpt-6-astra"))
+    if raw.get("agent_reasoning_effort") != "high":
+        issues.append(Issue("error", "invalid-native-loop-effort", f"{role} 必须使用 reasoning_effort=high"))
     for field in (
         "may_modify_code", "may_modify_shared_records", "received_full_chat",
         "received_other_agent_reasoning", "accepted_implementation_self_report",
@@ -263,9 +263,9 @@ def _validate_child(raw: object, role: str, expected_verdict: str, version: int,
         issues.append(Issue("error", "invalid-native-loop-verdict", f"{role} verdict 必须是 {expected_verdict}"))
     expected = {
         "schema_version": 1, "receipt_kind": "codex-native-spawn-result",
-        "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-        "recorded_model": "gpt-5.6-sol", "agent_id": raw.get("agent_id"),
-        "requested_reasoning_effort": "xhigh", "recorded_reasoning_effort": "xhigh",
+        "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+        "recorded_model": "gpt-6-astra", "agent_id": raw.get("agent_id"),
+        "requested_reasoning_effort": "high", "recorded_reasoning_effort": "high",
         "run_id": raw.get("run_id"), "role": role, "module": bundle.get("module"),
         "maintainer_title": role,
     }
@@ -473,7 +473,7 @@ def _deduplicate(issues: list[Issue]) -> list[Issue]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="验证原生 Sol 方案/黑盒审查闭环和运行黑盒绑定")
+    parser = argparse.ArgumentParser(description="验证原生 GPT-6 方案/黑盒审查闭环和运行黑盒绑定")
     parser.add_argument("path", type=Path)
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--template", action="store_true")

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from mutation_execution import run_target
 
 from mutation_cases_records import ADDITIONAL_MUTANT_CASES
 from mutation_cases_module_closure import MODULE_CLOSURE_MUTANT_CASES
@@ -21,6 +20,7 @@ from mutation_cases_delivery_contract_bundle import DELIVERY_CONTRACT_BUNDLE_MUT
 from mutation_cases_write_authority import WRITE_AUTHORITY_MUTANT_CASES
 from mutation_cases_local_trust import LOCAL_TRUST_MUTANT_CASES
 from mutation_cases_module_lease import MODULE_LEASE_MUTANT_CASES
+from mutation_cases_command_execution import COMMAND_EXECUTION_MUTANT_CASES
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -116,7 +116,7 @@ CORE_MUTANTS = (
     Mutant(
         "command-declaration-binding-disabled",
         "scripts/validate_project_commands.py",
-        "if declared_argv != argv or source_command not in source.read_text(encoding=\"utf-8\", errors=\"replace\"):",
+        "if declared_argv != argv or source_command not in source_text:",
         "if False:",
         "scripts.test_validate_project_commands.ProjectCommandValidatorTests.test_argv_must_equal_complete_declared_command",
     ),
@@ -312,9 +312,9 @@ CORE_MUTANTS = (
     Mutant(
         "playwright-terminal-state-binding-disabled",
         "scripts/frontend_report_validation.py",
+        'if actual_status == "passed" and expected_status == "passed":',
         'if actual_status in {"passed", "failed"} and actual_status == expected_status:',
-        "if True:",
-        "scripts.test_validate_frontend_evidence.FrontendEvidenceValidatorTests.test_playwright_failed_terminal_state_must_match_unexpected_stats",
+        "scripts.test_validate_frontend_evidence.FrontendEvidenceValidatorTests.test_playwright_expected_failure_cannot_count_as_passed",
     ),
     Mutant(
         "playwright-exact-count-binding-disabled",
@@ -340,8 +340,8 @@ CORE_MUTANTS = (
     Mutant(
         "single-pipe-shell-syntax-check-disabled",
         "scripts/validate_project_commands.py",
-        'SHELL_OPERATOR_RE = re.compile(r"(?:\\||&&|[;\\r\\n])")',
-        'SHELL_OPERATOR_RE = re.compile(r"(?:\\|\\||&&|[;\\r\\n])")',
+        'FORBIDDEN_ARGUMENTS = {"|", "||", "&&", ";", "--no-verify", "-c"}',
+        'FORBIDDEN_ARGUMENTS = {"||", "&&", ";", "--no-verify", "-c"}',
         "scripts.test_validate_project_commands.ProjectCommandValidatorTests.test_single_pipe_shell_syntax_is_rejected",
     ),
     Mutant(
@@ -420,7 +420,8 @@ MUTANTS = (
     *CORE_MUTANTS,
     *(Mutant(*case) for case in (
         *ADDITIONAL_MUTANT_CASES, *STRICT_MUTANT_CASES, *REVIEW_FIX_MUTANT_CASES,
-        *STABILITY_MUTANT_CASES, *MODULE_CLOSURE_MUTANT_CASES,
+        *STABILITY_MUTANT_CASES, *COMMAND_EXECUTION_MUTANT_CASES,
+        *MODULE_CLOSURE_MUTANT_CASES,
         *AUTHORITY_BINDING_MUTANT_CASES,
         *NATIVE_REVIEW_MUTANT_CASES,
         *REVIEW_TRIGGER_MUTANT_CASES,
@@ -436,9 +437,15 @@ MUTANTS = (
 
 def main() -> int:
     survivors: list[str] = []
+    baselines: set[str] = set()
     with tempfile.TemporaryDirectory(prefix="generate-agents-md-mutation-") as temporary:
         temporary_root = Path(temporary)
         for mutant in MUTANTS:
+            if mutant.test not in baselines:
+                if run_target(SKILL_ROOT, mutant.test) != 'pass':
+                    print(f"ERROR mutation-baseline {mutant.name} invalid or failing target; valid=false")
+                    return 1
+                baselines.add(mutant.test)
             target_root = temporary_root / mutant.name
             shutil.copytree(SKILL_ROOT, target_root, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
             target = target_root / mutant.relative_path
@@ -447,14 +454,11 @@ def main() -> int:
                 print(f"ERROR mutation-anchor {mutant.name} expected exactly one source anchor")
                 return 1
             target.write_text(source.replace(mutant.original, mutant.replacement), encoding="utf-8")
-            result = subprocess.run(
-                [sys.executable, "-m", "unittest", mutant.test],
-                cwd=target_root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            if result.returncode == 0:
+            outcome = run_target(target_root, mutant.test)
+            if outcome == 'invalid':
+                print(f"ERROR mutation-execution {mutant.name} invalid target run; valid=false")
+                return 1
+            if outcome == 'pass':
                 survivors.append(mutant.name)
                 print(f"SURVIVED {mutant.name}")
             else:

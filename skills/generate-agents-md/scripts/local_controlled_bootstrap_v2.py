@@ -156,7 +156,7 @@ def _validate_semantics(
     fixed = {
         "schema_version": 2, "receipt_type": "system_governance_bootstrap_v2",
         "trust_mode": TRUST_MODE, "security_caveat": SECURITY_CAVEAT,
-        "assigned_model": "gpt-5.6-sol", "assigned_reasoning_effort": "high",
+        "assigned_model": "gpt-6-astra", "assigned_reasoning_effort": "medium",
         "next_authority": "local-controlled-module-write-lease-required",
     }
     require(all(payload.get(key) == value for key, value in fixed.items()),

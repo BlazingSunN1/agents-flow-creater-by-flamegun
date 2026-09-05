@@ -18,12 +18,12 @@ from native_gate_agent_validation import validate_native_gate_agent
 DISPATCHER_IDENTITY = {
     "title": "System Dispatcher",
     "provider": "codex-native-agent",
-    "model": "gpt-5.6-sol",
+    "model": "gpt-6-astra",
 }
 AGGREGATION_IDENTITY = {
     "title": "System Aggregation Writer",
     "provider": "codex-native-agent",
-    "model": "gpt-5.6-sol",
+    "model": "gpt-6-astra",
 }
 AGGREGATION_RECEIPT_FIELDS = {
     "aggregation_spawn_receipt",
@@ -131,13 +131,13 @@ def _validate_dispatcher(
     if any(value.get(f"dispatcher_{key}") != expected for key, expected in DISPATCHER_IDENTITY.items()):
         issues.append(Issue(
             "error", "system-dispatcher-agent-invalid",
-            "Dispatcher 必须声明并绑定为只读原生 gpt-5.6-sol Agent；严格模式追加宿主证明",
+            "Dispatcher 必须声明并绑定为只读原生 gpt-6-astra Agent；严格模式追加宿主证明",
         ))
     expected = _base_expected(
         value, prefix="dispatcher", receipt_kind="codex-native-spawn-result",
         role="dispatcher", title=DISPATCHER_IDENTITY["title"],
         read_only=True, owned_paths_field="dispatcher_owned_paths",
-        reasoning_effort="xhigh", root=root, issues=issues,
+        reasoning_effort="high", root=root, issues=issues,
     )
     issues.extend(validate_native_spawn_record(
         data=value, root=root, expected=expected,
@@ -161,13 +161,13 @@ def _validate_aggregation_writer(
                    for key, expected in AGGREGATION_IDENTITY.items())):
         issues.append(Issue(
             "error", "system-aggregation-agent-invalid",
-            "系统聚合写者必须是独立原生 gpt-5.6-sol Agent",
+            "系统聚合写者必须是独立原生 gpt-6-astra Agent",
         ))
     expected = _base_expected(
         value, prefix="aggregation_writer", receipt_kind="codex-native-output-result",
         role="system-aggregation", title=AGGREGATION_IDENTITY["title"],
         read_only=False, owned_paths_field="aggregation_writer_owned_paths",
-        reasoning_effort="high", root=root, issues=issues,
+        reasoning_effort="medium", root=root, issues=issues,
     )
     expected["candidate_payload_sha256"] = system_candidate_payload_sha256(value)
     expected["authority_binding"] = value.get("authority_binding")
@@ -194,8 +194,8 @@ def _base_expected(
         "schema_version": schema_version,
         "receipt_kind": receipt_kind,
         "provider": "codex-native-agent",
-        "requested_model": "gpt-5.6-sol",
-        "recorded_model": "gpt-5.6-sol",
+        "requested_model": "gpt-6-astra",
+        "recorded_model": "gpt-6-astra",
         "agent_id": value.get(f"{prefix}_agent_id"),
         "run_id": value.get(f"{prefix}_run_id"),
         "role": role,

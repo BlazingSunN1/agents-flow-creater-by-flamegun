@@ -12,9 +12,9 @@ NATIVE_REVIEW_MUTANT_CASES = (
     (
         "native-loop-reasoning-effort-check-disabled",
         "scripts/validate_native_review_loop.py",
-        '    if raw.get("agent_reasoning_effort") != "xhigh":',
+        '    if raw.get("agent_reasoning_effort") != "high":',
         "    if False:",
-        "scripts.test_validate_native_review_loop.NativeReviewLoopValidatorTests.test_project_receipts_cannot_self_grant_host_trust",
+        "scripts.test_validate_native_review_loop.NativeReviewLoopValidatorTests.test_project_receipts_allow_local_coordination_without_claiming_host_trust",
     ),
     (
         "native-loop-checkpoint-chain-check-disabled",

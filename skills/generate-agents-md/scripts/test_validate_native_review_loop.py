@@ -39,10 +39,10 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
                  maintainer_title: str | None = None) -> dict[str, object]:
         value: dict[str, object] = {
             "schema_version": 1, "receipt_kind": kind,
-            "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol", "agent_id": agent_id,
-            "requested_reasoning_effort": "high" if role in {"module-maintainer", "implementation"} else "xhigh",
-            "recorded_reasoning_effort": "high" if role in {"module-maintainer", "implementation"} else "xhigh",
+            "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra", "agent_id": agent_id,
+            "requested_reasoning_effort": "medium" if role in {"module-maintainer", "implementation"} else "high",
+            "recorded_reasoning_effort": "medium" if role in {"module-maintainer", "implementation"} else "high",
             "run_id": run_id, "role": role, "module": "M02",
             "maintainer_title": maintainer_title or role,
         }
@@ -91,8 +91,8 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
             output_sha256=output_sha, verdict="produced" if role == "solution-author" else "pass",
         ))
         return {
-            "provider": "codex-native-agent", "agent_model": "gpt-5.6-sol",
-            "agent_reasoning_effort": "xhigh",
+            "provider": "codex-native-agent", "agent_model": "gpt-6-astra",
+            "agent_reasoning_effort": "high",
             "agent_id": agent_id, "run_id": run_id,
             "spawn_receipt": spawn_path, "spawn_receipt_sha256": spawn_sha,
             "output_receipt": output_receipt_path, "output_receipt_sha256": output_receipt_sha,
@@ -183,9 +183,9 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
         receipt_path = "evidence/native-review-recovery-v1.json"
         receipt = {
             "schema_version": 1, "receipt_kind": "codex-native-recovery-result",
-            "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol",
-            "requested_reasoning_effort": "xhigh", "recorded_reasoning_effort": "xhigh",
+            "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra",
+            "requested_reasoning_effort": "high", "recorded_reasoning_effort": "high",
             "agent_id": self.data["adjudicator_agent_id"], "run_id": self.data["adjudicator_run_id"],
             "role": "coordinator-adjudicator", "module": self.data["module"],
             "maintainer_title": "coordinator-adjudicator",
@@ -304,7 +304,7 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
         codes = {item.code for item in issues}
         self.assertNotIn("native-loop-adjudicator-receipt-not-validated", codes)
         self.assertNotIn("native-loop-writer-receipt-not-validated", codes)
-        self.data["candidates"][0]["black_box_reviewer"]["agent_reasoning_effort"] = "high"
+        self.data["candidates"][0]["black_box_reviewer"]["agent_reasoning_effort"] = "medium"
         self._write_bundle()
         self.assertIn("invalid-native-loop-effort", self.codes())
 

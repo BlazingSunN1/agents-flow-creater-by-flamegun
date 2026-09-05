@@ -89,7 +89,7 @@ def dom_action_issues(evidence: dict[str, object], transcript: dict[str, object]
         return [("browser-dom-evidence-mismatch", "DOM 快照路径和哈希必须是字符串")]
     payload = _snapshot_payload(raw_path, raw_hash, evidence, root)
     if isinstance(payload, str):
-        return [(payload, "DOM 快照必须与实时入口页面使用完全相同的 UTF-8 响应字节")]
+        return [(payload, "DOM 快照必须是绑定当前浏览器运行的 UTF-8 页面状态")]
     parser = _DomParser()
     parser.feed(payload.decode("utf-8"))
     styles, style_issue = combined_styles(parser.style_sources, evidence, root)
@@ -270,8 +270,7 @@ def _snapshot_payload(raw_path: str, raw_hash: str, evidence: dict[str, object],
     payload = snapshot.read_bytes() if snapshot is not None else b""
     if snapshot is None:
         return "browser-dom-evidence-mismatch"
-    if (hashlib.sha256(payload).hexdigest() != raw_hash.casefold()
-            or raw_hash.casefold() != str(evidence.get("page_artifact_sha256", "")).casefold()):
+    if hashlib.sha256(payload).hexdigest() != raw_hash.casefold():
         return "browser-dom-page-mismatch"
     try:
         payload.decode("utf-8")

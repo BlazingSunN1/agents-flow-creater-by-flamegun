@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from delivery_gate_planner import build_gate_plan, compute_command_fingerprints, compute_impact_fingerprint
 from validate_delivery_contract import validate_delivery_contract
+from test_gate_output_support import passing_output
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -180,11 +181,17 @@ class DeliveryContractValidatorTests(unittest.TestCase):
         for command_id, fingerprint in data["gate_plan"]["gate_input_fingerprints"].items():
             output_path = f"docs/gate-output-{command_id}.txt"
             receipt_path = f"docs/gate-receipt-{command_id}.json"
-            (self.root / output_path).write_text(f"passed {command_id}", encoding="utf-8")
+            (self.root / output_path).write_text(passing_output(["python3", "-m", "unittest"]), encoding="utf-8")
             receipt = {
-                "schema_version": 1,
+                "schema_version": 2,
+                "producer": "flowctl-gate-runner",
                 "command_id": command_id,
                 "gate_input_fingerprint": fingerprint,
+                "command_argv": ["python3", "-m", "unittest"],
+                "command_argv_sha256": hashlib.sha256(b"python3\0-m\0unittest").hexdigest(),
+                "started_at": "2026-09-05T12:00:00+08:00",
+                "ended_at": "2026-09-05T12:00:01+08:00",
+                "exit_code": 0,
                 "verdict": "pass",
                 "run_id": f"run-{command_id}",
                 "output_path": output_path,
@@ -202,6 +209,53 @@ class DeliveryContractValidatorTests(unittest.TestCase):
 
     def test_valid_contract_passes(self) -> None:
         self.assertEqual(set(), self.codes())
+
+    def test_legacy_gate_receipt_schema_is_rejected(self) -> None:
+        data = self.contract()
+        command_id = "targeted_tests"
+        ref = data["gate_receipts"][command_id]
+        receipt_path = self.root / ref["path"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["schema_version"] = 1
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        data["gate_receipts"][command_id] = self.ref(ref["path"])
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("invalid-gate-receipt", self.codes())
+
+    def test_handwritten_gate_receipt_missing_runner_fields_is_rejected(self) -> None:
+        data = self.contract()
+        command_id = "targeted_tests"
+        ref = data["gate_receipts"][command_id]
+        receipt_path = self.root / ref["path"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        for field in (
+            "producer", "command_argv", "command_argv_sha256", "started_at",
+            "ended_at", "exit_code",
+        ):
+            del receipt[field]
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        data["gate_receipts"][command_id] = self.ref(ref["path"])
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIn("invalid-gate-receipt", self.codes())
+
+    def test_gate_receipt_binds_registered_argv_exit_code_and_time(self) -> None:
+        mutations = (
+            ("command_argv", ["python3", "-m", "compileall"], "gate-receipt-command-mismatch"),
+            ("exit_code", 1, "gate-receipt-not-pass"),
+            ("ended_at", "2026-09-05T11:59:59+08:00", "invalid-gate-receipt-time"),
+        )
+        for field, value, expected in mutations:
+            with self.subTest(field=field):
+                data = self.contract()
+                command_id = "targeted_tests"
+                ref = data["gate_receipts"][command_id]
+                receipt_path = self.root / ref["path"]
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                receipt[field] = value
+                receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+                data["gate_receipts"][command_id] = self.ref(ref["path"])
+                self.path.write_text(json.dumps(data), encoding="utf-8")
+                self.assertIn(expected, self.codes())
 
     def test_small_completion_rejects_structurally_invalid_command_manifest(self) -> None:
         data = self.contract()

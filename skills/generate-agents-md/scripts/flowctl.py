@@ -10,6 +10,7 @@ CORE_COMMANDS = {
     "doctor": "validate_skill",
     "scope": "validate_task_write_scope",
     "plan": "plan_delivery_gates",
+    "gate": "execute_delivery_gate",
     "record": "update_project_record",
 }
 

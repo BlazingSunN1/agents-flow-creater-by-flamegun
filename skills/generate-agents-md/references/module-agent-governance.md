@@ -25,7 +25,7 @@
 
 `schema_version=2` 的封闭 `expanded-authority-matrix-v1` 声明只是同一 96 行 v1 权限矩阵的紧凑编码。兼容适配器必须先按闭集合同展开为 v1，再对展开结果计算并核对声明的 canonical SHA-256；不得把紧凑 v2 JSON 的原始哈希误当成权限身份。既有完整 v1 表仍可验证；未知合同、未知字段、重复键、展开结果或声明哈希漂移一律失败关闭。
 
-每次被 Dispatcher 派发的模块维护实现 run 和独立门禁 run 必须使用不同的 Codex 原生 `gpt-5.6-sol` Agent/run；实现/维护固定 `reasoning_effort=high`，审核、黑盒和独立验收固定 `reasoning_effort=xhigh`。默认本地协调 receipt 精确绑定请求配置、Agent/run、角色、模块、owned paths、input/output SHA-256、baseline/code/build 和 verdict，但不证明宿主实际运行身份；严格模式再由可信宿主校验器复核。Dispatcher、聚合写者、维护者和门禁审查者的 Agent/run 必须全局唯一；身份复用、配置替换、记录漂移或失败门禁均阻塞，默认模式不会仅因缺宿主校验器而阻塞。
+每次被 Dispatcher 派发的模块维护实现 run 和独立门禁 run 必须使用不同的 Codex 原生 `gpt-6-astra` Agent/run；实现/维护固定 `reasoning_effort=medium`，审核、黑盒和独立验收固定 `reasoning_effort=high`。默认本地协调 receipt 精确绑定请求配置、Agent/run、角色、模块、owned paths、input/output SHA-256、baseline/code/build 和 verdict，但不证明宿主实际运行身份；严格模式再由可信宿主校验器复核。Dispatcher、聚合写者、维护者和门禁审查者的 Agent/run 必须全局唯一；身份复用、配置替换、记录漂移或失败门禁均阻塞，默认模式不会仅因缺宿主校验器而阻塞。
 
 稳定标题是长期规则；provider、模型、thread ID、session ID、一次性 run ID、在线状态和当前任务队列都是运行时事实，只能放运行时登记或证据。公共模板使用占位符，真实项目必须解析为经验证值。
 
@@ -61,10 +61,10 @@ Dispatcher 角色始终只读，不得修改业务代码，不得写共享计划
 
 - 普通代码增量仅累计当前 run 的变更与证据，不逐次启动审查。只有模块实现、定向测试、追踪和当期证据形成闭环候选，或人工主动要求时才启动审查；人工触发可审查当前快照但不自行关闭模块。审查后任何代码或配置变化都会使结论失效，下一闭环候选必须按当前代码指纹重新审查。
 - 主、父、子层级不授予固有写权。每项实现任务恰好一个 implementation Agent；单模块任务使用登记的模块维护 Agent，并以当前唯一活动协调租约匹配 module、Agent/run、稳定标题、精确 owned paths 和策略哈希。严格模式额外宿主证明这些字段。只有当前租约持有者可写该模块。
-- 机器可读的运行证据必须显式记录 `assigned_model` 与 `assigned_reasoning_effort`；实现固定为 `gpt-5.6-sol/high`，只读方案、审核、裁决和独立验收固定为 `gpt-5.6-sol/xhigh`，不得以角色自报代替调度或 receipt 绑定。
+- 机器可读的运行证据必须显式记录 `assigned_model` 与 `assigned_reasoning_effort`；实现固定为 `gpt-6-astra/medium`，只读方案、审核、裁决和独立验收固定为 `gpt-6-astra/high`，不得以角色自报代替调度或 receipt 绑定。
 - 模块维护 Agent 可以作为其获派变更的唯一实现写者，但不得审查或验收自己的实现；适用的变更审查和黑盒验收必须由不同的独立只读 Agent 针对同一代码/构建身份执行。Dispatcher 身份不能成为实现写者；若同一上层执行主体需要实现，必须使用前述分离且不复用身份的 implementation Agent/run。
 - 模块维护 Agent 不得以 `complete`、`finalize`、“完成”或任何同义表述自行关闭自己的交付。每次显式 actor 出现都开始新的 scope，不依赖前置标点或连接词枚举；维护者/实现者 scope 只要同时出现自有交付与关闭、自验、批准、验收、完成或最终签署/审批权归属即默认失败，即使独立审查、黑盒或验收已经 `passed`、`completed` 或 `success` 也不得豁免；Dispatcher scope 只要同时出现模块交付与这些动作或权限归属也默认失败。只有绑定该动作的明确否定才能使相关分句合法。独立门禁通过只允许当前租约持有的模块维护 Agent 记录已经通过的结果，永不授权其自行 review、black-box、acceptance、adjudicate、close、complete 或 accept。主动语态与 `by`/“由”被动语态、`belongs to`/“归”、`from`/“从”及 `under authority of`/“在授权下”关系都必须按同一分句绑定 actor、交付对象、动作和组合极性；动作按完整单词、词形及 `final approval`、`final approver`、`final signatory`、`owns acceptance`、`approval authority/rights`、审批权和批准权等名词化授权归一，不把 `acceptance` 子串当成 `accept`。合法结果记录必须绑定可信证据证明的独立门禁 `passed`、`completed` 或 `success`；裸 `independent acceptance`，以及 `optional`、`omitted`、`pending`、`forged`、失败或未通过等状态都不能记录为通过，更不能授权任何自有动作。`allow`、`permit`、`authorize`、`ask`、`instruct` 控制的宾语 actor 仅继承直接绑定控制动作的明确否定；`prevent`、`forbid`、`block`、`disallow`、`stop ... from`、禁止、不允许和阻止属于动作级禁止，并按双重否定组合极性，正向控制以及后续 `but` 或新主句不得继承。`neither ... nor`/“均不得”可安全禁止多个 actor；同一动作的直接否定覆盖其 `and/or` 链，无关 actor 的否定或条件不得跨 scope 豁免。
-- 模块维护/实现 Agent 不得承载 `$native-gpt-review-loop` 的 coordinator/adjudicator 职责；coordinator/adjudicator 的 Agent ID 与 run ID 必须同时不同于租约写者，始终只读、永不持 writer lease，且不得为该写者自证任何门禁。同一身份不能通过切换 role 或新建 run 先裁决再写；实际修订只交给不同的 canonical module-maintainer/implementation Agent identity+run，并再次校验唯一活动模块写租约。该租约只授权精确 owned paths 内的实现和合法结果记录，不授权裁决。两个 Sol 方案/审查 Agent 仍只读，父 GPT、主 Agent 或子 Agent 标签以及父子关系均不会赋予 Dispatcher、writer 或任何未持租约 Agent 额外权限。
+- 模块维护/实现 Agent 不得承载 `$native-gpt-review-loop` 的 coordinator/adjudicator 职责；coordinator/adjudicator 的 Agent ID 与 run ID 必须同时不同于租约写者，始终只读、永不持 writer lease，且不得为该写者自证任何门禁。同一身份不能通过切换 role 或新建 run 先裁决再写；实际修订只交给不同的 canonical module-maintainer/implementation Agent identity+run，并再次校验唯一活动模块写租约。该租约只授权精确 owned paths 内的实现和合法结果记录，不授权裁决。两个 GPT-6 方案/审查 Agent 仍只读，父 GPT、主 Agent 或子 Agent 标签以及父子关系均不会赋予 Dispatcher、writer 或任何未持租约 Agent 额外权限。
 - 其他模块维护 Agent 只读提供边界意见；独立 UI/UX、验收用例、需求一致性、领域、变更审查和黑盒 Agent 对代码和共享记录只读。
 - Dispatcher 组织全流程验证并核对证据绑定，不代替独立结论。实现 Agent 和 Dispatcher 都不得自证独立门禁。
 - 每个已启动的独立门禁必须分别保存 spawn receipt 和 output result。completion 阶段仅有 spawn receipt 必须 fail closed；implementation 阶段尚未启动且不适用的门禁仍按阶段规则省略，不得伪造空结果占位。
@@ -76,7 +76,7 @@ Dispatcher 角色始终只读，不得修改业务代码，不得写共享计划
 - Skill/插件缓存与直装副本是派生产物，只能从获授权源码根经验证、cachebuster 和重装流程生成，不得直接编辑。目标校验器只检查声明路径，不能提供 OS 级隔离；真实强制仍需宿主沙箱、独立 worktree、容器或 OS 权限。
 - 跨模块或系统级任务只有在每个受影响模块都关闭当前需求 ID、代码/构建、定向测试、独立验收、模块 run/latest 与适用流程变化泳道证据，且没有开放 finding 后才能完成；Dispatcher 只能聚合核对，不能替任何模块补签。
 
-跨模块时，每个维护 Agent 用 `assets/module-delivery-bundle.template.json` 声明完成包并运行模块门禁。包必须绑定 delivery contract、canonical 疑问清单及当前需求基线；泳道记录、路径和审查重跑项只来自 contract 的 gate plan，未规划 `swimlane_evidence` 时该工件路径为 `null`。每个未答项保持非阻塞 P2，伪造 `ANSWERED`、基线/哈希漂移或失败门禁才失败关闭。所有模块关闭后，不同的原生 Sol `SYSTEM_AGGREGATION` 写者生成并哈希绑定系统清单，只读 Dispatcher 调用 `scripts/validate_system_delivery_bundle.py`。默认本地模式重验逐模块交付、身份分离、规范化模块集合、需求/变更并集、所有权、code/build、清单哈希与零开放缺陷；严格模式再复核全部宿主 provenance。
+跨模块时，每个维护 Agent 用 `assets/module-delivery-bundle.template.json` 声明完成包并运行模块门禁。包必须绑定 delivery contract、canonical 疑问清单及当前需求基线；泳道记录、路径和审查重跑项只来自 contract 的 gate plan，未规划 `swimlane_evidence` 时该工件路径为 `null`。每个未答项保持非阻塞 P2，伪造 `ANSWERED`、基线/哈希漂移或失败门禁才失败关闭。所有模块关闭后，不同的原生 GPT-6 `SYSTEM_AGGREGATION` 写者生成并哈希绑定系统清单，只读 Dispatcher 调用 `scripts/validate_system_delivery_bundle.py`。默认本地模式重验逐模块交付、身份分离、规范化模块集合、需求/变更并集、所有权、code/build、清单哈希与零开放缺陷；严格模式再复核全部宿主 provenance。
 
 ## 5. 可选严格安全路由
 

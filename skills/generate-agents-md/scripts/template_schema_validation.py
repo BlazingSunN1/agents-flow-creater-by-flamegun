@@ -113,8 +113,8 @@ def multi_agent_issues(
     issues: list[tuple[str, str]] = []
     if data.get("open_disagreements") != []:
         issues.append(("open-agent-disagreement", "模板 open_disagreements 必须为空"))
-    if data.get("implementation_agent_reasoning_effort") != "high":
-        issues.append(("invalid-implementation-agent-effort", "模板实现 Agent 必须固定 reasoning_effort=high"))
+    if data.get("implementation_agent_reasoning_effort") != "medium":
+        issues.append(("invalid-implementation-agent-effort", "模板实现 Agent 必须固定 reasoning_effort=medium"))
     gates = data.get("gates")
     if not isinstance(gates, list):
         return [("invalid-gates", "模板 gates 必须是数组")]
@@ -130,8 +130,8 @@ def multi_agent_issues(
             issues.append(("unsafe-agent-boundary", "模板独立 Agent 边界必须为 false"))
         if any(type(gate.get(field)) is not str or not gate.get(field, "").strip() for field in gate_fields - boundaries):
             issues.append(("invalid-gate-types", "模板独立 Agent 身份、路径和结论必须是字符串"))
-        if gate.get("provider") != "codex-native-agent" or gate.get("agent_model") != "gpt-5.6-sol":
-            issues.append(("invalid-gate-agent", "模板独立 Agent 必须固定为 Codex 原生 gpt-5.6-sol"))
-        if gate.get("agent_reasoning_effort") != "xhigh":
-            issues.append(("invalid-gate-agent-effort", "模板独立 Agent 必须固定 reasoning_effort=xhigh"))
+        if gate.get("provider") != "codex-native-agent" or gate.get("agent_model") != "gpt-6-astra":
+            issues.append(("invalid-gate-agent", "模板独立 Agent 必须固定为 Codex 原生 gpt-6-astra"))
+        if gate.get("agent_reasoning_effort") != "high":
+            issues.append(("invalid-gate-agent-effort", "模板独立 Agent 必须固定 reasoning_effort=high"))
     return issues

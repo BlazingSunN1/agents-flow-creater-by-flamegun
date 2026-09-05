@@ -197,10 +197,10 @@ STABILITY_MUTANT_CASES = (
         "scripts.test_validate_swimlane_evidence.SwimlaneEvidenceValidatorTests.test_system_drilldown_controls_require_href_and_target_id",
     ),
     (
-        "frontend-dom-live-page-binding-disabled", "scripts/browser_dom_validation.py",
-        'or raw_hash.casefold() != str(evidence.get("page_artifact_sha256", "")).casefold()',
-        "or False",
-        "scripts.test_validate_frontend_evidence.FrontendEvidenceValidatorTests.test_dom_snapshot_must_match_live_page_bytes",
+        "frontend-dom-snapshot-hash-binding-disabled", "scripts/browser_dom_validation.py",
+        "if hashlib.sha256(payload).hexdigest() != raw_hash.casefold():",
+        "if False:",
+        "scripts.test_validate_frontend_evidence.FrontendEvidenceValidatorTests.test_stale_dom_snapshot_hash_is_rejected",
     ),
     (
         "frontend-dom-utf8-check-disabled", "scripts/browser_dom_validation.py",
@@ -425,7 +425,7 @@ STABILITY_MUTANT_CASES = (
     ),
     (
         "frontend-click-state-artifact-binding-disabled", "scripts/validate_frontend_evidence.py",
-        "        _validate_state_transition_artifacts(value, root, issues)\n", "",
+        "        _validate_state_transition_artifacts(value, root, issues)\n", "        pass\n",
         "scripts.test_validate_frontend_evidence.FrontendEvidenceValidatorTests.test_state_transition_hashes_must_bind_snapshot_artifacts",
     ),
     (

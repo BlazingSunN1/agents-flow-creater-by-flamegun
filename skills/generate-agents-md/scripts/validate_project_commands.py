@@ -10,6 +10,8 @@ from pathlib import Path
 
 from strict_json import loads as strict_json_loads
 from browser_url_validation import is_http_browser_url
+from agents_policy_common import markdown_without_html_comments, normative_markdown_view
+from gate_test_results import invokes_test_framework
 
 
 PLACEHOLDER_RE = re.compile(r"\{\{[^{}\r\n]+\}\}")
@@ -29,10 +31,12 @@ REQUIRED_COMMANDS = {
     "atomic_record_update",
     "delivery_bundle",
 }
+ALWAYS_ENABLED_COMMANDS = {
+    "delivery_contract", "task_write_scope", "traceability", "context_manifest",
+}
 CONDITIONAL_FRONTEND_COMMANDS = {"frontend_e2e", "frontend_evidence"}
 FORBIDDEN_EXECUTABLES = {"true", "echo", "printf", "env", "command", "xargs", "bash", "sh", "zsh", "cmd", "powershell", "pwsh"}
-FORBIDDEN_ARGUMENTS = {"||", "&&", ";", "--no-verify", "-c"}
-SHELL_OPERATOR_RE = re.compile(r"(?:\||&&|[;\r\n])")
+FORBIDDEN_ARGUMENTS = {"|", "||", "&&", ";", "--no-verify", "-c"}
 SHELL_EXECUTABLES = {"bash", "sh", "zsh", "cmd", "powershell", "pwsh"}
 FRONTEND_ENTRY_FIELDS = {"frontend_preview_url", "frontend_preview_root", "frontend_entry_artifact"}
 TOP_LEVEL_FIELDS = {"schema_version", "frontend_applicable", "commands"} | FRONTEND_ENTRY_FIELDS
@@ -78,6 +82,12 @@ def validate_project_commands(path: Path, *, project_root: Path, template: bool 
     root = project_root.resolve()
     _validate_frontend_entry(data, root, issues)
     command_map = {item.get("id"): item for item in commands if isinstance(item, dict)}
+    for command_id in ALWAYS_ENABLED_COMMANDS:
+        if command_map.get(command_id, {}).get("applicability") != "required":
+            issues.append(Issue(
+                "error", "always-enabled-command-disabled",
+                f"基础命令不得标记为 N/A：{command_id}",
+            ))
     if frontend is True:
         for command_id in CONDITIONAL_FRONTEND_COMMANDS:
             if command_map.get(command_id, {}).get("applicability") != "required":
@@ -116,8 +126,7 @@ def _validate_template_commands(data: dict[str, object], issues: list[Issue]) ->
         if not isinstance(item, dict):
             issues.append(Issue("error", "invalid-command-entry", "命令条目必须是对象"))
             continue
-        if set(item) != COMMAND_FIELDS:
-            issues.append(Issue("error", "invalid-command-fields", "命令条目含缺失或未知字段"))
+        _validate_command_fields(item, issues)
         strings = COMMAND_FIELDS - {"argv"}
         if any(type(item.get(field)) is not str or not item.get(field, "").strip() for field in strings):
             issues.append(Issue("error", "invalid-command-field-types", "模板命令字段必须是非空字符串"))
@@ -127,7 +136,7 @@ def _validate_template_commands(data: dict[str, object], issues: list[Issue]) ->
             continue
         executable = Path(argv[0]).name.casefold()
         unsafe = executable in FORBIDDEN_EXECUTABLES or any(
-            value in FORBIDDEN_ARGUMENTS or SHELL_OPERATOR_RE.search(value)
+            value in FORBIDDEN_ARGUMENTS
             or Path(value).name.casefold() in SHELL_EXECUTABLES for value in argv[1:]
         )
         if unsafe:
@@ -174,9 +183,18 @@ def _read_json(path: Path) -> tuple[dict[str, object] | None, list[Issue]]:
     return data, []
 
 
-def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) -> None:
-    if set(item) != COMMAND_FIELDS:
+def _validate_command_fields(item: dict[str, object], issues: list[Issue]) -> None:
+    if set(item) - {'result_kind'} != COMMAND_FIELDS:
         issues.append(Issue("error", "invalid-command-fields", "命令条目含缺失或未知字段"))
+    if 'result_kind' in item and (
+            item.get('id') != 'full_test_or_build' or item['result_kind'] not in ('tests', 'build')):
+        issues.append(Issue("error", "invalid-command-result-kind", "仅 full_test_or_build 可声明 tests/build 类型"))
+    if item.get('result_kind') == 'build' and invokes_test_framework(item.get('argv')):
+        issues.append(Issue("error", "invalid-command-result-kind", "测试框架命令不得登记为 build"))
+
+
+def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) -> None:
+    _validate_command_fields(item, issues)
     string_fields = COMMAND_FIELDS - {"argv"}
     if any(type(item.get(field)) is not str or not item.get(field, "").strip() for field in string_fields):
         issues.append(Issue("error", "invalid-command-field-types", "命令身份、来源、目录和适用性必须是非空字符串"))
@@ -192,7 +210,7 @@ def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) 
         return
     executable = Path(argv[0]).name.casefold()
     inline_code = executable.startswith("python") and any(value == "-c" or value.startswith("-c") for value in argv[1:])
-    shell_syntax = any(value in FORBIDDEN_ARGUMENTS or SHELL_OPERATOR_RE.search(value) for value in argv[1:])
+    shell_syntax = any(value in FORBIDDEN_ARGUMENTS for value in argv[1:])
     indirect_shell = any(Path(value).name.casefold() in SHELL_EXECUTABLES for value in argv[1:])
     if executable in FORBIDDEN_EXECUTABLES or inline_code or shell_syntax or indirect_shell:
         issues.append(Issue("error", "unsafe-command", f"{command_id} 使用了吞错、Shell 包装或绕过参数"))
@@ -201,12 +219,14 @@ def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) 
     elif shutil.which(argv[0]) is None:
         issues.append(Issue("error", "missing-executable", f"{command_id} 的可执行文件不存在：{argv[0]}"))
     working_directory = _resolve_path(str(item.get("working_directory", "")), root, issues, "working-directory", require_directory=True)
+    _validate_command_entrypoint(argv, working_directory, root, command_id, issues)
     source = _resolve_path(str(item.get("source", "")), root, issues, "command-source", require_directory=False)
     selector = str(item.get("source_selector", "")).strip()
     source_command = str(item.get("source_command", "")).strip()
     if not selector:
         issues.append(Issue("error", "missing-source-selector", f"{command_id} 缺少 source_selector"))
-    elif source and source.is_file() and selector not in source.read_text(encoding="utf-8", errors="replace"):
+    source_text = _command_source_text(source) if source and source.is_file() else ""
+    if selector and source is not None and selector not in source_text:
         issues.append(Issue("error", "undeclared-command", f"{command_id} 的声明来源不包含 selector：{selector}"))
     if not source_command or source is None or not source.is_file():
         issues.append(Issue("error", "missing-source-command", f"{command_id} 缺少完整声明命令"))
@@ -215,10 +235,40 @@ def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) 
             declared_argv = shlex.split(source_command)
         except ValueError:
             declared_argv = []
-        if declared_argv != argv or source_command not in source.read_text(encoding="utf-8", errors="replace"):
+        if declared_argv != argv or source_command not in source_text:
             issues.append(Issue("error", "command-declaration-mismatch", f"{command_id} 的 argv 未绑定来源中的完整命令"))
     if working_directory and not working_directory.is_dir():
         issues.append(Issue("error", "invalid-working-directory", f"{command_id} 的工作目录不是目录"))
+
+
+def _validate_command_entrypoint(
+    argv: list[str], working_directory: Path | None, root: Path,
+    command_id: str, issues: list[Issue],
+) -> None:
+    executable = Path(argv[0]).name.casefold()
+    if not executable.startswith("python") or len(argv) < 2 or argv[1].startswith("-"):
+        return
+    raw = argv[1]
+    if not raw.endswith(".py"):
+        return
+    base = working_directory if working_directory and working_directory.is_dir() else root
+    candidate = (base / raw).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        candidate = Path()
+    if not candidate.is_file():
+        issues.append(Issue(
+            "error", "missing-command-entrypoint",
+            f"{command_id} 的 Python 脚本入口不存在：{raw}",
+        ))
+
+
+def _command_source_text(source: Path) -> str:
+    text = source.read_text(encoding="utf-8", errors="replace")
+    if source.suffix.casefold() in {".md", ".mdx", ".markdown"}:
+        return normative_markdown_view(text)
+    return markdown_without_html_comments(text)
 
 
 def _resolve_path(

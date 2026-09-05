@@ -67,14 +67,14 @@ def _validate_implementation_agent_impl(
 ) -> list[Issue]:
     issues: list[Issue] = []
     if (data.get("implementation_agent_provider") != "codex-native-agent"
-            or data.get("implementation_agent_model") != "gpt-5.6-sol"):
+            or data.get("implementation_agent_model") != "gpt-6-astra"):
         issues.append(Issue(
             "error", "invalid-implementation-agent",
-            "模块长期维护实现 Agent 必须声明并绑定为 Codex 原生 gpt-5.6-sol",
+            "模块长期维护实现 Agent 必须声明并绑定为 Codex 原生 gpt-6-astra",
         ))
-    if data.get("implementation_agent_reasoning_effort") != "high":
+    if data.get("implementation_agent_reasoning_effort") != "medium":
         issues.append(Issue("error", "invalid-implementation-agent-effort",
-                            "模块长期维护实现 Agent 必须使用 reasoning_effort=high"))
+                            "模块长期维护实现 Agent 必须使用 reasoning_effort=medium"))
     modules = [item.strip().casefold() for item in context.get("Modules", "").split(",") if item.strip()]
     schema_version = data.get("schema_version", 1)
     expected = _implementation_expected(data, modules, schema_version)
@@ -109,9 +109,9 @@ def _implementation_expected(
     return {
         "schema_version": schema_version,
         "receipt_kind": "codex-native-spawn-result",
-        "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-        "recorded_model": "gpt-5.6-sol",
-        "requested_reasoning_effort": "high", "recorded_reasoning_effort": "high",
+        "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+        "recorded_model": "gpt-6-astra",
+        "requested_reasoning_effort": "medium", "recorded_reasoning_effort": "medium",
         "agent_id": data.get("implementation_agent_id"),
         "run_id": data.get("implementation_run_id"), "role": "module-maintainer",
         "module": modules[0] if len(modules) == 1 else None,

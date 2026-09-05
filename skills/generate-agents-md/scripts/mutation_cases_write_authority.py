@@ -89,8 +89,8 @@ WRITE_AUTHORITY_MUTANT_CASES = (
     (
         "hard-deny-writer-actor-priority-disabled",
         "scripts/write_authority_policy_validation.py",
-        "    rf\"(?P<canonical>{CANONICAL_WRITER_ACTOR})\", re.IGNORECASE,\n",
-        "    rf\"(?P<canonical>{CANONICAL_WRITER_ACTOR})|(?P<hard>unused-hard-deny)\", re.IGNORECASE,\n",
+        'actor.lastgroup == "hard"',
+        'actor.lastgroup == "unused-hard-deny"',
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_noncanonical_actor_cannot_borrow_canonical_lease_language",
     ),
     (
@@ -209,7 +209,7 @@ WRITE_AUTHORITY_MUTANT_CASES = (
         "release-publish-verdict-action-ontology-disabled",
         "scripts/agents_self_signoff_policy_validation.py",
         "    r\"\\b(?:publish(?:es|ed|ing)?|releas(?:e|es|ed|ing)|issu(?:e|es|ed|ing)\\s+\"\n",
-        "    r\"unused-release-publish-verdict|\"\n",
+        "    r\"\\b(?:unused-release-publish-verdict\\s+\"\n",
         "scripts.test_validate_agents_md.ValidatorRegressionTests.test_self_signoff_segment_inheritance_and_gate_action_ontology",
     ),
     (

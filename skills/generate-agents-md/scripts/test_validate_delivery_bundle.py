@@ -465,9 +465,9 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         output_receipt = f"evidence/{slug}-output-result.json"
         payload = {
             "schema_version": 1, "receipt_kind": "codex-native-spawn-result",
-            "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol", "agent_id": f"{slug}-agent-1",
-            "requested_reasoning_effort": "xhigh", "recorded_reasoning_effort": "xhigh",
+            "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra", "agent_id": f"{slug}-agent-1",
+            "requested_reasoning_effort": "high", "recorded_reasoning_effort": "high",
             "run_id": run_id, "role": f"{slug}-gate", "module": "module",
             "maintainer_title": f"{role} Gate Reviewer",
         }
@@ -490,8 +490,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "role": role,
             "run_id": run_id,
             "provider": "codex-native-agent",
-            "agent_model": "gpt-5.6-sol",
-            "agent_reasoning_effort": "xhigh",
+            "agent_model": "gpt-6-astra",
+            "agent_reasoning_effort": "high",
             "agent_id": f"{slug}-agent-1",
             "spawn_receipt": receipt,
             "spawn_receipt_sha256": hashlib.sha256((self.root / receipt).read_bytes()).hexdigest(),
@@ -575,10 +575,10 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "schema_version": 1,
             "receipt_kind": "codex-native-spawn-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-5.6-sol",
-            "recorded_model": "gpt-5.6-sol",
-            "requested_reasoning_effort": "high",
-            "recorded_reasoning_effort": "high",
+            "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra",
+            "requested_reasoning_effort": "medium",
+            "recorded_reasoning_effort": "medium",
             "agent_id": "module-maintainer-agent-1",
             "run_id": "impl-run-1",
             "role": "module-maintainer",
@@ -601,8 +601,8 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "candidate_sha256": hashlib.sha256(b"module-candidate").hexdigest(),
             "implementation_agent_title": "ModuleMaintainer",
             "implementation_agent_provider": "codex-native-agent",
-            "implementation_agent_model": "gpt-5.6-sol",
-            "implementation_agent_reasoning_effort": "high",
+            "implementation_agent_model": "gpt-6-astra",
+            "implementation_agent_reasoning_effort": "medium",
             "implementation_agent_id": "module-maintainer-agent-1",
             "implementation_run_id": "impl-run-1",
             "implementation_spawn_receipt": "evidence/implementation-spawn-receipt.json",
@@ -768,15 +768,27 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             data["change"], stage=stage, impact_fingerprint=impact,
             command_fingerprints=compute_command_fingerprints(data, self.root),
         )
+        manifest = json.loads(self.commands.read_text(encoding="utf-8"))
+        command_argv = {
+            item["id"]: item["argv"] for item in manifest["commands"]
+        }
         receipts = {}
         for command_id, fingerprint in data["gate_plan"]["gate_input_fingerprints"].items():
             output = self.root / f"evidence/contract-gate-{command_id}.txt"
-            output.write_text(f"passed {command_id}", encoding="utf-8")
+            from test_gate_output_support import passing_output
+            output.write_text(passing_output(command_argv[command_id]), encoding="utf-8")
             receipt = self.root / f"evidence/contract-gate-{command_id}.json"
+            argv = command_argv[command_id]
             receipt.write_text(json.dumps({
-                "schema_version": 1,
+                "schema_version": 2,
+                "producer": "flowctl-gate-runner",
                 "command_id": command_id,
                 "gate_input_fingerprint": fingerprint,
+                "command_argv": argv,
+                "command_argv_sha256": hashlib.sha256("\0".join(argv).encode("utf-8")).hexdigest(),
+                "started_at": "2026-09-05T12:00:00+08:00",
+                "ended_at": "2026-09-05T12:00:01+08:00",
+                "exit_code": 0,
                 "verdict": "pass",
                 "run_id": f"run-{command_id}",
                 "output_path": output.relative_to(self.root).as_posix(),

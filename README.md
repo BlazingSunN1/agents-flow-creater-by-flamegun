@@ -10,8 +10,8 @@ An evidence-backed Codex plugin for generating, reviewing, and enforcing stable 
 - Browser click-through plus Playwright/Cypress frontend verification
 - System and module swimlane diagrams generated from documentation and code review
 - Stage-based swimlane updates to avoid unnecessary redraws and token usage
-- Conditional major-module maintenance: qualifying modules receive one registered long-term maintenance Agent and an independently accepted closure; every maintainer and gate run is a distinct Codex-native `gpt-5.6-sol` Agent/run
-- A bounded native `gpt-5.6-sol` solution-author → black-box-reviewer → read-only coordinator-adjudicator loop
+- Conditional major-module maintenance: qualifying modules receive one registered long-term maintenance Agent and an independently accepted closure; every maintainer and gate run is a distinct Codex-native `gpt-6-astra` Agent/run
+- A bounded native `gpt-6-astra` solution-author → black-box-reviewer → read-only coordinator-adjudicator loop
 - A hard-paused legacy Kimi/DeepSeek integration retained only for compatibility and offline inspection
 
 ## Skill
@@ -24,7 +24,7 @@ $native-gpt-review-loop
 $multi-model-review-loop
 ```
 
-The first Skill builds and audits stable project rules. Main, parent, and child placement grants no inherent write authority. When major-module or multi-Agent criteria are met, each qualifying module receives exactly one registered maintenance/implementation Agent/run that may write only while holding the matching unique active module write lease; small tasks do not create this topology. Dispatcher and coordinator/adjudicator roles are always read-only. Delivery-first mode uses closed local coordination receipts; strict-security mode optionally adds host attestation. The governed updater enforces shared-record writes, while arbitrary same-user shell writes require OS or worktree isolation if technical prevention is needed. Cross-module delivery requires every module closure plus a separate `SYSTEM_AGGREGATION` Sol writer. The active review Skill uses two read-only Codex-native `gpt-5.6-sol` children and a separate read-only adjudicator. External Kimi/DeepSeek execution remains disabled.
+The first Skill builds and audits stable project rules. Main, parent, and child placement grants no inherent write authority. When major-module or multi-Agent criteria are met, each qualifying module receives exactly one registered maintenance/implementation Agent/run that may write only while holding the matching unique active module write lease; small tasks do not create this topology. Dispatcher and coordinator/adjudicator roles are always read-only. Delivery-first mode uses closed local coordination receipts; strict-security mode optionally adds host attestation. The governed updater enforces shared-record writes, while arbitrary same-user shell writes require OS or worktree isolation if technical prevention is needed. Cross-module delivery requires every module closure plus a separate `SYSTEM_AGGREGATION` GPT-6 writer. The active review Skill uses two read-only Codex-native `gpt-6-astra` children and a separate read-only adjudicator. External Kimi/DeepSeek execution remains disabled.
 
 ## Repository layout
 

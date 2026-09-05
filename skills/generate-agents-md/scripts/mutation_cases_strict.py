@@ -10,8 +10,8 @@ STRICT_MUTANT_CASES = (
     ),
     (
         "commands-exact-entry-fields-check-disabled", "scripts/validate_project_commands.py",
-        "def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) -> None:\n    if set(item) != COMMAND_FIELDS:",
-        "def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) -> None:\n    if False:",
+        "    if set(item) - {'result_kind'} != COMMAND_FIELDS:",
+        "    if False:",
         "scripts.test_validate_project_commands.ProjectCommandValidatorTests.test_duplicate_or_unknown_command_fields_fail_closed",
     ),
     (

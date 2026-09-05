@@ -50,7 +50,7 @@ description: 从仓库事实和需求生成、更新、拆分、公共化或审�
 - 用追踪模板贯通需求、流程、功能、UI、测试、模块和黑盒；歧义返回基线，不为实现缺陷改需求。
 - 最小链是“目标/边界/验收 → 真实入口至业务结果 → 受影响检查 → 当前证据”。冻结后才打磨，回归后重验。见 `references/delivery-orchestration.md`。
 - 仅按已证实风险加载方案、泳道、功能、原型、测试和独立验收；不适用只记理由，不建空产物。
-- 实现/维护 Agent 用 `gpt-5.6-sol/high`；方案、审核、裁决和独立验收用 `gpt-5.6-sol/xhigh`。后者只读且不持租约；修订只由不同 Agent/run 的当前租约写者执行，写者不得自验。默认保存本地结构绑定，严格模式才要求宿主证明运行身份。
+- 实现/维护 Agent 用 `gpt-6-astra/medium`；方案、审核、裁决和独立验收用 `gpt-6-astra/high`。后者只读且不持租约；修订只由不同 Agent/run 的当前租约写者执行，写者不得自验。默认保存本地结构绑定，严格模式才要求宿主证明运行身份。
 - 小型任务须影响已知、无行为/契约/流程变化且有定向验证，只复用唯一写者，不增 Agent/全链产物。标准任务最多一个写者和一个只读 `BLACK_BOX` Agent，合并审查、用例复核与黑盒验收；完整多 Agent 仅用于已证实高风险、并发大模块或独立/合规要求。未知先调查。
 - 用 delivery contract/gate receipt 模板建立单一决策索引；规划器只读，租约 writer 经 CAS 合并，禁止手改或复用旧门禁。命令由 `assets/project-commands.template.json` 登记；成果可先跑已核实入口，冻结前须登记。见 `references/delivery-orchestration.md`。
 - receipt schema v2 要求实现独占租约、gate 只读同候选、outer 唯一来源、replay 失败关闭；strict 再加宿主证明。v1 仅兼容。见 `references/role-specific-local-receipts.md`。
@@ -86,7 +86,7 @@ python3 scripts/flowctl.py doctor --full
 
 冻结证明/full receipt 在源码树外，受本机 HMAC 和跨进程锁保护。full 保留回归、mutation；每个冻结 SHA-256 仅跑一次，通过可复用，失败/中断/畸形阻断；源码变化须重冻。分发用 `python3 scripts/flowctl.py doctor --full --distribution --require-direct-skills`，仅补 distribution；无直装则省略末项，未同步不得发布。
 
-生成项目产物时以 `python3 scripts/flowctl.py --help` 为入口：`check` 运行项目验证，`plan` 规划门禁，`record` 原子更新记录；旧 `scripts/*.py` 仅作兼容。验证器故障、证据漂移、失败门禁或开放缺陷阻断；`P2 pending` 不阻断且不得伪装已答。
+用 `flowctl.py`：`check` 验证、`plan` 规划、`gate` 执行登记命令生成 v2 receipt、`record` 原子更新；禁手写 receipt。`full_test_or_build` 默认 `tests`，构建登记 `result_kind: build`。验证故障、漂移、失败门禁或缺陷阻断；`P2 pending` 不阻断且不得伪装已答。
 
 ## 输出
 

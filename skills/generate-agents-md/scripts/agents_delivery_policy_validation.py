@@ -445,10 +445,10 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
     checks = ((
             _section_has_line(text, (
                 r"Kimi", r"DeepSeek", r"disabled|暂停|禁用", r"native-gpt-review-loop",
-                r"gpt-5\.6-sol", r"reasoning_effort=high", r"reasoning_effort=xhigh",
+                r"gpt-6-astra", r"reasoning_effort=medium", r"reasoning_effort=high",
             )),
             "missing-native-sol-model-policy",
-            "缺少停用外部 provider、改用原生 GPT Sol Skill 及精确模型绑定",
+            "缺少停用外部 provider、改用原生 GPT-6 Astra Skill 及精确模型绑定",
         ),
         (
             _section_has_line(text, (
@@ -481,7 +481,7 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
     )
     issues = [Issue("error", code, message) for matched, code, message in checks if not matched]
     contradiction_patterns = (
-        r"gpt-5\.6-sol.{0,80}(?:optional|fallback|substitut|可选|替换|降级)",
+        r"gpt-6-astra.{0,80}(?:optional|fallback|substitut|可选|替换|降级)",
         r"solution-author.{0,80}(?:write workspace|modify code|写工作区|修改代码)",
         r"black-box-reviewer.{0,80}(?:write workspace|modify code|写工作区|修改代码)",
         r"(?:parent GPT|父 GPT).{0,80}(?:additional|separate|another|额外|另加).{0,50}(?:standard|普通|标准).{0,20}(?:gates?|门禁)",
@@ -496,4 +496,4 @@ def _native_sol_contradiction_issues(text: str, patterns: tuple[str, ...]) -> li
     flattened = " ".join(line.strip() for line in text.splitlines())
     if not any(re.search(pattern, flattened, re.IGNORECASE) for pattern in patterns):
         return []
-    return [Issue("error", "contradictory-native-sol-policy", "原生 GPT Sol 模型、只读角色、父级转交边界和证据门禁不得被否定或降级")]
+    return [Issue("error", "contradictory-native-sol-policy", "原生 GPT-6 Astra 模型、只读角色、父级转交边界和证据门禁不得被否定或降级")]

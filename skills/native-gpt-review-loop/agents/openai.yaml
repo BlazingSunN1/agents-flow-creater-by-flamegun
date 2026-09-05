@@ -1,6 +1,6 @@
 interface:
-  display_name: "Native GPT Sol 稳定交付闭环"
-  short_description: "两个 Sol/xhigh 子 Agent 独立方案与黑盒审查"
-  default_prompt: "Use $native-gpt-review-loop with exactly two read-only Codex-native gpt-5.6-sol sub-Agents at reasoning_effort=xhigh: one complete solution author and one independent black-box case and defect reviewer. Keep coordinator adjudication read-only at xhigh. Route mutations only to a separately registered gpt-5.6-sol implementation or maintenance Agent at reasoning_effort=high with a unique active module coordination lease; use local coordination by default and add host attestation only in strict-security mode. Keep Dispatcher and all independent gates read-only, and never let the writer self-review or self-accept. Hierarchy never grants write authority. Do not call Kimi, DeepSeek, or any external model provider."
+  display_name: "Native GPT-6 Astra 稳定交付闭环"
+  short_description: "两个 GPT-6/high 子 Agent 独立方案与黑盒审查"
+  default_prompt: "Use $native-gpt-review-loop with exactly two read-only Codex-native gpt-6-astra sub-Agents at reasoning_effort=high: one complete solution author and one independent black-box case and defect reviewer. Keep coordinator adjudication read-only at high. Route mutations only to a separately registered gpt-6-astra implementation or maintenance Agent at reasoning_effort=medium with a unique active module coordination lease; use local coordination by default and add host attestation only in strict-security mode. Keep Dispatcher and all independent gates read-only, and never let the writer self-review or self-accept. Hierarchy never grants write authority. Do not call Kimi, DeepSeek, or any external model provider."
 policy:
   allow_implicit_invocation: false
