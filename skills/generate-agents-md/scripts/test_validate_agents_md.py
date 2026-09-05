@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from validate_agents_md import _is_overbroad_allow_pattern, validate_text
 from agents_authority_matrix_validation import EXPECTED_AUTHORITY_MATRIX
+from delivery_gate_planner import build_gate_plan
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -107,11 +108,62 @@ class ValidatorRegressionTests(unittest.TestCase):
             error_codes(ROOT_TEMPLATE, mode="public-template", scope="root"),
         )
 
+    def test_small_completion_template_follows_planned_independent_gates(self) -> None:
+        change = {
+            "risk_level": "small", "surfaces": ["internal"],
+            "delivery_phase": "completed", "baseline_frozen": True,
+            "frontend_applicable": False, "swimlane_applicable": False,
+            "flow_impact": "none", "cross_module": False,
+            "human_review_triggered": False,
+        }
+        small = build_gate_plan(change, stage="completion", impact_fingerprint="a" * 64)
+        standard = build_gate_plan(
+            {**change, "risk_level": "standard", "surfaces": ["user-visible"]},
+            stage="completion", impact_fingerprint="a" * 64,
+        )
+        self.assertEqual([], small["independent_roles"])
+        self.assertEqual(["BLACK_BOX"], standard["independent_roles"])
+        for command in ("multi_agent_evidence", "delivery_bundle"):
+            self.assertNotIn(command, small["required_command_ids"])
+            self.assertIn(command, standard["required_command_ids"])
+        for command in ("real_entry_acceptance", "targeted_tests", "automated_review"):
+            self.assertIn(command, small["required_command_ids"])
+        # Generated instructions must preserve the planner's applicability,
+        # including failure and documentation clauses, not just its risk labels.
+        conditions = {
+            "a different independent read-only Agent validates": r"if gate-planned",
+            "independent black-box Agent approved acceptance cases": r"If BLACK_BOX is planned",
+            "{{MULTI_AGENT_EVIDENCE_VALIDATION_COMMAND}}": r"planned independent roles",
+            "{{DELIVERY_BUNDLE_VALIDATION_COMMAND}}": r"only if planned",
+            "independent Agent cannot start": r"planned independent Agent",
+            "Do not mark `completed` until trace": r"applicable independent acceptance",
+            "Write or update delivery/completion documentation": r"planned independent black-box",
+        }
+        for anchor, condition in conditions.items():
+            with self.subTest(anchor=anchor):
+                lines = [line for line in ROOT_TEMPLATE.splitlines() if anchor in line]
+                self.assertEqual(1, len(lines), anchor)
+                self.assertTrue(re.search(condition, lines[0]), f"Unconditional gate: {anchor}")
+
+    def test_first_result_registration_exception_cannot_certify_a_gate(self) -> None:
+        registry = [line for line in ROOT_TEMPLATE.splitlines() if "- Command registry:" in line]
+        self.assertEqual(1, len(registry))
+        self.assertTrue(re.search(r"Before running evidenced gates.*validate", registry[0]))
+        first_result = [line for line in ROOT_TEMPLATE.splitlines() if "- First result only:" in line]
+        self.assertEqual(1, len(first_result))
+        for condition in (
+            r"verified.*in-scope.*non-destructive entry may run before registration",
+            r"provisional.*never a passing gate",
+            r"Before freeze.*register.*validate.*rerun.*receipts",
+        ):
+            self.assertTrue(re.search(condition, first_result[0]), condition)
+
     def test_delivery_documentation_requires_tests_and_black_box_to_pass_first(self) -> None:
         rule = (
             "- Write or update delivery/completion documentation only after all required tests, "
-            "including independent black-box acceptance, pass for the same candidate.\n"
+            "including planned independent black-box acceptance, pass for the same candidate.\n"
         )
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         weakened = ROOT_TEMPLATE.replace(rule, "")
         self.assertIn(
             "missing-test-before-delivery-documentation",
@@ -176,8 +228,10 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_module_work_has_exactly_one_writer(self) -> None:
+        rule = "Each task has exactly one implementation Agent as sole code writer; all other Agents are read-only."
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         weakened = ROOT_TEMPLATE.replace(
-            "Each task has exactly one implementation Agent as writer; all other Agents are read-only.",
+            rule,
             "Implementation tasks may use multiple writers.",
         )
         self.assertIn(
@@ -299,8 +353,10 @@ class ValidatorRegressionTests(unittest.TestCase):
                 )
 
     def test_maintenance_agent_cannot_self_accept_its_implementation(self) -> None:
+        rule = "The module maintenance Agent is the sole writer but must not self-certify review/acceptance; if gate-planned, a different independent read-only Agent validates the same code/build identity."
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         weakened = ROOT_TEMPLATE.replace(
-            "The module maintenance Agent is the sole writer but must not self-certify review/acceptance; a different independent read-only Agent validates the same code/build identity.",
+            rule,
             "The module maintenance Agent may implement and accept its own change.",
         )
         self.assertIn(
@@ -925,8 +981,10 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_new_module_requires_owner_before_implementation(self) -> None:
+        rule = "Before implementation, Dispatcher registers each stable new module's unique module key/name, non-overlapping ownership boundary and long-term maintenance Agent/session, then delegates initialization."
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         weakened = ROOT_TEMPLATE.replace(
-            "Before implementation, Dispatcher gives each stable new module a unique module key/name, non-overlapping ownership boundary and long-term maintenance Agent/session, registers them, then delegates initialization.",
+            rule,
             "The ownership mapping can be updated later.",
         )
         self.assertIn(
@@ -966,9 +1024,11 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_new_module_cannot_implement_before_owner_exists(self) -> None:
+        rule = "then delegates initialization."
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         weakened = ROOT_TEMPLATE.replace(
-            "registers them, then delegates initialization.",
-            "registers them, then delegates initialization. A new module may implement before its owner Agent/session exists.",
+            rule,
+            rule + " A new module may implement before its owner Agent/session exists.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -1141,9 +1201,11 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_reversed_new_module_order_authorization_is_rejected(self) -> None:
+        rule = "then delegates initialization."
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         weakened = ROOT_TEMPLATE.replace(
-            "registers them, then delegates initialization.",
-            "registers them, then delegates initialization. Implementation is allowed before the owner Agent/session is created for a new module.",
+            rule,
+            rule + " Implementation is allowed before the owner Agent/session is created for a new module.",
         )
         self.assertIn(
             "contradictory-dispatcher-policy",
@@ -1741,14 +1803,15 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_plan_and_progress_binding_rule_is_required(self) -> None:
-        weakened = ROOT_TEMPLATE.replace(
-            "- Bind the plan to `Baseline version` and `Baseline SHA-256`, and include non-empty `Objective`, `Scope`, `Ordered steps`, `Verification criteria`, and `Known risks`. Bind progress to the current `Run ID` and `Code version`; completion additionally requires `Completion date`, `Delivered result`, `Validation performed`, closed `Remaining work`, and `Status: completed`.\n",
-            "",
-        )
-        self.assertIn(
-            "missing-plan-progress-binding-rule",
-            error_codes(weakened, mode="public-template", scope="root"),
-        )
+        for field in ("Baseline SHA-256", "Code version", "Remaining work"):
+            with self.subTest(field=field):
+                token = f"`{field}`"
+                self.assertEqual(1, ROOT_TEMPLATE.count(token))
+                weakened = ROOT_TEMPLATE.replace(token, "")
+                self.assertIn(
+                    "missing-plan-progress-binding-rule",
+                    error_codes(weakened, mode="public-template", scope="root"),
+                )
 
     def test_scoped_document_inherits_root_policies(self) -> None:
         text = "# Scoped Agent Instructions\n\n## Local Verification\n\n- Run tests.\n"
@@ -2636,8 +2699,10 @@ class ValidatorRegressionTests(unittest.TestCase):
         self.assertIn("missing-compact-evidence-summary", codes)
 
     def test_negated_context_manifest_policy_fails(self) -> None:
+        rule = "On-disk `{{CONTEXT_MANIFEST_PATH}}`"
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         text = ROOT_TEMPLATE.replace(
-            "Keep `{{CONTEXT_MANIFEST_PATH}}` on disk",
+            rule,
             "Do not keep `{{CONTEXT_MANIFEST_PATH}}` on disk",
         )
         self.assertIn(
@@ -2674,10 +2739,11 @@ class ValidatorRegressionTests(unittest.TestCase):
                 )
 
     def test_standard_task_cannot_add_second_independent_agent(self) -> None:
+        anchor = "High-risk: separately mapped specialist roles only."
+        self.assertEqual(1, ROOT_TEMPLATE.count(anchor))
         text = ROOT_TEMPLATE.replace(
-            "High-risk may add separately mapped specialist roles.",
-            "Standard work also requires an independent CHANGE_REVIEW Agent. "
-            "High-risk may add separately mapped specialist roles.",
+            anchor,
+            f"Standard work also requires an independent CHANGE_REVIEW Agent. {anchor}",
         )
         self.assertIn(
             "contradictory-standard-agent-role-policy",
@@ -2685,14 +2751,16 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_standard_task_role_allowlist_does_not_depend_on_addition_words(self) -> None:
+        anchor = "High-risk: separately mapped specialist roles only."
+        self.assertEqual(1, ROOT_TEMPLATE.count(anchor))
         for statement in (
             "Standard work uses a read-only CHANGE_REVIEW Agent before BLACK_BOX.",
             "Standard work uses a read-only Security Review Agent before BLACK_BOX.",
         ):
             with self.subTest(statement=statement):
                 text = ROOT_TEMPLATE.replace(
-                    "High-risk may add separately mapped specialist roles.",
-                    f"{statement} High-risk may add separately mapped specialist roles.",
+                    anchor,
+                    f"{statement} {anchor}",
                 )
                 self.assertIn(
                     "contradictory-standard-agent-role-policy",
@@ -2741,8 +2809,10 @@ class ValidatorRegressionTests(unittest.TestCase):
         self.assertIn("missing-minimum-reliable-loop", codes)
 
     def test_complexity_without_risk_mapping_fails(self) -> None:
+        rule = "Without a mapping, do not add or run it; concerns, best practices or anecdotes alone cannot justify permanent gates."
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         text = ROOT_TEMPLATE.replace(
-            "If that mapping is absent, do not add or run it; a hypothetical concern, generic best practice, or one-off anecdote is not enough to create a permanent hard gate.",
+            rule,
             "Add every useful process mechanism by default.",
         )
         self.assertIn(
@@ -2751,8 +2821,10 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_minimum_reliable_loop_is_required(self) -> None:
+        rule = "Minimum reliable loop:"
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         text = ROOT_TEMPLATE.replace(
-            "Every task closes the minimum reliable loop:",
+            rule,
             "Large projects may use this optional workflow:",
         )
         self.assertIn(
@@ -2791,8 +2863,10 @@ class ValidatorRegressionTests(unittest.TestCase):
         )
 
     def test_frozen_result_must_survive_hardening(self) -> None:
+        rule = "On optimization regression, stop it, restore or repair the minimum business flow, and rerun frozen acceptance before continuing;"
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         text = ROOT_TEMPLATE.replace(
-            "If any later optimization regresses it, stop that optimization, restore or repair the minimum business flow, and rerun the frozen acceptance command before continuing;",
+            rule,
             "If later optimization regresses it, continue polishing;",
         )
         self.assertIn(
@@ -2882,8 +2956,9 @@ class ValidatorRegressionTests(unittest.TestCase):
 
     def test_mobile_viewport_is_conditional_not_globally_required(self) -> None:
         conditional = (
-            "Only when the approved requirement baseline, supported environment, or affected change scope explicitly includes mobile Web, touch, or responsive browser behavior, repeat the closure in applicable mobile browser viewports and run the corresponding mobile end-to-end cases. Native mobile scope uses the registered native mobile test command instead of browser automation. Otherwise mobile adaptation and mobile verification are not required and must not block completion."
+            "Only when approved baseline/environment/change scope explicitly includes mobile Web/touch/responsive behavior, repeat closure in applicable mobile browser viewports with mobile end-to-end cases. Native mobile uses its registered native test command, not browser automation. Otherwise mobile adaptation/verification is not required and must not block completion."
         )
+        self.assertEqual(1, ROOT_TEMPLATE.count(conditional))
         text = ROOT_TEMPLATE.replace(
             conditional,
             "After every frontend code change, test both desktop and mobile browser viewports.",
@@ -2938,8 +3013,9 @@ class ValidatorRegressionTests(unittest.TestCase):
     def test_fenced_policy_text_cannot_satisfy_normative_rule(self) -> None:
         rule = (
             "- Write or update delivery/completion documentation only after all required tests, "
-            "including independent black-box acceptance, pass for the same candidate.\n"
+            "including planned independent black-box acceptance, pass for the same candidate.\n"
         )
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         fenced = ROOT_TEMPLATE.replace(rule, f"```text\n{rule}```\n", 1)
         self.assertIn(
             "missing-test-before-delivery-documentation",
@@ -2949,8 +3025,9 @@ class ValidatorRegressionTests(unittest.TestCase):
     def test_html_comment_policy_text_cannot_satisfy_normative_rule(self) -> None:
         rule = (
             "- Write or update delivery/completion documentation only after all required tests, "
-            "including independent black-box acceptance, pass for the same candidate.\n"
+            "including planned independent black-box acceptance, pass for the same candidate.\n"
         )
+        self.assertEqual(1, ROOT_TEMPLATE.count(rule))
         commented = ROOT_TEMPLATE.replace(rule, f"<!-- {rule.strip()} -->\n", 1)
         self.assertIn(
             "missing-test-before-delivery-documentation",

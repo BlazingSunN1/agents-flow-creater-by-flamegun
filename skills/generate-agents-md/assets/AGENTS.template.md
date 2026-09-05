@@ -10,7 +10,7 @@
 
 ## Machine-Enforced Policy
 
-This block is authoritative. Project instructions may add detail but must not weaken or contradict it.
+Authoritative policy; project instructions may add detail but must not weaken or contradict it.
 
 ```yaml
 schema_version: 1
@@ -49,7 +49,7 @@ authority_matrix_validation: required_before_delegation_and_completion
 
 ## Machine-Enforced Authority Matrix
 
-This declaration expands to canonical `expanded-authority-matrix-v1`; unlisted actor/action pairs are denied. Prose cannot override it. Local receipts bind coordination; only strict-security receipts attest the host.
+Expand to canonical `expanded-authority-matrix-v1`; unlisted actor/action pairs are denied. Prose cannot override it.
 
 ```json
 {
@@ -66,9 +66,9 @@ This declaration expands to canonical `expanded-authority-matrix-v1`; unlisted a
 }
 ```
 
-- `independent-only` requires a distinct Agent/run, `completed`/`pass`, receipt/candidate hashes, code version and Build ID; strict mode also requires host verification.
+- `independent-only`: distinct Agent/run, `completed`/`pass`, receipt/candidate hashes, code version and Build ID; strict mode requires host verification.
 - Bind matrix locator/SHA-256 to caches, trace, bundles, system candidate and receipts. Drift, stale/missing proof, failure or identity reuse blocks completion.
-- Each module has one maintainer and non-overlapping paths. Only `allow` writes; writers never self-review, accept, release, close or aggregate.
+- Only `allow` writes; writers never self-review, accept, release, close or aggregate.
 - Local coordination does not attest the host. Strict security is explicit or mapped high-risk/compliance only; bootstrap is one-time, external, replay/path-bound and grants no business gate authority.
 
 ## Project Constraints
@@ -76,8 +76,8 @@ This declaration expands to canonical `expanded-authority-matrix-v1`; unlisted a
 - {{ARCHITECTURAL_BOUNDARY}}
 - {{DATA_OR_COMPATIBILITY_CONSTRAINT}}
 - {{SECURITY_OR_PRIVACY_CONSTRAINT}}
-- Fix root causes; do not hide failures by swallowing errors, fabricating results, or disabling validation.
-- Keep changes focused and consistent with existing code; report unrelated problems without fixing them unless requested.
+- Fix root causes; never hide errors, fabricate results or disable validation.
+- Follow existing code; report unrelated problems, fix only when requested.
 
 ## Repository Layout
 
@@ -96,31 +96,32 @@ Stable Agent titles are ownership names; thread/session/run IDs are runtime evid
 | --- | --- | --- | --- |
 | {{MODULE_KEY}} | {{MODULE_SCOPE}} | {{MODULE_OWNED_BOUNDARY}} | {{MODULE_AGENT_TITLE}} |
 
-Ownership cells contain backticked project-relative paths separated only by commas, for example `src/module-a/`, `tests/module-a/`; put API/protocol descriptions in `Stable scope`.
+Ownership cells: backticked project-relative paths, comma-separated (`src/module-a/`, `tests/module-a/`); API/protocol details go in `Stable scope`.
 
 - A major functional module is a stable business capability with an independently testable entry/output contract and non-overlapping ownership boundary; helpers/temporary slices stay inside it and do not create Agents.
 - Every major functional module has one independent long-term maintenance Agent closing requirement → design/flow → implementation → targeted tests → independent black-box acceptance → evidence/log and gate-planned swimlane artifacts before completion. `record_completion_after_verified_gates` only records another read-only Agent's passed gates.
-- Main, parent, and child placement grants no inherent write authority. The sole writer holds the matching unique active module write lease for module, title, paths and policy hashes. Strict host attestation is explicit or mapped high-risk/compliance only.
-- The module maintenance Agent is the sole writer but must not self-certify review/acceptance; a different independent read-only Agent validates the same code/build identity.
+- Main, parent, and child placement grants no inherent write authority. The writer holds the matching unique active module write lease for module, title, paths and policy hashes.
+- The module maintenance Agent is the sole writer but must not self-certify review/acceptance; if gate-planned, a different independent read-only Agent validates the same code/build identity.
 - Before cross-module/system completion, every affected module binds current requirement IDs, code/build, targeted tests, independent acceptance, run/latest, applicable mapped swimlane evidence and no open findings. A distinct native GPT-6 `SYSTEM_AGGREGATION` writer emits the system manifest/receipt; Dispatcher only invokes its read-only validator.
-- Dispatcher is the user's only entry point for decomposition, routing, orchestration, context transfer, full-flow validation, summaries and new module creation; Dispatcher must not edit business code or shared records.
-- Each task has exactly one implementation Agent as writer; all other Agents are read-only. Single-module work uses its leased maintainer; a former Dispatcher uses a different Agent/run and never reuses Dispatcher IDs.
-- Update shared plan/progress/trace/context/evidence only through `scripts/update_project_record.py`, bound to writer, lease, target and policy hashes; reject wrong/duplicate identities, drift, cross-module targets and stale CAS.
+- Dispatcher is the user's only entry point for decomposition, routing, orchestration, summaries and new module creation; Dispatcher must not edit business code or shared records.
+- Each task has exactly one implementation Agent as sole code writer; all other Agents are read-only. Single-module work uses its leased maintainer; a former Dispatcher uses a different Agent/run and never reuses Dispatcher IDs.
+- Shared record updates bind writer, lease, target and policy hashes; reject wrong/duplicate identities, drift and cross-module targets. Use the atomic command under Development Plan and Progress.
 - A project task may write only inside the canonical project root or its assigned isolated worktree and only within owned paths. Before writing, validate each declared canonical target with `task_write_scope`; a realpath outside that boundary, including symlink escape, fails before mutation.
 - For project tasks, global Skill/plugin source roots, caches and direct Skill installs are read-only. Editing requires a dedicated Skill-maintainer task, explicit authorization in the current user request and one exact canonical maintenance source root; hierarchy or a project lease grants nothing.
 - Plugin caches and direct Skill installs are derived outputs: update authorized source, validate, use cachebuster/reinstall, and never edit those copies directly.
 - The write-scope validator checks declared canonical targets and does not intercept a same-user shell that bypasses it. Claim filesystem-level isolation only when the host enforces a workspace write sandbox, isolated worktree, container, or OS permissions.
-- Use distinct Codex-native `gpt-6-astra` Agent/runs: writer `medium`, independent acceptance `high`. Local receipts bind role/module/hashes/output for coordination but do not prove host identity; strict mode adds host verification. Drift, identity reuse or failed evidence blocks completion.
+- Local receipts bind role/module/hashes/output, not host identity; strict mode verifies hosts. Models/evidence: Delivery Gates.
 - Dispatcher context packet: user goal, approved requirements/constraints, affected modules/boundaries, input/output contracts, dependencies/risks, verification/acceptance, paths/evidence. Users need not repeat requests; it must not contain full chat, unrelated history or Agent reasoning.
 - Dispatcher orchestrates independent read-only gates for full-flow validation, remains read-only and must not self-certify.
-- Before implementation, Dispatcher gives each stable new module a unique module key/name, non-overlapping ownership boundary and long-term maintenance Agent/session, registers them, then delegates initialization.
+- Before implementation, Dispatcher registers each stable new module's unique module key/name, non-overlapping ownership boundary and long-term maintenance Agent/session, then delegates initialization.
 
 ## Verification
 
-- Run nearest tests first. Before explicit or automatically escalated full, create the signed current-candidate freeze proof; run full + mutation at most once per frozen release candidate.
-- Add tests for new behavior when the repository already has an applicable test structure.
-- Do not claim tests passed unless the listed command was actually executed successfully.
-- Treat `{{PROJECT_COMMAND_MANIFEST_PATH}}` as the executable command registry. Before running a required project command, validate it with `{{PROJECT_COMMAND_VALIDATION_COMMAND}}`; a missing, fabricated, constant-success, shell-wrapped, indirect `env`/command wrapper, undeclared, or invalid command blocks execution and completion.
+- Run nearest tests first. Before explicit/escalated full, create signed current-candidate freeze proof; run full + mutation at most once per frozen release candidate.
+- Test new behavior using applicable repository test structures.
+- Claim tests passed only after successful execution of the listed command.
+- Command registry: `{{PROJECT_COMMAND_MANIFEST_PATH}}`. Before running evidenced gates, validate with `{{PROJECT_COMMAND_VALIDATION_COMMAND}}`; missing/fabricated/constant-success/shell-wrapped/indirect `env` or command wrappers/undeclared/invalid commands block gates and completion.
+- First result only: verified in-scope non-destructive entry may run before registration; provisional, never a passing gate. Before freeze register/validate/rerun for receipts.
 
 ```bash
 {{TARGETED_TEST_COMMAND}}
@@ -130,103 +131,101 @@ Ownership cells contain backticked project-relative paths separated only by comm
 
 ## Change Boundaries
 
-- Preserve public APIs, data contracts and compatibility unless the task explicitly requires a breaking change.
-- Update affected documentation when changing public behavior, configuration, CLI, schemas or deployment requirements.
+- Preserve public APIs, data contracts and compatibility unless explicitly tasked otherwise.
+- Update affected docs for public behavior/config/CLI/schema/deployment changes.
 - {{PROJECT_SPECIFIC_CHANGE_RULE}}
 
 ## Development Plan and Progress
 
 - Development plan path: `{{DEVELOPMENT_PLAN_PATH}}`
 - Completion progress path: `{{PROGRESS_RECORD_PATH}}`
-- Bind the plan to `Baseline version` and `Baseline SHA-256`, and include non-empty `Objective`, `Scope`, `Ordered steps`, `Verification criteria`, and `Known risks`. Bind progress to the current `Run ID` and `Code version`; completion additionally requires `Completion date`, `Delivered result`, `Validation performed`, closed `Remaining work`, and `Status: completed`.
-- Before substantial implementation, record the objective, scope, ordered steps, verification criteria, and known risks.
-- After completing verified work, record the completion date, delivered result, validation performed, and remaining work.
-- Use explicit states such as `pending`, `in_progress`, `completed`, and `blocked`; never mark unexecuted or unverified work as completed.
+- Plan binds `Baseline version`/`Baseline SHA-256` and non-empty `Objective`, `Scope`, `Ordered steps`, `Verification criteria`, `Known risks`; record before substantial implementation.
+- Progress binds current `Run ID`/`Code version`; after verified work record `Completion date`, `Delivered result`, `Validation performed`, `Remaining work`, `Status`; completion requires nothing remaining and `Status: completed`.
+- States: `pending`, `in_progress`, `completed`, `blocked`; never mark unexecuted/unverified work completed.
 - Keep sensitive connection values out of these records unless the user explicitly authorizes their project-scoped handling.
-- Update shared plan, progress, trace, context and evidence indexes through `{{ATOMIC_RECORD_UPDATE_COMMAND}}`, using a file lock, the expected current SHA-256, and atomic replacement. A stale write must fail and be reread; never let concurrent Agents overwrite each other.
+- Update shared plan/progress/trace/context/evidence through `{{ATOMIC_RECORD_UPDATE_COMMAND}}` with a file lock, expected current SHA-256 and atomic replacement. A stale write must fail and be reread; concurrent Agents must not overwrite each other.
 
 ## Requirement Traceability and Delivery Gates
 
-- Stable delivery is the only purpose of process complexity. Before adding an Agent, artifact, gate, context expansion or record, bind verified risk/failure, factual evidence, affected acceptance, observable signal and removal condition. If that mapping is absent, do not add or run it; a hypothetical concern, generic best practice, or one-off anecdote is not enough to create a permanent hard gate.
-- `{{DELIVERY_CONTRACT_PATH}}` is the machine decision index. Generate its plan with read-only `{{DELIVERY_GATE_PLANNER_COMMAND}}`, merge only through the leased writer and `{{ATOMIC_RECORD_UPDATE_COMMAND}}`, then run `{{DELIVERY_CONTRACT_VALIDATION_COMMAND}}`. Never hand-edit derived risk/gates or reuse stale receipts; each receipt binds command, input fingerprint, run, verdict and output hash.
-- Every task closes the minimum reliable loop: approved objective, scope, non-goals and measurable acceptance → smallest implementation → affected tests and relevant static checks → acceptance evidence. Load extra stages only when mapped; use one verifiable `N/A` reason instead of an empty artifact.
-- First prove the smallest end-to-end business flow through a real entry and observable result. Follow `result_candidate -> affected_checks_passed -> baseline_frozen -> hardening -> closure_candidate`; bind the frozen result to code/build, acceptance command/result and evidence hash. Before freeze run only correctness/core-acceptance/irreversible-harm checks; afterward add only mapped hardening. Governance alone is not delivery.
-- Hardening preserves the frozen behavior/result. If any later optimization regresses it, stop that optimization, restore or repair the minimum business flow, and rerun the frozen acceptance command before continuing; never weaken requirements or checks to pass.
-- Maintain the delivery traceability matrix at `{{REQUIREMENT_TRACEABILITY_PATH}}` with stable `REQ-*`, `FLOW-*`, `FEAT-*`, `UI-*`, `UT-*`, `AT-*`, `MOD-*`, and `BB-*` IDs linking every downstream artifact to its requirement.
-- Each trace role has a distinct artifact; files, symlinks or hard links cannot impersonate Requirement, Flow, Feature, UI, Unit-test, Acceptance, Code-module or Black-box roles.
-- Before implementation baseline objective, scope, non-goals, constraints and measurable acceptance. Record the baseline artifact, immutable version and SHA-256; bind final black-box evidence to code version, build ID, environment and timezone-aware time.
-- Keep `docs/requirements/questions.json` fields `question_id`, `impact_scope`, `risk`, `proposed_default`, `safe_fallback`, `answer_status`, `delivery_disposition`, `assumption`, `owner`, and `review_due`. `NOT_PROVIDED` is reversible, asynchronous `P2 pending` and never blocks continued implementation, verification, acceptance or closure; legal, security, destructive/irreversible or permission risk changes the safe action, not this disposition. On `ANSWERED`, correct the requirement/objective baseline and rerun only affected `impact_scope` gates.
-- When requirements/risk make stages applicable, preserve: solution design → system/module swimlanes → feature points → independent UI/UX prototype review for interaction/design changes → test points/unit cases → independently authored complete acceptance cases → implementation → continuous code checks → independent black-box acceptance. Omit inapplicable stages; do not create placeholders.
-- Keep Kimi and DeepSeek disabled. Standard work uses `gpt-6-astra`: one assigned writer at `reasoning_effort=medium` and one read-only BLACK_BOX Agent at `reasoning_effort=high`, the sole independent gate on the same candidate hash, combining change/acceptance review and black-box execution. Parent GPT/Dispatcher relays only, with no standard gate. Only mapped high-risk uses `$native-gpt-review-loop` and adds solution-author/adjudication roles. Self-report is not evidence. Six candidate versions without pass are `incomplete` or `blocked`; no secrets or full chat.
-- The implementation Agent is the sole code writer; independent Agents stay read-only and receive no full chat, reasoning or self-report as proof.
-- Classify and justify `small`, `standard`, or `high-risk`. Behavior/UI/API/mobile/touch/responsive surfaces are at least standard; public API, auth, security, privacy, migration, persistence, async, cross-module and schema are high-risk; unknown stays high-risk until investigated. Small work has known non-observable impact and one registered writer with targeted checks only. Standard work has at most that writer plus one read-only BLACK_BOX acceptance Agent, which combines change review, acceptance-case review and black-box execution. High-risk may add separately mapped specialist roles. Mobile Web/touch/responsive runs browser mobile E2E only when explicitly in scope; native mobile uses its native command; unrelated work does not require mobile adaptation.
-- For mapped high-risk UI work, a read-only UI/UX Agent reviews the approved baseline, solution, swimlanes, feature points and prototype without expanding requirements. Define test points/unit cases before implementation; the independent acceptance role covers success, rejection, failure, retry, recovery, permission and boundaries.
-- Implement only approved `REQ-*` and `FEAT-*` items. Any new or changed behavior requires a new or updated identifier; before code continues, synchronize only applicable and mapped design, swimlane, UI, test, and acceptance artifacts selected by the gate plan.
-- After baseline freeze, run mapped `{{FORMAT_OR_STATIC_CHECK_COMMAND}}` checks before closure; unrelated quality gates must not block the first usable result.
-- After implementation, give an independent black-box Agent the approved acceptance cases and a release-like interface, without asking it to modify code or accept the implementation Agent's self-report. Record reproducible evidence for every `BB-*` result.
-- Record writer and applicable independent Agent/run IDs plus minimum hashed inputs/outputs. Validate multi-Agent evidence at `{{MULTI_AGENT_EVIDENCE_PATH}}` with `{{MULTI_AGENT_EVIDENCE_VALIDATION_COMMAND}}`; missing/extra roles, reused identities/artifacts, writable reviewers, open defects, failed gates, disagreement or majority vote block closure. Unanswered questions remain non-blocking P2.
-- Classify every failure before retrying: route `implementation_defect` to implementation, `requirement_ambiguity` to the requirement baseline, `acceptance_case_defect` to acceptance cases, `environment_blocker` to blocked, and `approved_requirement_change` to a new baseline. Never edit requirements merely to make an implementation defect pass.
-- Run the fail-closed semantic trace validator `{{TRACEABILITY_VALIDATION_COMMAND}}` before implementation handoff and again before marking any row or run `completed`. If the validator is missing, cannot run, or reports any error, the gate is `blocked`; do not substitute manual judgment.
-- At handoff/completion run `{{DELIVERY_BUNDLE_VALIDATION_COMMAND}}`; contract, trace, questions, plan/progress, commands, AGENTS, current run/latest index, baseline/code/build and automated-review/frontend evidence must agree or remain `blocked`.
-- If an independent Agent cannot start, its gate is `blocked` and implementation must not self-certify. Do not mark `completed` until trace, tests, independent acceptance and zero relevant bugs agree.
-- Write or update delivery/completion documentation only after all required tests, including independent black-box acceptance, pass for the same candidate.
+- Stable delivery is the only purpose of process complexity. Before adding Agents/artifacts/gates/context/records, map verified risk/failure, factual evidence, acceptance, observable signal and removal condition. Without a mapping, do not add or run it; concerns, best practices or anecdotes alone cannot justify permanent gates.
+- `{{DELIVERY_CONTRACT_PATH}}` is the decision index: read-only `{{DELIVERY_GATE_PLANNER_COMMAND}}` → leased writer merges via `{{ATOMIC_RECORD_UPDATE_COMMAND}}` → `{{DELIVERY_CONTRACT_VALIDATION_COMMAND}}`. Never hand-edit derived risk/gates or reuse stale receipts; bind command, input fingerprint, run, verdict and output hash.
+- Minimum reliable loop: approved objective/scope/non-goals/measurable acceptance → smallest implementation → affected tests/static checks → acceptance evidence. Extra stages need mapping; inapplicable artifacts need a verifiable `N/A` reason, not empty files.
+- First prove the smallest end-to-end business flow through a real entry and observable result. Follow `result_candidate -> affected_checks_passed -> baseline_frozen -> hardening -> closure_candidate`; freeze binds code/build, acceptance command/result and evidence hash. Pre-freeze: correctness/core-acceptance/irreversible-harm checks only; afterward: mapped hardening only. Governance is not delivery.
+- Hardening preserves frozen behavior/results. On optimization regression, stop it, restore or repair the minimum business flow, and rerun frozen acceptance before continuing; never weaken requirements/checks to pass.
+- Maintain the traceability matrix at `{{REQUIREMENT_TRACEABILITY_PATH}}`: stable `REQ-*`, `FLOW-*`, `FEAT-*`, `UI-*`, `UT-*`, `AT-*`, `MOD-*`, `BB-*` IDs link every downstream artifact to its requirement.
+- Each trace role needs a distinct artifact; files, symlinks or hard links cannot impersonate other roles.
+- Before implementation, baseline objective/scope/non-goals/constraints/measurable acceptance; record baseline artifact, immutable version and SHA-256. Bind black-box evidence to code version, build ID, environment and timezone-aware time.
+- `docs/requirements/questions.json`: `question_id`, `impact_scope`, `risk`, `proposed_default`, `safe_fallback`, `answer_status`, `delivery_disposition`, `assumption`, `owner`, `review_due`. `NOT_PROVIDED`: reversible async `P2 pending`, never blocks continued implementation/verification/acceptance/closure; legal/security/destructive/irreversible/permission risk changes safe action, not disposition. On `ANSWERED`, correct requirement/objective baseline and rerun only affected `impact_scope` gates.
+- When applicable, preserve: solution design → system/module swimlanes → feature points → independent UI/UX prototype review → test points/unit cases → independently authored complete acceptance cases → implementation → code checks → independent black-box acceptance. Omit inapplicable stages, not empty placeholders.
+- Kimi/DeepSeek disabled. Standard work uses distinct Codex-native `gpt-6-astra` Agent/runs: one assigned writer `reasoning_effort=medium`; one read-only BLACK_BOX `reasoning_effort=high`, sole independent gate for change/acceptance review and black-box execution on the same candidate hash. Parent GPT/Dispatcher relays only, no standard gate. Only mapped high-risk adds `$native-gpt-review-loop` solution-author/adjudication. Six candidate versions without pass: `incomplete` or `blocked`; no self-report proof, secrets or full chat.
+- Classify and justify `small`, `standard`, or `high-risk`. Behavior/UI/API/mobile/touch/responsive are at least standard; public API, auth, security, privacy, migration, persistence, async, cross-module and schema are high-risk; unknown stays high-risk until investigated. Small: known non-observable impact, one registered writer, targeted checks only. Standard work uses at most one writer and one read-only BLACK_BOX Agent. High-risk: separately mapped specialist roles only.
+- Read-only UI/UX Agent: review mapped high-risk UI against approved baseline/solution/swimlanes/feature points/prototype without expanding requirements. Define test points/unit cases before implementation; independent acceptance covers success/rejection/failure/retry/recovery/permission/boundaries.
+- Implement only approved `REQ-*`/`FEAT-*`. New or changed behavior needs a new or updated identifier; before code continues, synchronize only applicable and mapped design/swimlane/UI/test/acceptance artifacts selected by the gate plan.
+- After freeze run mapped `{{FORMAT_OR_STATIC_CHECK_COMMAND}}` checks before closure; unrelated quality gates must not block first usable results.
+- If BLACK_BOX is planned, give an independent black-box Agent approved acceptance cases and a release-like interface, without allowing it to modify code or accept writer self-report. Record reproducible `BB-*` evidence.
+- For planned independent roles, record writer/independent Agent/run IDs and hashed inputs/outputs. Validate multi-Agent evidence at `{{MULTI_AGENT_EVIDENCE_PATH}}` with `{{MULTI_AGENT_EVIDENCE_VALIDATION_COMMAND}}`; missing/extra roles, reused identities/artifacts, writable reviewers, open defects, failed gates, disagreement or majority vote block closure, not unanswered P2.
+- Before retrying, route `implementation_defect` → implementation, `requirement_ambiguity` → baseline, `acceptance_case_defect` → acceptance cases, `environment_blocker` → blocked, `approved_requirement_change` → new baseline. Never edit requirements to make an implementation defect pass.
+- Run the fail-closed semantic trace validator `{{TRACEABILITY_VALIDATION_COMMAND}}` before implementation handoff and again before marking any row or run `completed`. Missing/unrunnable/error: `blocked`, never manual judgment.
+- At handoff/completion run `{{DELIVERY_BUNDLE_VALIDATION_COMMAND}}` only if planned; contract, trace, questions, plan/progress, commands, AGENTS, current run/latest index, baseline/code/build and automated-review/frontend evidence must agree or remain `blocked`.
+- If a planned independent Agent cannot start: gate `blocked`, implementation must not self-certify. Do not mark `completed` until trace, tests, applicable independent acceptance and zero relevant bugs agree.
+- Write or update delivery/completion documentation only after all required tests, including planned independent black-box acceptance, pass for the same candidate.
 
 ## Automated Code Review
 
 - Automated review evidence path: `{{AUTOMATED_REVIEW_EVIDENCE_PATH}}`
-- Run `{{AUTOMATED_REVIEW_COMMAND}}` only at a module closure candidate or explicit human trigger. Intermediate edits only accumulate current-run deltas. Missing/failed closure review blocks acceptance; a human-triggered snapshot does not stop unrelated implementation.
-- Review the actual changed files and their affected callers, callees, public interfaces, configuration, persistence or asynchronous boundaries, tests, requirement trace, and gate-plan-mapped swimlane diagrams. A diff summary or implementation self-report is not sufficient evidence.
-- Record every actionable finding with severity, exact file and line, trigger, impact, and executable reproduction or verification. Classify requirement ambiguity separately from implementation defects.
-- Route implementation defects to the writer; add a failing regression when applicable, make the smallest root-cause fix, and rerun affected checks. Limit auto-repair to three rounds and two repeats of one failure fingerprint; never edit approved requirements/authority or weaken gates to pass.
-- Any code/config change stales a prior review. Store trigger, candidate fingerprint, scope, findings, commands/results and verdict in the declared automated review evidence record; actionable findings, unexplained errors or stale/blocked closure review prevent completion.
+- Run `{{AUTOMATED_REVIEW_COMMAND}}` only at module closure candidate or human trigger. Intermediate edits only accumulate run deltas. Missing/failed closure review blocks acceptance; human-triggered snapshots do not stop unrelated implementation.
+- Review actual changed files, affected callers/callees, public interfaces, config, persistence/async boundaries, tests, requirement trace and gate-plan-mapped swimlanes; not just a diff summary or writer self-report.
+- Findings require severity, exact file/line, trigger, impact and executable reproduction/verification; separate requirement ambiguity from implementation defects.
+- Writer repairs defects: add a failing regression when applicable, make the smallest root-cause fix, rerun affected checks. Limit auto-repair to three rounds and two repeats per failure fingerprint; never change approved requirements/authority or weaken gates to pass.
+- Code/config changes stale a prior review. Review evidence contains trigger, candidate fingerprint, scope, findings, commands/results and verdict; actionable findings, unexplained errors or stale/blocked closure review prevent completion.
 
 ## Context and Token Budget
 
-- Default only loads: the effective root-to-scope `AGENTS.md` chain, compact progress index, affected module's current run, and related traceability rows. Then read only directly affected code/tests/configuration/diagrams; `latest.md`, old runs, whole-repository scans and raw logs are not default context.
-- Keep `{{CONTEXT_MANIFEST_PATH}}` on disk with baseline/code/build, affected requirements/modules/files/dependencies/commands, effective AGENTS hash and evidence hashes. Validators may read it without placing it in the model prompt.
-- Expand the workset only when the change is high-risk, cross-module, changes a public contract, has unknown impact, or when targeted review or tests expose an unresolved dependency. Record the expansion reason in the manifest.
-- Reuse evidence only when a completed different run has the same fingerprint: module, code/build, command, configuration hash, environment ID, input hashes and evidence hashes. AGENTS drift, aliases, missing provenance or multi-module worksets make it stale and require rerun. Before expansion/reuse run fail-closed manifest validator `{{CONTEXT_MANIFEST_VALIDATION_COMMAND}}`; failure is `blocked`.
-- Store raw command output, screenshots, diffs, and generated files at project paths. In prompts and run summaries record only the command, exit status, concise result counts, fingerprint, and evidence path; do not paste unchanged bulk output.
-- Give each independent Agent only its role-specific input manifest and directly linked artifacts; do not send the full chat, all repository documentation, unrelated module logs, or another Agent's reasoning.
+- Default only loads: effective `AGENTS.md` chain, progress index, module current run, and related traceability rows. Then read directly affected code/tests/config/diagrams; `latest.md`, old runs, whole-repository scans and raw logs are not default context.
+- On-disk `{{CONTEXT_MANIFEST_PATH}}`: baseline/code/build, affected requirements/modules/files/dependencies/commands, effective AGENTS hash and evidence hashes; validators read it outside the prompt.
+- Expand only for high-risk, cross-module, public contract, unknown impact or unresolved dependencies exposed by review/tests; record the reason in the manifest.
+- Reuse only a completed different run's identical fingerprint: module, code/build, command, configuration hash, environment ID, input hashes and evidence hashes. AGENTS drift, aliases, missing provenance or multi-module worksets are stale: rerun. Before expansion/reuse run fail-closed manifest validator `{{CONTEXT_MANIFEST_VALIDATION_COMMAND}}`; failure is `blocked`.
+- Store raw command output/screenshots/diffs/generated files at project paths; prompts/run summaries: command, exit status, result counts, fingerprint, evidence path only; do not paste bulk output.
+- Read-only independent Agents receive role-specific input manifests/artifacts, not full chat, all repository documentation, unrelated module logs, reasoning or self-report as proof.
 - Do not rerun an identical valid fingerprint. Token limits never excuse a required correctness or acceptance gate.
 
 ## Modular Execution Logs
 
-- Keep the compact execution index at `{{PROGRESS_RECORD_PATH}}`; it contains only current module status and links to detailed records.
-- For cross-module aggregation, configure that progress path and `{{AUTOMATED_REVIEW_EVIDENCE_PATH}}` with literal `<module>` and `<run_id>` so every module run resolves to a different file; single-module projects may use static paths.
+- Compact execution index: `{{PROGRESS_RECORD_PATH}}`; current module status and record links only.
+- For cross-module aggregation, progress and `{{AUTOMATED_REVIEW_EVIDENCE_PATH}}` paths need literal `<module>`/`<run_id>` to separate module runs; single-module paths may be static.
 - Immutable module run template path: `{{MODULE_EXECUTION_LOG_DIRECTORY}}/<module>/run-<run_id>.md`
 - Cross-module runs: `{{SYSTEM_EXECUTION_LOG_DIRECTORY}}/`.
-- Assign every run a distinct `run_id` and `code_version`. Use `run_id` for the Agent execution and `code_version` for a Git commit, tag, or build version; never treat them as the same identifier.
-- Each run record must include the run ID, module, status, code version, risk level, traceability IDs, changed files, delivered result, automated code review, verification and independent review evidence, remaining risks, and only swimlane records/paths selected by the gate plan.
-- After verified completion, update the module's compressed `latest.md` summary and the compact execution index. Do not rewrite immutable historical run records.
+- Separate `run_id` (Agent execution) from `code_version` (Git commit/tag/build); never treat them as the same identifier.
+- Run fields: run ID, module, status, code version, risk level, traceability IDs, changed files, delivered result, automated code review, verification/independent review evidence, remaining risks; only gate-planned swimlane records/paths.
+- After verified completion, update module `latest.md` summary and the compact index; never rewrite immutable historical runs.
 - Do not mark a run `completed` until its run record, module `latest.md`, and compact index are synchronized.
-- Read the index first; it points to the current immutable run. `latest.md` is a derived completion summary, not default input; read it or older runs only for regression, conflict or historical-decision investigation.
-- Reference project paths for raw test output, screenshots, diffs, and generated diagrams instead of pasting large artifacts into execution logs.
+- Read index → current immutable run; `latest.md`/history only for regression, conflict or past-decision investigation.
+- Reference project paths for test output, screenshots and diffs; do not paste large artifacts into logs.
 
 ## Swimlane Diagram Synchronization
 
-- Classify `swimlane_applicable` and `flow_impact` (`none`, `changed`, or `uncertain`) in current-run evidence from implementation entry/call/interface/config/test facts, not documentation alone. Do not create a separate classification artifact or empty diagram.
-- If `swimlane_applicable=true` and `flow_impact=none`, do not rewrite the diagram file and preserve its content and SHA-256. At stage or milestone close, run the registered lightweight `swimlane_freshness` command against the current code/diagram binding and store its gate receipt; do not require the full diagram-redraw/browser evidence path when no diagram changed.
-- If `changed`, batch a stabilized candidate and update each affected module diagram at most once per stage/candidate, before its first downstream consumer or handoff. Update sooner only for active safety/security/irreversible/public-contract risk.
-- If `flow_impact=uncertain`, perform the minimum entry-point, call-chain, interface, configuration, and test investigation needed to resolve it to `none` or `changed` before downstream use or stage close; must not redraw just in case and must not complete with unresolved impact.
-- Update the system overview at `{{SWIMLANE_OVERVIEW_PATH}}` only for verified system/cross-module boundaries, ownership, top-level entry/exit or external dependencies; otherwise update only the module diagram at `{{MODULE_SWIMLANE_PATH}}`. Do not diagram helpers or temporary/test-only slices.
-- After an actual diagram write, open the interactive HTML in a browser and click through the affected modules. Verify that lane headers, connectors, module drill-down, and return-to-overview behavior are visible and complete.
+- Classify `swimlane_applicable`/`flow_impact` (`none`, `changed`, or `uncertain`) in the current run from implementation entry/call/interface/config/test facts, not documentation alone; no separate classification artifact or empty diagram.
+- If `swimlane_applicable=true` and `flow_impact=none`, do not rewrite the diagram file and preserve its content and SHA-256. At stage/milestone close, run registered lightweight `swimlane_freshness` and record its current code/diagram receipt; no redraw/browser evidence for unchanged diagrams.
+- If `changed`, batch a stabilized candidate: update affected module diagrams at most once per stage/candidate before first downstream consumer or handoff; sooner only for active safety/security/irreversible/public-contract risk.
+- If `flow_impact=uncertain`, investigate entry-point/call-chain/interface/configuration/test facts to resolve `none` or `changed` before downstream use or stage close; must not redraw just in case or complete with unresolved impact.
+- Update the system overview at `{{SWIMLANE_OVERVIEW_PATH}}` only for verified system/cross-module boundaries, ownership, top-level entry/exit or external dependencies; otherwise only module diagram `{{MODULE_SWIMLANE_PATH}}`. No helper/temporary/test-only diagrams.
+- After an actual diagram write, click through affected modules in the HTML browser: visible lane headers/connectors, module drill-down and return-to-overview must work.
 - Serve local HTML from a registered loopback `http://`/`https://` preview, bind URL/path and actual/browser body hashes, and never use `file://` or an unrelated page as evidence.
-- Record the affected modules, diagram paths, reviewed code evidence, and browser verification result in the current module run, then update the compact completion progress record at `{{PROGRESS_RECORD_PATH}}`.
+- Record affected modules, diagram paths, reviewed code evidence and browser verification in the current run; update completion progress at `{{PROGRESS_RECORD_PATH}}`.
 - Save code/diagram/hash/click binding at `{{SWIMLANE_EVIDENCE_PATH}}` and run `{{SWIMLANE_EVIDENCE_VALIDATION_COMMAND}}`; changed-module coverage, unique paths, visible enabled links/targets, return control and browser transcript must pass.
-- A stage or task milestone is not complete and must not be marked `completed` until every `uncertain` impact is resolved, each `changed` diagram is synchronized and verified, and each `none` result has a recorded freshness check without rewriting the diagram.
+- Do not mark a stage/milestone `completed` until every `uncertain` is resolved, `changed` diagram synchronized/verified, and `none` has recorded freshness without rewriting.
 
 ## Frontend Interaction Verification
 
 - After every frontend code change, use `browser:control-in-app-browser` to exercise the affected user flow with human-like clicks in a desktop PC browser viewport.
 - For local pages use the registered server or loopback `http://` preview. Bind entry URL/root/artifact and same-run live response hash; stopped services, `file://`, redirects, decoys and unrelated pages are invalid.
-- Run the project's Playwright or Cypress end-to-end command `{{FRONTEND_E2E_COMMAND}}` for the affected flow; if no applicable suite exists, add the smallest maintainable test path or record the missing suite as a blocker.
+- Run Playwright or Cypress end-to-end `{{FRONTEND_E2E_COMMAND}}` for the affected flow; if no suite applies, add the smallest maintainable test path or record a blocker.
 - Click from the real entry through visible outcome, including applicable failure/retry/recovery. Bind ordered CSS-id actions, browser-computed visibility/enabled state, before/after DOM hashes proving the assertion node changed, and a decodable viewport-sized PNG.
-- Only when the approved requirement baseline, supported environment, or affected change scope explicitly includes mobile Web, touch, or responsive browser behavior, repeat the closure in applicable mobile browser viewports and run the corresponding mobile end-to-end cases. Native mobile scope uses the registered native mobile test command instead of browser automation. Otherwise mobile adaptation and mobile verification are not required and must not block completion.
-- Confirm there are no console errors, failed required requests, broken controls, clipped critical content, or page-level horizontal overflow in every required viewport; record viewport sizes, click path, assertions, and evidence in the current run.
-- The completion-stage application-browser transcript must be executed or independently replayed by the current read-only BLACK_BOX Agent; bind its distinct Agent run ID as the verifier rather than accepting the implementation Agent's self-report.
-- Save browser/entry/DOM/screenshot/action/E2E bindings at `{{FRONTEND_EVIDENCE_PATH}}`, then run `{{FRONTEND_EVIDENCE_VALIDATION_COMMAND}}`. Bind candidate, times, URL/root/path/hashes, ordered selectors, viewport, screenshots, exact E2E argv/framework/tests and independent verifier. Stale/missing/reused/fabricated evidence, broken action order/state transition, console/network failures or baseline/code/build mismatch blocks completion.
-- If any bug or unexplained error remains, the frontend change is not complete and must not be marked `completed` or passed.
+- Only when approved baseline/environment/change scope explicitly includes mobile Web/touch/responsive behavior, repeat closure in applicable mobile browser viewports with mobile end-to-end cases. Native mobile uses its registered native test command, not browser automation. Otherwise mobile adaptation/verification is not required and must not block completion.
+- Required viewports: no console errors, failed required requests, broken controls, clipped critical content or page-level horizontal overflow. Log viewport sizes, click path, assertions and evidence.
+- Current read-only BLACK_BOX Agent executes or independently replays the completion-stage application-browser transcript; bind its distinct Agent run ID as verifier, not writer self-report.
+- Save browser/entry/DOM/screenshot/action/E2E bindings at `{{FRONTEND_EVIDENCE_PATH}}`; then run `{{FRONTEND_EVIDENCE_VALIDATION_COMMAND}}`. Bind candidate/times, URL/root/path/hashes, ordered selectors, viewport, exact E2E argv/framework/tests and independent verifier. Stale/missing/reused/fabricated evidence, broken action order/state transition, console/network failures or baseline/code/build mismatch blocks completion.
+- With any bug or unexplained error, do not mark frontend work `completed` or passed.
 
 ## Project-Specific Rules
 

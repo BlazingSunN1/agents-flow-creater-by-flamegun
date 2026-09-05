@@ -11,20 +11,10 @@ from pathlib import Path
 from authority_binding_validation import authority_binding_issues, authority_metadata_issues
 
 from traceability_common import (
-    ALLOWED_SURFACES,
-    FINDING_COLUMNS,
-    FINDING_ROUTES,
-    GATE_COLUMNS,
-    HIGH_RISK_SURFACES,
-    Issue,
-    LINK_RE,
-    PLACEHOLDER_RE,
-    REQUIRED_GATES,
-    REQUIRED_METADATA,
-    RISK_ORDER,
-    STANDARD_SURFACES,
-    STATUSES,
-    TRACE_COLUMNS,
+    ALLOWED_SURFACES, STANDARD_SURFACES, HIGH_RISK_SURFACES,
+    FINDING_COLUMNS, FINDING_ROUTES, GATE_COLUMNS, TRACE_COLUMNS,
+    Issue, LINK_RE, PLACEHOLDER_RE,
+    REQUIRED_GATES, REQUIRED_METADATA, RISK_ORDER, STATUSES,
     TRACE_PREFIXES, VALIDATION_STAGES, VERDICTS,
     required_independent_roles,
 )
@@ -42,6 +32,7 @@ from trace_stage_validation import black_box_not_started, pending_black_box_issu
 from trace_row_identity_validation import requirement_identity_issues
 from trace_baseline_validation import _validate_baseline
 from trace_workset_binding import trace_deleted_files
+from trace_gate_applicability import trace_gate_applicability, trace_na_issues
 
 def validate_traceability(
     path: Path,
@@ -50,6 +41,7 @@ def validate_traceability(
     template: bool = False,
     stage: str = "completion",
     context_path: Path | None = None,
+    delivery_contract_path: Path | None = None,
 ) -> list[Issue]:
     issues: list[Issue] = []
     text = _read_traceability(path, issues)
@@ -71,7 +63,11 @@ def validate_traceability(
     surfaces = _validate_risk(metadata, issues)
     expected_sha = _validate_baseline(metadata, root, issues)
     deleted = trace_deleted_files(context_path, root, issues)
-    _validate_trace_rows(trace_rows, trace_numbers, surfaces, root, issues, deleted)
+    optional_columns, selected_requirements = trace_gate_applicability(
+        delivery_contract_path, path, metadata, root, stage, issues,
+    )
+    _validate_trace_rows(trace_rows, trace_numbers, surfaces, root, issues, deleted,
+                         optional_columns, selected_requirements)
     gates = _validate_gate_rows(gate_rows, gate_numbers, metadata, expected_sha, surfaces, root, stage, issues)
     open_findings = _validate_finding_rows(finding_rows, finding_numbers, root, issues)
     _validate_stage(stage, trace_rows, gates, metadata, surfaces, open_findings, issues)
@@ -172,7 +168,11 @@ def _validate_risk(metadata: dict[str, str], issues: list[Issue]) -> set[str]:
     return surfaces
 
 
-def _validate_trace_rows(trace_rows: list[dict[str, str]], row_numbers: list[int], surfaces: set[str], root: Path, issues: list[Issue], deleted_files: set[str] | None = None) -> None:
+def _validate_trace_rows(
+    trace_rows: list[dict[str, str]], row_numbers: list[int], surfaces: set[str], root: Path,
+    issues: list[Issue], deleted_files: set[str] | None = None,
+    optional_columns: set[str] | None = None, selected_requirements: set[str] | None = None,
+) -> None:
     artifact_ids: dict[str, tuple[str, int]] = {}
     requirement_rows: dict[str, int] = {}
     artifact_roles: dict[tuple[int, int], str] = {}
@@ -186,10 +186,7 @@ def _validate_trace_rows(trace_rows: list[dict[str, str]], row_numbers: list[int
         for column, prefix in TRACE_PREFIXES.items():
             cell = row[column].strip()
             if _is_na(cell):
-                if column != "UI/UX":
-                    issues.append(Issue("error", "invalid-na", f"{column} 不允许 N/A", row_number))
-                elif "ui" in surfaces:
-                    issues.append(Issue("error", "ui-artifact-required", "实际 UI 变更不能把 UI/UX 工件标记为 N/A", row_number))
+                issues.extend(trace_na_issues(row, column, row_number, surfaces, optional_columns, selected_requirements))
                 continue
             links = LINK_RE.findall(cell)
             if not links:
@@ -204,8 +201,7 @@ def _validate_trace_rows(trace_rows: list[dict[str, str]], row_numbers: list[int
                 if previous is not None and previous[0] != normalized_path:
                     issues.append(
                         Issue(
-                            "error",
-                            "conflicting-trace-id",
+                            "error", "conflicting-trace-id",
                             f"编号 {artifact_id} 在第 {previous[1]} 行映射到 {previous[0]}，当前却映射到 {normalized_path}",
                             row_number,
                         )
@@ -458,6 +454,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("path", type=Path)
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--context", type=Path, help="显式删除 Code module 的工作集声明")
+    parser.add_argument("--delivery-contract", type=Path, help="从有效绑定的 gate plan 判定 Flow/Black-box result 是否适用")
     parser.add_argument("--template", action="store_true", help="只校验公共模板结构和 UTF-8")
     parser.add_argument("--stage", choices=VALIDATION_STAGES, default="completion")
     parser.add_argument("--json", action="store_true")
@@ -472,6 +469,7 @@ def main() -> int:
         template=arguments.template,
         stage=arguments.stage,
         context_path=arguments.context,
+        delivery_contract_path=arguments.delivery_contract,
     )
     failed = any(issue.severity == "error" for issue in issues)
     if arguments.json:

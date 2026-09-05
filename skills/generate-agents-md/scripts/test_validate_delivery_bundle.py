@@ -1894,7 +1894,7 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         module_bundle = (assets / "module-delivery-bundle.template.json").read_text(encoding="utf-8")
         execution = (assets / "execution-run.template.md").read_text(encoding="utf-8")
         latest = (assets / "module-latest.template.md").read_text(encoding="utf-8")
-        self.assertIn("synchronize only applicable and mapped design, swimlane, UI, test, and acceptance artifacts selected by the gate plan", agents)
+        self.assertIn("synchronize only applicable and mapped design/swimlane/UI/test/acceptance artifacts selected by the gate plan", agents)
         self.assertIn("{{GATE_PLAN_SWIMLANE_SCOPE_SUFFIX_OR_EMPTY}}", review)
         self.assertIn("{{TARGETED_TESTS_CODE_STANDARDS_TRACEABILITY_AUTOMATED_REVIEW_AND_GATE_PLAN_SWIMLANE_IDS}}", review)
         self.assertIn("{{GATE_PLAN_SWIMLANE_RERUN_ID_OR_REMOVE_ENTRY}}", output)

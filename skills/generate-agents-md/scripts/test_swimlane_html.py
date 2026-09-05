@@ -17,6 +17,11 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 
 
 class SwimlaneHtmlContractTests(unittest.TestCase):
+    def test_runtime_dom_guidance_matches_browser_policy(self) -> None:
+        self.assertNotIn("DOM 快照必须与实时入口响应字节相同", HTML)
+        self.assertIn("运行时 DOM 可与服务端入口字节不同", HTML)
+        self.assertIn("绑定自身哈希和同一浏览器 run", HTML)
+
     def test_every_module_has_navigation_drilldown_and_back_link(self) -> None:
         for module_id in ("module-m00", "module-m01", "module-m02", "module-m03", "module-m04"):
             self.assertGreaterEqual(HTML.count(f'data-open-module="{module_id}"'), 2)
@@ -105,8 +110,8 @@ class SwimlaneHtmlContractTests(unittest.TestCase):
         self.assertNotIn("Keep the active parent GPT as sole workspace writer", NATIVE_AGENT_CONFIG)
         self.assertIn("Hierarchy never grants write authority", NATIVE_AGENT_CONFIG)
         self.assertIn("a different independent read-only Agent validates the same code/build identity", AGENTS_TEMPLATE)
-        self.assertIn("Use distinct Codex-native `gpt-6-astra` Agent/runs", AGENTS_TEMPLATE)
-        self.assertIn("Drift, identity reuse or failed evidence blocks completion", AGENTS_TEMPLATE)
+        self.assertIn("Standard work uses distinct Codex-native `gpt-6-astra` Agent/runs", AGENTS_TEMPLATE)
+        self.assertIn("Drift, stale/missing proof, failure or identity reuse blocks completion", AGENTS_TEMPLATE)
         self.assertNotIn("The parent GPT independently adjudicates both roles", AGENTS_TEMPLATE)
         template_ref = "../generate-agents-md/assets/native-review-loop-evidence.template.json"
         validator_ref = "../generate-agents-md/scripts/validate_native_review_loop.py"

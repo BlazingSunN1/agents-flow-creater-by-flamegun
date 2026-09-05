@@ -628,14 +628,11 @@ class SkillValidationTests(unittest.TestCase):
         root_template = (SKILL_ROOT / "assets" / "AGENTS.template.md").read_text(encoding="utf-8")
         # SKILL.md is loaded on every invocation; keep meaningful headroom.
         self.assertLessEqual(len(skill.encode("utf-8")), 10_000)
-        # Generated AGENTS.md becomes project context, so retain growth headroom.
+        # Budget the root plus scoped instructions; smaller valid templates are allowed.
         template_bytes = len(root_template.encode("utf-8"))
-        self.assertGreaterEqual(template_bytes, 29_000)
-        self.assertLessEqual(template_bytes, 30_500)
-        # Captured before this requested compression pass; keep the reduction bounded.
-        compression_delta = 31_995 - template_bytes
-        self.assertGreaterEqual(compression_delta, 1_500)
-        self.assertLessEqual(compression_delta, 2_500)
+        self.assertLessEqual(template_bytes, 27_000)
+        scoped_bytes = (SKILL_ROOT / "assets" / "AGENTS.scoped.template.md").stat().st_size
+        self.assertLessEqual(template_bytes + scoped_bytes, 30_000)
         self.assertLessEqual(max(map(len, skill.splitlines())), 900)
         for relative in (
             "references/multi-model-review-policy.md",

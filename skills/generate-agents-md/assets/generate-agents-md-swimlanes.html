@@ -82,40 +82,20 @@
   <p>当前代码行为：从项目事实与需求基线提取工程约束，以真实命令、单写者和风险触发的只读独立 Agent 建立方案到黑盒结果的可验证追踪链。</p>
 
   <section aria-labelledby="review-title">
-    <h2 id="review-title">代码审查发现</h2>
+    <h2 id="review-title">当前交付规则与验证边界</h2>
     <div class="finding">
       <p><strong>审查结果：</strong>只读独立 Agent 在模块闭环候选或人工主动触发时执行需求稳定性审查；适用模块闭环须完成独立黑盒验收。发现按测试先行修复，全量回归和关键源码变异均纳入最终门禁。</p>
-      <p><strong>本轮交付编排：</strong>单一交付契约把需求基线、计划进度、变更工作集和真实命令绑定为确定性门禁计划；开发迭代使用 <code>quick</code>，已知标准影响的闭环候选使用 <code>affected</code>，高风险、跨模块、共享规划器或未知映射自动升级 <code>full</code>。每个可执行门禁有独立输入指纹；最终聚合校验仅在闭环或完成阶段、底层 receipt 齐备后实时执行，且不为自身或彼此签发 receipt，消除自引用。自动修复最多三轮、同一失败最多两次，禁止削弱测试或修改批准需求来制造通过。</p>
-      <p><strong>已修复：</strong><code>--allow-pattern</code> 只豁免基础设施误报，不再跳过敏感信息、占位符和待办扫描。</p>
-      <p><strong>已修复：</strong>开发计划、模块日志、泳道图和前端验证均在指定章节内校验完整规则；反引号敏感值和同一行独立身份主机也不会被漏检。</p>
-      <p><strong>已修复：</strong>敏感信息扫描已覆盖常见标记与大小写变体；非法 mode/scope 不能绕过根/子作用域门禁。</p>
-      <p><strong>已修复：</strong>模块切换会关闭其他模块，返回系统总览会收起所有模块，避免多个模块同时展开。</p>
-      <p><strong>本轮新增：</strong>普通代码增量只累计变更文件与证据差量，不启动完整审查；仅在模块形成闭环候选或人工主动要求时审查当前指纹。人工触发可检查中间快照，但不自动关闭模块；审查通过后的代码或配置变化会令结论失效，下一闭环候选必须重审。泳道先判定 <code>swimlane_applicable=true|false</code>，再按 <code>flow_impact=none|changed|uncertain</code> 判定：无适用泳道时无图无门禁；有适用泳道且无变化时保留图内容和哈希，确认变化按稳定候选合并，并在首次下游依赖或阶段交接前至多写图一次；阶段结束只对适用泳道校验新鲜度，系统总览只随系统或跨模块边界变化，避免逐文件、逐提交和按时钟重画。</p>
-      <p><strong>本轮修复：</strong>全局规则不得反转机器门禁；需求基线路径、版本和哈希进入证据缓存键；追踪链拒绝跨语义角色复用同一工件；模板模式深检嵌套 schema；implementation 阶段的前端改动同样必须提供点击与 E2E 证据。</p>
-      <p><strong>本轮加固：</strong>所选需求的 Code module 必须覆盖当前 Changed files；模块日志只记录自身需求编号；跨角色复制同内容工件、重复授权字段、旧证据预复用及模板中的失败/可选门禁均失败关闭。</p>
-      <p><strong>相邻缺陷修复：</strong>追踪工件内容身份消除尾随空白差异；execution run 模板明确只填模块所属 REQ；仅 user-visible 的非前端任务不再误触浏览器/E2E。</p>
-      <p><strong>边界修复：</strong>追踪内容身份消除零宽格式字符但保留正文内部空白语义；命令清单可正确声明 trace=internal 的真实前端重构，仍强制浏览器与 E2E。</p>
-      <p><strong>浏览器可用性修复：</strong>本地 HTML 和前端页面必须先由回环地址上的已登记服务提供 HTTP(S) 入口；证据头与点击转录精确绑定实际 URL，拒绝 <code>file://</code>、含敏感连接值和非 HTTP(S) 地址。</p>
-      <p><strong>页面身份加固：</strong>HTTP(S) URL 还必须映射预览根目录下的当前入口工件，并在证据头和点击转录中同时绑定入口文件与浏览器实际响应体 SHA-256；泳道浏览器必须使用回环地址并只能以当前系统总览为入口，无关网页或模块细图不能冒充。</p>
-      <p><strong>复用稳定性加固：</strong>缓存键新增风险/扩展理由、直接依赖边界和 Build ID；工作集父级或叶子符号链接失败关闭；复用必须绑定结构化成功 run、唯一模块、Build ID、验收环境、当前缓存键和逐项证据哈希；单一源 run 只服务单模块，多模块必须重跑。</p>
-      <p><strong>阶段与追踪修复：</strong>implementation 阶段允许 BLACK_BOX 以严格的未启动状态留空 run 和工件，completion 仍要求完整独立黑盒；同一追踪单元格的多个 REQ 链接会被聚合门禁全部识别。</p>
-      <p><strong>行为证据加固：</strong>DOM 快照必须与实时入口响应字节相同且为 UTF-8；动作保存浏览器计算的可见/启用状态并按声明顺序及次数执行，每次点击绑定前后 DOM 工件并证明断言节点自身变化且结果可见；DOM/CSS/ARIA/禁用状态、组合器和项目相对外链 CSS 按文档顺序、优先级与 <code>!important</code> 交叉校验，无法重放的 CSS import 阻断；截断 HTTP、目录入口、无调色板索引 PNG、未知关键块、不连续 IDAT、隐藏或非交互泳道跳转全部失败关闭。风险字段固定为三段，复用源 run 的模块、基线、代码、Build ID、验收环境、风险、需求、规范化文件/编号集合及严格历史上下文路径/哈希逐项绑定当前上下文，多证据统一使用无歧义逗号语法。</p>
+      <p><strong>交付编排：</strong>单一交付契约把需求基线、计划进度、变更工作集和真实命令绑定为确定性门禁计划；开发迭代使用 <code>quick</code>，已知标准影响的闭环候选使用 <code>affected</code>，高风险、跨模块、共享规划器或未知映射自动升级 <code>full</code>。每个可执行门禁有独立输入指纹；最终聚合校验仅在闭环或完成阶段、底层 receipt 齐备后实时执行，且不为自身或彼此签发 receipt，消除自引用。自动修复最多三轮、同一失败最多两次，禁止削弱测试或修改批准需求来制造通过。</p>
+      <p><strong>审查与泳道频率：</strong>普通代码增量只累计变更文件与证据差量，不启动完整审查；仅在模块形成闭环候选或人工主动要求时审查当前指纹。人工触发可检查中间快照，但不自动关闭模块；审查通过后的代码或配置变化会令结论失效，下一闭环候选必须重审。泳道先判定 <code>swimlane_applicable=true|false</code>，再按 <code>flow_impact=none|changed|uncertain</code> 判定：无适用泳道时无图无门禁；有适用泳道且无变化时保留图内容和哈希，确认变化按稳定候选合并，并在首次下游依赖或阶段交接前至多写图一次；阶段结束只对适用泳道校验新鲜度，系统总览只随系统或跨模块边界变化，避免逐文件、逐提交和按时钟重画。</p>
       <p><strong>Token 优化：</strong>入口 Skill 已去除重复细节；每次执行先建立最小工作集，组合代码、命令、配置、环境和输入指纹生成缓存键，只有验证器确认完全一致且证据存在时才复用。</p>
-      <p><strong>本轮路由优化：</strong>普通事实提取不再加载受控敏感配置细节；相关能力只在用户本次明确授权时读取独立策略。外部多模型、证据复用和浏览器验收也拆为按场景加载的独立契约，历史上下文复用模板已加入显式资源路由。</p>
-      <p><strong>本轮效率修复：</strong>严格安全正文按触发条件独立加载，默认本地协调不读取签名 bootstrap 与受控租约细节；迭代阶段运行 <code>python3 scripts/validate_skill.py --quick</code>，已知标准影响闭环可用 <code>--affected</code>，发布或未知影响运行 <code>--full</code>。快速检查不能作为闭环、发布或安装验收，默认无参数调用仍等价于完整门禁。</p>
+      <p><strong>验证频率：</strong>严格安全正文按触发条件独立加载，默认本地协调不读取签名 bootstrap 与受控租约细节；迭代阶段运行 <code>python3 scripts/validate_skill.py --quick</code>，已知标准影响闭环可用 <code>--affected</code>，发布或未知影响运行 <code>--full</code>。快速检查不能作为闭环、发布或安装验收，默认无参数调用仍等价于完整门禁。</p>
       <p><strong>成果优先：</strong>先从真实入口跑通最小业务流程，得到可演示、可观测的验收结果；再冻结代码版本、Build ID、验收命令、结果和证据 SHA-256。冻结后才启动非必要门禁、重构、代码质量、性能或体验打磨；每个打磨候选重放冻结验收，发生回归时先恢复最小业务闭环。治理完整或门禁通过不能替代业务成果。</p>
-      <p><strong>授权易用性优化：</strong>受控敏感配置收敛到单一项目文档授权源，由直接校验、交付包和系统聚合自动继承；旧开关仅兼容调用，不能单独放行。端点规则允许同源或明确路径前缀，同时保持协议、主机和有效端口硬边界。</p>
-      <p><strong>本轮审查修复：</strong>Machine-Enforced Policy 现在解析完整 YAML 标量并拒绝未知覆盖键；根 AGENTS.md 还必须内嵌唯一 canonical authority matrix，以固定定位符和 SHA-256 绑定 5 类 actor × 15 类 action 的单主体、单对象稳定能力。固定 <code>deny</code> 不得被自然语言或委派覆盖，<code>independent-only</code> 只接受不同 Agent/run、精确 completed/pass、receipt/candidate 哈希、版本、Build ID 与封闭结果绑定组成的结构化 gate proof；严格模式才追加外部宿主校验，运行事实不写入稳定矩阵。前端与泳道 CSS 的 <code>:not()</code> 支持多个排除参数、状态伪类且只按顶层逗号拆分，未知状态按失败关闭处理，隐藏控件不能伪造点击闭环。通用清单只路由复用与浏览器契约，不再复制底层 schema。本机受控信任仅作为显式严格兼容路径支持一次性 system-governance bootstrap：Ed25519 detached signature 必须是 64-byte 对应的精确 86 字符规范 Base64URL；project root、外部工件、replay 与 owned paths 均验证磁盘逐级大小写和 canonical 身份；工件读取、lock 与 ledger 把实际 fd/fstat 绑定 lstat 名称，并在读取、判重、替换前后重验，目录 fsync fd 还须匹配冻结 parent 身份，拒绝替换恢复、断链和 inode 替换竞态。Python 3.9 symlink-loop 与缺 argv 等 IO/路径失败只输出无路径/Errno 的稳定 JSON；bootstrap 后普通写入仍须取得当前模块协调租约。</p>
-      <p><strong>唯一 replay ledger：</strong>签名 bootstrap payload 闭集固定一个 canonical 外部 <code>replay_state_path</code>；CLI 参数和实际 guard path 必须在任何 lock 或 ledger 写入前精确匹配，同一 envelope 切换 ledger 必须失败关闭且不触碰备用 ledger。</p>
-      <p><strong>稳定性优化：</strong>完整 argv 必须匹配来源声明；共享记录写入先绑定 canonical ownership、module/Agent/run、精确 target/owned paths、AGENTS/authority matrix 哈希与唯一活动协调租约，再通过固定目录描述符、文件锁、期望哈希与原子替换防 symlink 竞态；默认本地模式校验结构、哈希、锁与 CAS，严格模式才追加宿主证明，测试替身不能由 CLI 注入；前端证据拒绝空文件、伪报告和越界链接。</p>
-      <p><strong>多 Agent：</strong>实现 Agent 是代码和共享记录的唯一写者；实现阶段不提前要求黑盒；小型、标准、高风险严格启用最少必要角色；每个独立输入只覆盖当前需求的角色所需工件并逐文件绑定 SHA-256，独立输出再绑定输入清单 SHA-256，额外/缺失/漂移输入、证据复用或开放分歧都阻断。</p>
       <p><strong>原生 GPT-6 Astra 并列通道：</strong>Kimi/DeepSeek 外部调用保持暂停。方案作者与黑盒审查者是两个独立、只读的 Codex 原生子 Agent，调度必须显式固定 <code>model=gpt-6-astra</code>；父/主/子层级不授予写权，协调裁决 Agent/run 始终只读、永不持 writer lease。仅登记的当前实现/维护 Agent 可写，并须是匹配唯一活动模块协调租约的 canonical writer；默认本地协调，严格模式才追加宿主证明。其 Agent ID 与 run ID 必须同时不同于协调裁决者，同一身份不得靠切换角色或 run 自审自写。Dispatcher 也始终只读；独立通过只授权记录结果，不授权 writer 自审/黑盒/验收/裁决/关闭/完成/接受。同候选哈希门禁逐轮绑定最小输入、原生 spawn 结果、Agent/run ID 与输入输出哈希。最多 6 轮，无法同版无缺陷通过则标记 <code>incomplete</code> 或 <code>blocked</code>；子 Agent 自报模型和仅编写未执行的黑盒用例均不能充当验收证据。</p>
       <p><strong>模块闭环责任制：</strong>每个具备稳定业务能力、独立可测入口/输出和非重叠边界的大功能模块只设一个长期维护子 Agent，闭合需求、设计/流程、实现、定向测试、独立验收、证据日志和后续维护。默认本地模式以封闭 receipt 绑定 Dispatcher、聚合写者、模块维护者和门禁审查者的全局唯一 Agent/run 及输入/输出哈希、版本、Build ID 与 verdict；严格模式才追加宿主可信运行时复核和宿主证明 output result。仅有 spawn receipt、自关闭、自声明完成或同义橡皮图章均不得替代独立验收。跨模块交付先逐模块关闭；schema v2 模块/系统交付包逐字段绑定 canonical authority locator、SHA-256 与精确 role/action/policy，规范化模块集合必须一致；独立原生 GPT-6 <code>SYSTEM_AGGREGATION</code> 写者再生成系统清单并以 output receipt 回显同一 authority binding、绑定规范化候选正文哈希，Dispatcher 仅只读调用全量重验。</p>
       <p><strong>失败关闭：</strong>根级 AGENTS 使用权威机器策略枚举；交付包总门禁绑定 AGENTS、追踪矩阵、工作集、真实命令、计划进度、自动审查、当前模块 run、完成态 latest/index、多 Agent 与适用前端证据；追踪表坏行不再静默丢弃。</p>
-      <p><strong>本轮修复：</strong>计划绑定需求基线，进度绑定实现 run/code 和模块记录链接；自动审查用结构化 JSON 绑定真实命令、argv、时间、退出码和 rerun，模块 run/latest 绑定实际审查、独立评审、泳道与前端证据，严格拒绝 symlink 父链、hardlink 别名、隐藏字段和开放工作。</p>
-      <p><strong>结构优化：</strong>AGENTS 策略、追踪解析和原生 E2E 报告已拆分为独立校验模块，入口文件与函数均受大小边界约束。</p>
       <p><strong>分层自检：</strong><code>python3 scripts/validate_skill.py --quick</code> 用于快速迭代；<code>python3 scripts/validate_skill.py --full</code> 聚合 Skill 包、代码结构、全部 CLI smoke、全量回归、源码变异和泳道脚本语法 6 层检查，任一层失败即整体失败。</p>
       <p><strong>明确例外：</strong>经用户授权的项目级敏感连接配置仅按需进入独立规则与专用校验；用户明确要求时可只读审查该策略及隔离效果，但不获得写入或传播真实值的权限。默认上下文不展示策略细节，公共模板始终脱敏。</p>
+      <p><strong>浏览器证据：</strong>运行时 DOM 可与服务端入口字节不同，但必须绑定自身哈希和同一浏览器 run；当前入口响应另行绑定文件与响应 SHA-256。动作必须真实点击并验证可见结果，配合 Playwright/Cypress。详细规则见 <a href="../references/browser-validation-policy.md">浏览器验证契约</a>；图中不重复维护解析器和历史修复细节。</p>
     </div>
   </section>
 

@@ -81,6 +81,8 @@ Independent review input `artifacts` keep every required deleted path explicitly
 
 `Code module` links name files, not directories. For deletion, retain an explicit link to the old path; standalone traceability validation requires `--context` to validate its `Deleted files` declaration, and the bundle passes its canonical context. Only that exact declared absent path in the `Code module` column is exempt from live-file resolution; other columns, undeclared missing paths, and directories remain invalid. Required independent review still explicitly receives each deleted path.
 
+For inapplicable trace artifacts, pass `--delivery-contract` to standalone traceability validation; the bundle forwards its contract automatically. A validated, current, exactly bound plan permits reasoned `N/A` only for selected requirement rows: `Flow` when no swimlane applies and `flow_impact=none`, and `Black-box result` when the plan has no `BLACK_BOX` role. Without a contract, legacy strict behavior remains. This input check does not require traceability's own receipt or prove completion; final contract validation still requires all planned receipts.
+
 ## Bounded repair
 
 Automatic repair is conditional, not mandatory. Use it only for formatting, deterministic generated artifacts, or a local implementation defect constrained by a failing regression test. The contract fixes `max_rounds <= 3`, `same_failure_limit <= 2`, regression-before-fix, and completion blocking on exhaustion.

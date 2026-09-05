@@ -17,13 +17,10 @@ from validate_frontend_evidence import validate_frontend_evidence
 from validate_multi_agent_evidence import _validate_multi_agent_evidence_impl
 from validate_project_commands import validate_project_commands
 from validate_swimlane_evidence import validate_swimlane_evidence
-from validate_traceability import TRACE_COLUMNS, _parse_metadata as parse_trace_metadata
-from validate_traceability import _parse_table as parse_trace_table
 from validate_traceability import validate_traceability
-from traceability_common import LINK_RE, VALIDATION_STAGES
-from trace_workset_binding import (
-    binding_issue_codes, encode_module_requirement_ids, module_requirement_ids,
-)
+from traceability_parsing import _parse_metadata as parse_trace_metadata, _parse_table as parse_trace_table
+from traceability_common import LINK_RE, TRACE_COLUMNS, VALIDATION_STAGES
+from trace_workset_binding import binding_issue_codes, encode_module_requirement_ids, module_requirement_ids
 from agents_dispatcher_policy_validation import module_ownership_mapping
 from validate_context_manifest import _parse_module_file_map
 from implementation_agent_validation import HostAttestationVerifier
@@ -120,6 +117,7 @@ def _validate_delivery_bundle_impl(
         multi_agent_evidence_path, project_root, stage, verifier,
         project_locator(requirement_questions_path, project_root),
         requirement_questions_sha256,
+        delivery_contract_path,
     ))
     issues.extend(_validate_swimlane_bundle(
         swimlane_evidence_path, trace_path, context_path, project_root,
@@ -227,10 +225,12 @@ def _validate_core_evidence(
     root: Path, stage: str, host_attestation_verifier: HostAttestationVerifier | None,
     requirement_questions_locator: str | None,
     requirement_questions_sha256: str | None,
+    delivery_contract_path: Path | None,
 ) -> list[Issue]:
     issues = [
         Issue(item.severity, f"trace-{item.code}", item.message, str(trace))
-        for item in validate_traceability(trace, project_root=root, stage=stage, context_path=context)
+        for item in validate_traceability(trace, project_root=root, stage=stage, context_path=context,
+                                         delivery_contract_path=delivery_contract_path)
     ]
     agent_issues = _validate_multi_agent_evidence_impl(
         agents, trace_path=trace, context_path=context, project_root=root,

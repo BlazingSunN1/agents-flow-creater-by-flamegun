@@ -60,6 +60,11 @@ class Issue:
 def validate_delivery_contract(
     path: Path, *, project_root: Path, template: bool = False,
 ) -> list[Issue]:
+    if not template:
+        data, issues = validate_delivery_contract_inputs(path, project_root=project_root)
+        if data is not None and not issues:
+            _validate_gate_receipts(data, project_root.resolve(), issues)
+        return _deduplicate(issues)
     data, issues = _read_contract(path)
     if data is None:
         return issues
@@ -68,15 +73,26 @@ def validate_delivery_contract(
         if not PLACEHOLDER_RE.search(path.read_text(encoding="utf-8")):
             issues.append(Issue("error", "missing-template-placeholder", "公共模板必须保留占位符"))
         return _deduplicate(issues)
+    return _deduplicate(issues)
+
+
+def validate_delivery_contract_inputs(
+    path: Path, *, project_root: Path,
+) -> tuple[dict[str, object] | None, list[Issue]]:
+    """Validate candidate inputs and recompute its plan, not gate receipts or completion."""
+    data, issues = _read_contract(path)
+    if data is None:
+        return None, issues
+    _validate_shape(data, issues, template=False)
     required_objects = (
         "baseline", "artifacts", "identity", "change", "repair_policy", "gate_plan", "gate_receipts",
     )
     if not TOP_FIELDS.issubset(data) or any(not isinstance(data.get(field), dict) for field in required_objects):
-        return _deduplicate(issues)
+        return None, _deduplicate(issues)
     root = project_root.resolve()
     _validate_refs(data, root, issues)
     _validate_semantics(data, root, issues)
-    return _deduplicate(issues)
+    return (None if issues else data), _deduplicate(issues)
 
 
 def _read_contract(path: Path) -> tuple[dict[str, object] | None, list[Issue]]:
@@ -204,7 +220,6 @@ def _validate_semantics(data: dict[str, object], root: Path, issues: list[Issue]
         issues.append(Issue("error", "stale-gate-plan", "gate_plan 与当前事实的确定性规划结果不一致"))
         return
     _validate_planned_commands(data, root, issues)
-    _validate_gate_receipts(data, root, issues)
 
 
 def _validate_gate_receipts(data: dict[str, object], root: Path, issues: list[Issue]) -> None:
