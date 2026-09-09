@@ -1,0 +1,13 @@
+...F......
+======================================================================
+FAIL: test_malformed_pytest_summary_cannot_hide_beside_a_passing_summary (test_gate_test_results.GateTestResultsTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/test_gate_test_results.py", line 64, in test_malformed_pytest_summary_cannot_hide_beside_a_passing_summary
+    self.assertFalse(test_result_passes('targeted_tests', argv, report), report)
+AssertionError: True is not false : b'1 failed in 0.01s garbage\n1 passed in 0.01s'
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.002s
+
+FAILED (failures=1)

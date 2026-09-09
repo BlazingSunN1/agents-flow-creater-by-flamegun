@@ -42,7 +42,7 @@ COMMAND_EXECUTION_MUTANT_CASES = (
     ),
     (
         "python-command-entrypoint-check-disabled", "scripts/validate_project_commands.py",
-        "    _validate_command_entrypoint(argv, working_directory, root, command_id, issues)\n",
+        "    _validate_command_entrypoint(argv, working_directory, root, command_id, issues,\n                                 item.get(\"trusted_external_entrypoint\"))\n",
         "",
         "scripts.test_validate_project_commands.ProjectCommandValidatorTests.test_python_script_entrypoint_must_exist_and_comment_is_not_provenance",
     ),

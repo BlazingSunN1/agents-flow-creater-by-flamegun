@@ -1,0 +1,13 @@
+......F..
+======================================================================
+FAIL: test_pytest_native_summary_requires_one_positive_all_passed_run (test_gate_test_results.GateTestResultsTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/test_gate_test_results.py", line 51, in test_pytest_native_summary_requires_one_positive_all_passed_run
+    self.assertFalse(test_result_passes('targeted_tests', argv, report), (argv, report))
+AssertionError: True is not false : (['pytest'], b'1 passed1 warnings in 0.01s')
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.001s
+
+FAILED (failures=1)

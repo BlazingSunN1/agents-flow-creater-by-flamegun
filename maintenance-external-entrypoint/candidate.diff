@@ -1,0 +1,396 @@
+diff --git a/.codex-plugin/plugin.json b/.codex-plugin/plugin.json
+index 95a1bc0..74b7761 100644
+--- a/.codex-plugin/plugin.json
++++ b/.codex-plugin/plugin.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "agents-flow-creater-by-flamegun",
+-  "version": "0.2.0+codex.20260905095718",
++  "version": "0.2.0+codex.20260908235823",
+   "description": "Generate stable AGENTS.md workflows with native gpt-6-astra sub-Agent review; external Kimi and DeepSeek remain paused.",
+   "author": {
+     "name": "FlameGun"
+diff --git a/skills/generate-agents-md/SKILL.md b/skills/generate-agents-md/SKILL.md
+index 8cc0d37..be5768e 100644
+--- a/skills/generate-agents-md/SKILL.md
++++ b/skills/generate-agents-md/SKILL.md
+@@ -52,7 +52,7 @@ description: 从仓库事实和需求生成、更新、拆分、公共化或审
+ - 仅按已证实风险加载方案、泳道、功能、原型、测试和独立验收；不适用只记理由，不建空产物。
+ - 实现/维护 Agent 用 `gpt-6-astra/medium`；方案、审核、裁决和独立验收用 `gpt-6-astra/high`。后者只读且不持租约；修订只由不同 Agent/run 的当前租约写者执行，写者不得自验。默认保存本地结构绑定，严格模式才要求宿主证明运行身份。
+ - 小型任务须影响已知、无行为/契约/流程变化且有定向验证，只复用唯一写者，不增 Agent/全链产物。标准任务最多一个写者和一个只读 `BLACK_BOX` Agent，合并审查、用例复核与黑盒验收；完整多 Agent 仅用于已证实高风险、并发大模块或独立/合规要求。未知先调查。
+-- 用 delivery contract/gate receipt 模板建立单一决策索引；规划器只读，租约 writer 经 CAS 合并，禁止手改或复用旧门禁。命令由 `assets/project-commands.template.json` 登记；成果可先跑已核实入口，冻结前须登记。见 `references/delivery-orchestration.md`。
++- 用 delivery contract/gate receipt 模板建立单一决策索引；规划器只读，租约 writer 经 CAS 合并，禁止手改或复用旧门禁。命令模板 `assets/project-commands.template.json`；成果先跑核实入口，冻结前登记；外部绑定见 `references/delivery-orchestration.md`。
+ - receipt schema v2 要求实现独占租约、gate 只读同候选、outer 唯一来源、replay 失败关闭；strict 再加宿主证明。v1 仅兼容。见 `references/role-specific-local-receipts.md`。
+ - 聚合验证器仅在闭环候选或完成阶段实时执行且不互签；漂移、失败门禁或开放分歧阻断。
+ - 仅当 `project` 模式显式选择 `authorization-mode=local-controlled-same-user`，或有已映射的高风险/合规要求时，才调用 `$strict-delivery-security`；默认 `delivery-first-local-coordination` 不加载其严格签名、宿主证明和 bootstrap 流程。核心 Skill 不复制这些细节。
+diff --git a/skills/generate-agents-md/references/delivery-orchestration.md b/skills/generate-agents-md/references/delivery-orchestration.md
+index 4be5932..528d7d9 100644
+--- a/skills/generate-agents-md/references/delivery-orchestration.md
++++ b/skills/generate-agents-md/references/delivery-orchestration.md
+@@ -65,7 +65,7 @@ The command fingerprint hashes the command's source file and recognized project-
+ 
+ The runner reserves output and receipt paths exclusively before execution; neither may already exist. A retry must use fresh paths. Failures preserve their diagnostic output; an interrupted execution may leave an empty, invalid receipt, never a passing result. Concurrent attempts cannot reuse the same output pair.
+ 
+-For `targeted_tests`, `frontend_e2e`, `mobile_frontend_e2e`, and `native_mobile_tests`, exit zero alone is insufficient: the captured output must contain a supported native report proving at least one executed test, no failures, and no skipped/pending cases. Supported outputs are unittest's native summary or Playwright/Cypress native JSON (without surrounding log text). `full_test_or_build` defaults to `result_kind: tests`, including wrapper commands; only a real build explicitly registered with `result_kind: build` is exempt from test counts. This optional field is allowed only on that command and is bound by its manifest fingerprint; classify it from the actual command, never to waive failed tests. Business commands do not require test counts. An unsupported runner/report needs an explicit report adapter and remains unverified, not silently passed. The runner and contract validator both use the manifest classification, not a receipt claim.
++For `targeted_tests`, `frontend_e2e`, `mobile_frontend_e2e`, and `native_mobile_tests`, exit zero alone is insufficient: the captured output must contain a supported native report proving at least one executed test, no failures, and no skipped/pending cases. Supported outputs are unittest's native summary, one pytest native terminal summary with a positive passed count (warnings allowed; skipped/deselected/xfail/xpass/error/failure or mixed/duplicate summaries rejected), or Playwright/Cypress native JSON (without surrounding log text). `full_test_or_build` defaults to `result_kind: tests`, including wrapper commands; only a real build explicitly registered with `result_kind: build` is exempt from test counts. This optional field is allowed only on that command and is bound by its manifest fingerprint; classify it from the actual command, never to waive failed tests. Business commands do not require test counts. An unsupported runner/report needs an explicit report adapter and remains unverified, not silently passed. The runner and contract validator both use the manifest classification, not a receipt claim.
+ 
+ Mutation validation first requires each distinct test target to load, execute nonzero tests and pass on the unmodified candidate; reuse that baseline only within the current invocation. Only an executed test failure kills a mutant. Missing targets, import/syntax load errors, zero executed tests and worker timeouts invalidate the run rather than count as kills.
+ 
+@@ -92,3 +92,9 @@ Stop and record an open defect when the same failure fingerprint repeats twice,
+ ## Agent budget
+ 
+ Do not create an Agent merely because a workflow stage exists. The planner requests independent roles only at closure candidate, completion, high-risk, actual UI interaction/design work, or explicit human-review triggers. Plain user-visible text does not imply UI/UX work. Keep one leased writer; independent roles are read-only and receive only the contract summary, affected requirements/files, exact gate input, and the artifact they must return.
++
++### External Python governance tools
++
++The command schema (version 1) accepts an optional per-command `trusted_external_entrypoint` object with exactly two string fields: `path` (the canonical absolute regular Python script file) and `sha256` (its current lowercase 64-character SHA-256). Existing project-local commands omit it; the public template stays project-local by default. For an external tool, resolve its actual installed entry, hash its bytes, put that exact absolute path in `argv`, and record the complete shell-quoted command in a project-local normative declaration used by `source`, `source_selector`, and `source_command`. Do not use an environment-variable placeholder in the final manifest. The validator CLI remains `flowctl.py check commands MANIFEST --project-root .`; trust comes from the hashed manifest, not a CLI bypass.
++
++The binding permits only that Python script entry, including normal Python flags before the script. Missing/unknown fields, unused bindings, noncanonical paths, symbolic-link aliases, missing files, and hash drift fail closed. The gate planner also reads and hashes the live external entry, so changing it invalidates command evidence. Source files and working directories remain project-relative; this execution declaration never expands module ownership or project write scope. The hash binds entry bytes, not all imported dependencies or OS-level isolation; bind required dependency/configuration fingerprints separately in the existing context contract. Reinstallation changes the path/hash: refresh the declaration and rerun affected gates instead of reusing stale receipts.
+diff --git a/skills/generate-agents-md/scripts/delivery_gate_planner.py b/skills/generate-agents-md/scripts/delivery_gate_planner.py
+index 0456e98..cbd00d6 100644
+--- a/skills/generate-agents-md/scripts/delivery_gate_planner.py
++++ b/skills/generate-agents-md/scripts/delivery_gate_planner.py
+@@ -147,7 +147,10 @@ def compute_command_fingerprints(contract: object, project_root: Path) -> dict[s
+ 
+ 
+ def _command_files(item: dict[str, object], root: Path) -> list[dict[str, str]]:
++    from validate_project_commands import _validate_external_binding, _validate_command_entrypoint, python_script_entrypoint
++
+     paths = set()
++    external_files = []
+     source = item.get("source")
+     if isinstance(source, str) and (root / source).is_file():
+         paths.add(source)
+@@ -155,15 +158,28 @@ def _command_files(item: dict[str, object], root: Path) -> list[dict[str, str]]:
+     argv = item.get("argv", [])
+     if not isinstance(argv, list):
+         raise GatePlanError("command argv must be an array")
++    binding = item.get("trusted_external_entrypoint")
++    if "trusted_external_entrypoint" in item:
++        issues = []
++        _validate_external_binding(binding, issues)
++        _validate_command_entrypoint(argv, base, root, str(item.get("id")), issues, binding)
++        if issues:
++            raise GatePlanError("invalid or stale external command entrypoint")
+     candidates = _command_entrypoints(argv, base)
+     for path in candidates:
+         if not path.is_file():
+             continue
++        resolved = path.resolve()
+         try:
++            resolved.relative_to(root)
+             paths.add(path.relative_to(root).as_posix())
+         except ValueError as error:
+-            raise GatePlanError("command input escapes project root") from error
+-    return [_live_path(path, root) for path in sorted(paths)]
++            if (isinstance(binding, dict) and str(path) == str(resolved) == binding["path"]
++                    and python_script_entrypoint(argv) == binding["path"]):
++                external_files.append({"path": str(resolved), "sha256": hashlib.sha256(resolved.read_bytes()).hexdigest()})
++            else:
++                raise GatePlanError("command input escapes project root") from error
++    return [_live_path(path, root) for path in sorted(paths)] + external_files
+ 
+ 
+ def _command_entrypoints(argv: list[object], base: Path) -> list[Path]:
+diff --git a/skills/generate-agents-md/scripts/gate_test_results.py b/skills/generate-agents-md/scripts/gate_test_results.py
+index 80a1594..c050439 100644
+--- a/skills/generate-agents-md/scripts/gate_test_results.py
++++ b/skills/generate-agents-md/scripts/gate_test_results.py
+@@ -7,6 +7,15 @@ from frontend_report_validation import _native_report_counts
+ from strict_json import loads as strict_json_loads
+ 
+ 
++PYTEST_SUMMARY = re.compile(
++    r'^=*[ \t]*(?P<counts>\d+ [a-z]+(?:, \d+ [a-z]+)*|no tests ran) in '
++    r'\d+(?:\.\d+)?s(?: \(\d+:\d{2}:\d{2}\))?[ \t]*=*[ \t]*$', re.MULTILINE)
++
++PYTEST_CANDIDATE = re.compile(
++    r'^=*[ \t]*(?:\d+ (?:passed|failed|skipped|errors?|xfailed|xpassed|deselected)'
++    r'|no tests ran)[^\n]*$', re.MULTILINE)
++
++
+ TEST_COMMANDS = {'targeted_tests', 'frontend_e2e', 'mobile_frontend_e2e', 'native_mobile_tests'}
+ 
+ 
+@@ -39,6 +48,10 @@ def invokes_test_framework(argv: object) -> bool:
+ 
+ def _looks_like_test_report(payload: bytes) -> bool:
+     text = payload.decode('utf-8', errors='replace')
++    # Detection is broader than acceptance so a malformed test report cannot
++    # evade strict parsing merely because a wrapper was labelled as a build.
++    if PYTEST_CANDIDATE.search(text):
++        return True
+     if re.search(r'^Ran \d+ tests? in ', text, re.MULTILINE):
+         return True
+     try:
+@@ -68,6 +81,20 @@ def test_result_passes(command_id: str, argv: object, payload: bytes, *, result_
+     browser_framework = invoked_framework if invoked_framework in {'playwright', 'cypress'} else None
+     # unittest's native summary: exactly one run, positive count, no skip/fail.
+     runs = list(re.finditer(r'^Ran (\d+) tests? in [0-9.]+s$', text, re.MULTILINE))
++    pytest_candidates = list(PYTEST_CANDIDATE.finditer(text))
++    if pytest_candidates:
++        if (len(pytest_candidates) != 1 or runs or invoked_framework not in {None, 'pytest', 'py.test'}):
++            return False
++        summary = PYTEST_SUMMARY.fullmatch(pytest_candidates[0].group())
++        if summary is None:
++            return False
++        counts = re.findall(r'(\d+) ([a-z]+)', summary['counts'])
++        labels = [label.rstrip("s") if label in {"warning", "warnings"} else label for _, label in counts]
++        return (len(labels) == len(set(labels)) and 'passed' in labels
++                and all(label in {'passed', 'warning', 'warnings'} and int(count) > 0
++                        for count, label in counts))
++    if invoked_framework in {'pytest', 'py.test'}:
++        return False
+     if runs and browser_framework is None:
+         # Buffered stdout can follow stderr's summary; bind OK to that summary.
+         return (len(runs) == 1 and int(runs[0].group(1)) > 0
+diff --git a/skills/generate-agents-md/scripts/mutation_cases_command_execution.py b/skills/generate-agents-md/scripts/mutation_cases_command_execution.py
+index 6c41474..3d33a04 100644
+--- a/skills/generate-agents-md/scripts/mutation_cases_command_execution.py
++++ b/skills/generate-agents-md/scripts/mutation_cases_command_execution.py
+@@ -42,7 +42,7 @@ COMMAND_EXECUTION_MUTANT_CASES = (
+     ),
+     (
+         "python-command-entrypoint-check-disabled", "scripts/validate_project_commands.py",
+-        "    _validate_command_entrypoint(argv, working_directory, root, command_id, issues)\n",
++        "    _validate_command_entrypoint(argv, working_directory, root, command_id, issues,\n                                 item.get(\"trusted_external_entrypoint\"))\n",
+         "",
+         "scripts.test_validate_project_commands.ProjectCommandValidatorTests.test_python_script_entrypoint_must_exist_and_comment_is_not_provenance",
+     ),
+diff --git a/skills/generate-agents-md/scripts/mutation_cases_strict.py b/skills/generate-agents-md/scripts/mutation_cases_strict.py
+index 34e0171..35045b3 100644
+--- a/skills/generate-agents-md/scripts/mutation_cases_strict.py
++++ b/skills/generate-agents-md/scripts/mutation_cases_strict.py
+@@ -10,7 +10,7 @@ STRICT_MUTANT_CASES = (
+     ),
+     (
+         "commands-exact-entry-fields-check-disabled", "scripts/validate_project_commands.py",
+-        "    if set(item) - {'result_kind'} != COMMAND_FIELDS:",
++        "    if set(item) - {'result_kind', 'trusted_external_entrypoint'} != COMMAND_FIELDS:",
+         "    if False:",
+         "scripts.test_validate_project_commands.ProjectCommandValidatorTests.test_duplicate_or_unknown_command_fields_fail_closed",
+     ),
+diff --git a/skills/generate-agents-md/scripts/test_gate_test_results.py b/skills/generate-agents-md/scripts/test_gate_test_results.py
+index 41990a2..71bb7a9 100644
+--- a/skills/generate-agents-md/scripts/test_gate_test_results.py
++++ b/skills/generate-agents-md/scripts/test_gate_test_results.py
+@@ -34,6 +34,37 @@ class GateTestResultsTests(unittest.TestCase):
+             with self.subTest(text=text):
+                 self.assertFalse(test_result_passes('targeted_tests', argv, text.encode()))
+ 
++    def test_pytest_native_summary_requires_one_positive_all_passed_run(self):
++        entries = (['pytest'], ['py.test'], ['python3', '-m', 'pytest'], ['python3', 'scripts/test.py'])
++        good = b'.................................... [100%]\n36 passed in 1.94s\n'
++        for argv in entries:
++            for report in (good, b'===== 36 passed in 1.94s =====', b'1 passed, 2 warnings in 0.12s'):
++                self.assertTrue(test_result_passes('targeted_tests', argv, report), (argv, report))
++            for report in (b'0 passed in 0.1s', b'no tests ran in 0.1s',
++                           b'1 passed, 1 skipped in 0.1s', b'1 passed, 1 failed in 0.1s',
++                           b'1 passed, 1 error in 0.1s', b'1 passed, 1 xfailed in 0.1s',
++                           b'1 passed, 1 xpassed in 0.1s', b'1 passed, 1 deselected in 0.1s',
++                           b'1 passed1 warnings in 0.01s', b'1 passed in 0.01s (1 failed)',
++                           b'1 passed, 1 warning, 1 warnings in 0.01s',
++                           good + good, good + b'1 failed in 0.1s', good + b'\xff',
++                           good + b'Ran 1 test in 0.1s\n\nOK', b'1 passed, 1 passed in 0.1s'):
++                self.assertFalse(test_result_passes('targeted_tests', argv, report), (argv, report))
++                self.assertFalse(test_result_passes('full_test_or_build', argv, report, result_kind='build'), (argv, report))
++        for argv in entries[:3]:
++            self.assertFalse(test_result_passes('targeted_tests', argv, passing_output([]).encode()))
++        self.assertFalse(test_result_passes('targeted_tests', ['python3', '-m', 'unittest'], good))
++
++    def test_malformed_pytest_summary_cannot_hide_beside_a_passing_summary(self):
++        good = b'1 passed in 0.01s'
++        for bad in (b'1 failed in 0.01s garbage', b'1 passed1 warnings in 0.01s',
++                    b'1 passed in 0.01s (1 failed)', b'1 error in invalid-time',
++                    b'no tests ran in 0.01s extra'):
++            for report in (bad + b'\n' + good, good + b'\n' + bad):
++                for argv in (['pytest'], ['python3', 'scripts/test.py']):
++                    self.assertFalse(test_result_passes('targeted_tests', argv, report), report)
++                    self.assertFalse(test_result_passes('full_test_or_build', argv, report,
++                                                       result_kind='build'), report)
++
+     def test_build_without_test_framework_does_not_require_test_counts(self):
+         self.assertTrue(test_result_passes('full_test_or_build', ['npm', 'run', 'build'],
+                                          b'build complete', result_kind='build'))
+diff --git a/skills/generate-agents-md/scripts/test_validate_project_commands.py b/skills/generate-agents-md/scripts/test_validate_project_commands.py
+index 1115afa..77cf7a6 100644
+--- a/skills/generate-agents-md/scripts/test_validate_project_commands.py
++++ b/skills/generate-agents-md/scripts/test_validate_project_commands.py
+@@ -1,6 +1,8 @@
+ from __future__ import annotations
+ 
++import hashlib
+ import json
++import shlex
+ import sys
+ import tempfile
+ import unittest
+@@ -230,6 +232,61 @@ class ProjectCommandValidatorTests(unittest.TestCase):
+             <= self.codes()
+         )
+ 
++    def test_external_python_entrypoint_requires_exact_hash_bound_declaration(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            external = Path(directory).resolve() / "flowctl.py"
++            external.write_text("raise SystemExit(0)\n", encoding="utf-8")
++            data = self._manifest()
++            item = data["commands"][0]
++            command = shlex.join(["python3", str(external), "--help"])
++            item.update(argv=["python3", str(external), "--help"],
++                        source_selector=command, source_command=command)
++            with (self.root / "commands.txt").open("a") as stream:
++                stream.write(command + "\n")
++            self.path.write_text(json.dumps(data))
++            self.assertIn("missing-command-entrypoint", self.codes())
++            item["trusted_external_entrypoint"] = {
++                "path": str(external), "sha256": hashlib.sha256(external.read_bytes()).hexdigest(),
++            }
++            self.path.write_text(json.dumps(data))
++            self.assertEqual(set(), self.codes())
++            from delivery_gate_planner import compute_command_fingerprints
++            contract = {"artifacts": {"command_manifest": {"path": "commands.json"}}}
++            self.assertIn(item["id"], compute_command_fingerprints(contract, self.root))
++            for flags in (["-B"], ["-W", "ignore"], ["-X", "dev"], ["--"]):
++                item["argv"] = ["python3", *flags, str(external), "--help"]
++                item["source_command"] = item["source_selector"] = shlex.join(item["argv"])
++                with (self.root / "commands.txt").open("a") as stream:
++                    stream.write(item["source_command"] + "\n")
++                self.path.write_text(json.dumps(data))
++                self.assertEqual(set(), self.codes())
++                self.assertIn(item["id"], compute_command_fingerprints(contract, self.root))
++            external.write_text("raise SystemExit(1)\n")
++            self.assertIn("external-entrypoint-hash-mismatch", self.codes())
++
++    def test_external_entrypoint_alias_and_invalid_binding_fail_closed(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            external = Path(directory).resolve() / "flowctl.py"
++            external.write_text("raise SystemExit(0)\n")
++            alias = self.root / "alias.py"
++            alias.symlink_to(external)
++            for raw, binding in (
++                (str(alias), {"path": str(external), "sha256": hashlib.sha256(external.read_bytes()).hexdigest()}),
++                (str(external), {"path": str(alias), "sha256": hashlib.sha256(external.read_bytes()).hexdigest()}),
++                (str(external), {"path": str(external), "sha256": "bad"}),
++                (str(external), {"path": str(external), "sha256": "0" * 64, "allow": True}),
++                (str(external), None),
++            ):
++                with self.subTest(raw=raw, binding=binding):
++                    data = self._manifest()
++                    command = shlex.join(["python3", raw])
++                    data["commands"][0].update(argv=["python3", raw], source_selector=command,
++                        source_command=command, trusted_external_entrypoint=binding)
++                    with (self.root / "commands.txt").open("a") as stream:
++                        stream.write(command + "\n")
++                    self.path.write_text(json.dumps(data))
++                    self.assertTrue(self.codes())
++
+     def test_fenced_markdown_command_is_not_provenance(self) -> None:
+         command = "python3 -m compileall"
+         data = self._manifest()
+diff --git a/skills/generate-agents-md/scripts/validate_project_commands.py b/skills/generate-agents-md/scripts/validate_project_commands.py
+index fe3e1b8..022f58c 100644
+--- a/skills/generate-agents-md/scripts/validate_project_commands.py
++++ b/skills/generate-agents-md/scripts/validate_project_commands.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ import argparse
++import hashlib
+ import json
+ import re
+ import shlex
+@@ -184,8 +185,10 @@ def _read_json(path: Path) -> tuple[dict[str, object] | None, list[Issue]]:
+ 
+ 
+ def _validate_command_fields(item: dict[str, object], issues: list[Issue]) -> None:
+-    if set(item) - {'result_kind'} != COMMAND_FIELDS:
++    if set(item) - {'result_kind', 'trusted_external_entrypoint'} != COMMAND_FIELDS:
+         issues.append(Issue("error", "invalid-command-fields", "命令条目含缺失或未知字段"))
++    if "trusted_external_entrypoint" in item:
++        _validate_external_binding(item["trusted_external_entrypoint"], issues)
+     if 'result_kind' in item and (
+             item.get('id') != 'full_test_or_build' or item['result_kind'] not in ('tests', 'build')):
+         issues.append(Issue("error", "invalid-command-result-kind", "仅 full_test_or_build 可声明 tests/build 类型"))
+@@ -219,7 +222,8 @@ def _validate_command(item: dict[str, object], root: Path, issues: list[Issue])
+     elif shutil.which(argv[0]) is None:
+         issues.append(Issue("error", "missing-executable", f"{command_id} 的可执行文件不存在：{argv[0]}"))
+     working_directory = _resolve_path(str(item.get("working_directory", "")), root, issues, "working-directory", require_directory=True)
+-    _validate_command_entrypoint(argv, working_directory, root, command_id, issues)
++    _validate_command_entrypoint(argv, working_directory, root, command_id, issues,
++                                 item.get("trusted_external_entrypoint"))
+     source = _resolve_path(str(item.get("source", "")), root, issues, "command-source", require_directory=False)
+     selector = str(item.get("source_selector", "")).strip()
+     source_command = str(item.get("source_command", "")).strip()
+@@ -243,19 +247,24 @@ def _validate_command(item: dict[str, object], root: Path, issues: list[Issue])
+ 
+ def _validate_command_entrypoint(
+     argv: list[str], working_directory: Path | None, root: Path,
+-    command_id: str, issues: list[Issue],
++    command_id: str, issues: list[Issue], external_binding: object = None,
+ ) -> None:
+-    executable = Path(argv[0]).name.casefold()
+-    if not executable.startswith("python") or len(argv) < 2 or argv[1].startswith("-"):
+-        return
+-    raw = argv[1]
+-    if not raw.endswith(".py"):
++    raw = python_script_entrypoint(argv)
++    if raw is None:
++        if external_binding is not None:
++            issues.append(Issue("error", "unused-external-entrypoint", "外部绑定只适用于 Python 脚本入口"))
+         return
+     base = working_directory if working_directory and working_directory.is_dir() else root
+     candidate = (base / raw).resolve()
+     try:
+         candidate.relative_to(root)
++        if external_binding is not None:
++            issues.append(Issue("error", "unused-external-entrypoint", "项目内入口不应声明外部绑定"))
+     except ValueError:
++        if (isinstance(external_binding, dict)
++                and raw == str(candidate) == external_binding.get("path")
++                and candidate.is_file()):
++            return  # Binding shape, canonical path and bytes were checked above.
+         candidate = Path()
+     if not candidate.is_file():
+         issues.append(Issue(
+@@ -264,6 +273,41 @@ def _validate_command_entrypoint(
+         ))
+ 
+ 
++def python_script_entrypoint(argv: list[str]) -> str | None:
++    if not argv or not Path(argv[0]).name.casefold().startswith("python"):
++        return None
++    index = 1
++    while index < len(argv):
++        token = argv[index]
++        if token in {"-m", "-c", "-"} or token.startswith("-c"):
++            return None
++        if token == "--":
++            return argv[index + 1] if index + 1 < len(argv) else None
++        if not token.startswith("-"):
++            return token
++        index += 2 if token in {"-W", "-X", "--check-hash-based-pycs"} else 1
++    return None
++
++
++def _validate_external_binding(binding: object, issues: list[Issue]) -> None:
++    if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"}
++            or not isinstance(binding.get("path"), str)
++            or not isinstance(binding.get("sha256"), str)
++            or re.fullmatch(r"[0-9a-f]{64}", binding["sha256"]) is None):
++        issues.append(Issue("error", "invalid-external-entrypoint", "外部入口必须精确声明 path 和 SHA-256"))
++        return
++    path = Path(binding["path"])
++    try:
++        if not path.is_absolute() or str(path.resolve(strict=True)) != binding["path"] or not path.is_file():
++            raise ValueError("外部入口必须是规范绝对普通文件路径，不允许别名或符号链接")
++        actual = hashlib.sha256(path.read_bytes()).hexdigest()
++    except (OSError, ValueError, RuntimeError) as error:
++        issues.append(Issue("error", "invalid-external-entrypoint", str(error)))
++        return
++    if actual != binding["sha256"]:
++        issues.append(Issue("error", "external-entrypoint-hash-mismatch", "外部入口 SHA-256 已漂移"))
++
++
+ def _command_source_text(source: Path) -> str:
+     text = source.read_text(encoding="utf-8", errors="replace")
+     if source.suffix.casefold() in {".md", ".mdx", ".markdown"}:

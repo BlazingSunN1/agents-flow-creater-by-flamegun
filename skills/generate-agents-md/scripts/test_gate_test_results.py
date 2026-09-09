@@ -34,6 +34,37 @@ class GateTestResultsTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertFalse(test_result_passes('targeted_tests', argv, text.encode()))
 
+    def test_pytest_native_summary_requires_one_positive_all_passed_run(self):
+        entries = (['pytest'], ['py.test'], ['python3', '-m', 'pytest'], ['python3', 'scripts/test.py'])
+        good = b'.................................... [100%]\n36 passed in 1.94s\n'
+        for argv in entries:
+            for report in (good, b'===== 36 passed in 1.94s =====', b'1 passed, 2 warnings in 0.12s'):
+                self.assertTrue(test_result_passes('targeted_tests', argv, report), (argv, report))
+            for report in (b'0 passed in 0.1s', b'no tests ran in 0.1s',
+                           b'1 passed, 1 skipped in 0.1s', b'1 passed, 1 failed in 0.1s',
+                           b'1 passed, 1 error in 0.1s', b'1 passed, 1 xfailed in 0.1s',
+                           b'1 passed, 1 xpassed in 0.1s', b'1 passed, 1 deselected in 0.1s',
+                           b'1 passed1 warnings in 0.01s', b'1 passed in 0.01s (1 failed)',
+                           b'1 passed, 1 warning, 1 warnings in 0.01s',
+                           good + good, good + b'1 failed in 0.1s', good + b'\xff',
+                           good + b'Ran 1 test in 0.1s\n\nOK', b'1 passed, 1 passed in 0.1s'):
+                self.assertFalse(test_result_passes('targeted_tests', argv, report), (argv, report))
+                self.assertFalse(test_result_passes('full_test_or_build', argv, report, result_kind='build'), (argv, report))
+        for argv in entries[:3]:
+            self.assertFalse(test_result_passes('targeted_tests', argv, passing_output([]).encode()))
+        self.assertFalse(test_result_passes('targeted_tests', ['python3', '-m', 'unittest'], good))
+
+    def test_malformed_pytest_summary_cannot_hide_beside_a_passing_summary(self):
+        good = b'1 passed in 0.01s'
+        for bad in (b'1 failed in 0.01s garbage', b'1 passed1 warnings in 0.01s',
+                    b'1 passed in 0.01s (1 failed)', b'1 error in invalid-time',
+                    b'no tests ran in 0.01s extra'):
+            for report in (bad + b'\n' + good, good + b'\n' + bad):
+                for argv in (['pytest'], ['python3', 'scripts/test.py']):
+                    self.assertFalse(test_result_passes('targeted_tests', argv, report), report)
+                    self.assertFalse(test_result_passes('full_test_or_build', argv, report,
+                                                       result_kind='build'), report)
+
     def test_build_without_test_framework_does_not_require_test_counts(self):
         self.assertTrue(test_result_passes('full_test_or_build', ['npm', 'run', 'build'],
                                          b'build complete', result_kind='build'))

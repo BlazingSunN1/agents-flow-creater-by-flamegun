@@ -1,0 +1,9 @@
+RUN skill-package
+RUN code-structure
+RUN cli-smoke
+RUN swimlane-js-syntax
+PASS skill-package 0.027s
+PASS code-structure 0.229s
+PASS cli-smoke 3.101s
+PASS swimlane-js-syntax 0.021s
+valid=true requested=freeze effective=freeze checks=4 full_receipt=freeze-candidate

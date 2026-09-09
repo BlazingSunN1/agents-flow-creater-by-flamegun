@@ -1,0 +1,7 @@
+----------------------------------------------------------------------
+Ran 86 tests in 0.629s
+
+OK
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md

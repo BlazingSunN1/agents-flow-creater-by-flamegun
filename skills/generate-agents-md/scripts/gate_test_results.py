@@ -7,6 +7,15 @@ from frontend_report_validation import _native_report_counts
 from strict_json import loads as strict_json_loads
 
 
+PYTEST_SUMMARY = re.compile(
+    r'^=*[ \t]*(?P<counts>\d+ [a-z]+(?:, \d+ [a-z]+)*|no tests ran) in '
+    r'\d+(?:\.\d+)?s(?: \(\d+:\d{2}:\d{2}\))?[ \t]*=*[ \t]*$', re.MULTILINE)
+
+PYTEST_CANDIDATE = re.compile(
+    r'^=*[ \t]*(?:\d+ (?:passed|failed|skipped|errors?|xfailed|xpassed|deselected)'
+    r'|no tests ran)[^\n]*$', re.MULTILINE)
+
+
 TEST_COMMANDS = {'targeted_tests', 'frontend_e2e', 'mobile_frontend_e2e', 'native_mobile_tests'}
 
 
@@ -39,6 +48,10 @@ def invokes_test_framework(argv: object) -> bool:
 
 def _looks_like_test_report(payload: bytes) -> bool:
     text = payload.decode('utf-8', errors='replace')
+    # Detection is broader than acceptance so a malformed test report cannot
+    # evade strict parsing merely because a wrapper was labelled as a build.
+    if PYTEST_CANDIDATE.search(text):
+        return True
     if re.search(r'^Ran \d+ tests? in ', text, re.MULTILINE):
         return True
     try:
@@ -68,6 +81,20 @@ def test_result_passes(command_id: str, argv: object, payload: bytes, *, result_
     browser_framework = invoked_framework if invoked_framework in {'playwright', 'cypress'} else None
     # unittest's native summary: exactly one run, positive count, no skip/fail.
     runs = list(re.finditer(r'^Ran (\d+) tests? in [0-9.]+s$', text, re.MULTILINE))
+    pytest_candidates = list(PYTEST_CANDIDATE.finditer(text))
+    if pytest_candidates:
+        if (len(pytest_candidates) != 1 or runs or invoked_framework not in {None, 'pytest', 'py.test'}):
+            return False
+        summary = PYTEST_SUMMARY.fullmatch(pytest_candidates[0].group())
+        if summary is None:
+            return False
+        counts = re.findall(r'(\d+) ([a-z]+)', summary['counts'])
+        labels = [label.rstrip("s") if label in {"warning", "warnings"} else label for _, label in counts]
+        return (len(labels) == len(set(labels)) and 'passed' in labels
+                and all(label in {'passed', 'warning', 'warnings'} and int(count) > 0
+                        for count, label in counts))
+    if invoked_framework in {'pytest', 'py.test'}:
+        return False
     if runs and browser_framework is None:
         # Buffered stdout can follow stderr's summary; bind OK to that summary.
         return (len(runs) == 1 and int(runs[0].group(1)) > 0

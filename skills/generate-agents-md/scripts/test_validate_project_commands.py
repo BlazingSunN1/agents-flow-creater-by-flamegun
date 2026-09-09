@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import shlex
 import sys
 import tempfile
 import unittest
@@ -229,6 +231,61 @@ class ProjectCommandValidatorTests(unittest.TestCase):
             {"missing-command-entrypoint", "undeclared-command", "command-declaration-mismatch"}
             <= self.codes()
         )
+
+    def test_external_python_entrypoint_requires_exact_hash_bound_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            external = Path(directory).resolve() / "flowctl.py"
+            external.write_text("raise SystemExit(0)\n", encoding="utf-8")
+            data = self._manifest()
+            item = data["commands"][0]
+            command = shlex.join(["python3", str(external), "--help"])
+            item.update(argv=["python3", str(external), "--help"],
+                        source_selector=command, source_command=command)
+            with (self.root / "commands.txt").open("a") as stream:
+                stream.write(command + "\n")
+            self.path.write_text(json.dumps(data))
+            self.assertIn("missing-command-entrypoint", self.codes())
+            item["trusted_external_entrypoint"] = {
+                "path": str(external), "sha256": hashlib.sha256(external.read_bytes()).hexdigest(),
+            }
+            self.path.write_text(json.dumps(data))
+            self.assertEqual(set(), self.codes())
+            from delivery_gate_planner import compute_command_fingerprints
+            contract = {"artifacts": {"command_manifest": {"path": "commands.json"}}}
+            self.assertIn(item["id"], compute_command_fingerprints(contract, self.root))
+            for flags in (["-B"], ["-W", "ignore"], ["-X", "dev"], ["--"]):
+                item["argv"] = ["python3", *flags, str(external), "--help"]
+                item["source_command"] = item["source_selector"] = shlex.join(item["argv"])
+                with (self.root / "commands.txt").open("a") as stream:
+                    stream.write(item["source_command"] + "\n")
+                self.path.write_text(json.dumps(data))
+                self.assertEqual(set(), self.codes())
+                self.assertIn(item["id"], compute_command_fingerprints(contract, self.root))
+            external.write_text("raise SystemExit(1)\n")
+            self.assertIn("external-entrypoint-hash-mismatch", self.codes())
+
+    def test_external_entrypoint_alias_and_invalid_binding_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            external = Path(directory).resolve() / "flowctl.py"
+            external.write_text("raise SystemExit(0)\n")
+            alias = self.root / "alias.py"
+            alias.symlink_to(external)
+            for raw, binding in (
+                (str(alias), {"path": str(external), "sha256": hashlib.sha256(external.read_bytes()).hexdigest()}),
+                (str(external), {"path": str(alias), "sha256": hashlib.sha256(external.read_bytes()).hexdigest()}),
+                (str(external), {"path": str(external), "sha256": "bad"}),
+                (str(external), {"path": str(external), "sha256": "0" * 64, "allow": True}),
+                (str(external), None),
+            ):
+                with self.subTest(raw=raw, binding=binding):
+                    data = self._manifest()
+                    command = shlex.join(["python3", raw])
+                    data["commands"][0].update(argv=["python3", raw], source_selector=command,
+                        source_command=command, trusted_external_entrypoint=binding)
+                    with (self.root / "commands.txt").open("a") as stream:
+                        stream.write(command + "\n")
+                    self.path.write_text(json.dumps(data))
+                    self.assertTrue(self.codes())
 
     def test_fenced_markdown_command_is_not_provenance(self) -> None:
         command = "python3 -m compileall"

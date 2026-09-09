@@ -1,0 +1,129 @@
+RUN skill-package
+RUN code-structure
+RUN cli-smoke
+RUN unit-regression
+RUN mutation
+RUN swimlane-js-syntax
+PASS skill-package 0.026s
+PASS code-structure 0.232s
+PASS cli-smoke 3.078s
+FAIL unit-regression 98.244s
+usage: flowctl.py [-h] {doctor,scope,plan,gate,record,check,strict} ...
+
+Agents Flow 的单一命令入口；旧 scripts/*.py 入口继续兼容。
+
+positional arguments:
+  {doctor,scope,plan,gate,record,check,strict}
+    strict              仅在显式启用 strict-delivery-security 时使用
+
+optional arguments:
+  -h, --help            show this help message and exit
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md
+ERROR gate-test-result-not-pass: expected nonempty passing native test report; see delivery-orchestration.md
+======================================================================
+FAIL: test_pytest_native_summary_requires_one_positive_all_passed_run (test_gate_test_results.GateTestResultsTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/test_gate_test_results.py", line 52, in test_pytest_native_summary_requires_one_positive_all_passed_run
+    self.assertFalse(test_result_passes('full_test_or_build', argv, report, result_kind='build'), (argv, report))
+AssertionError: True is not false : (['python3', 'scripts/test.py'], b'1 passed1 warnings in 0.01s')
+
+======================================================================
+FAIL: test_heavy_contracts_use_progressive_disclosure (test_validate_skill.SkillValidationTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/test_validate_skill.py", line 630, in test_heavy_contracts_use_progressive_disclosure
+    self.assertLessEqual(len(skill.encode("utf-8")), 10_000)
+AssertionError: 10183 not less than or equal to 10000
+
+----------------------------------------------------------------------
+Ran 1104 tests in 98.115s
+
+FAILED (failures=2)
+FAIL mutation 46.160s
+ng-disabled
+KILLED module-latest-completion-gate-disabled
+KILLED module-latest-record-binding-disabled
+KILLED module-latest-swimlane-binding-disabled
+KILLED automated-review-record-gate-disabled
+KILLED automated-review-open-findings-check-disabled
+KILLED module-run-review-evidence-binding-disabled
+KILLED progress-current-run-index-binding-disabled
+KILLED module-run-stage-check-disabled
+KILLED module-run-open-risk-check-disabled
+KILLED automated-review-execution-result-check-disabled
+KILLED declared-record-nul-check-disabled
+KILLED context-stable-run-id-check-disabled
+KILLED delivery-stable-run-id-check-disabled
+KILLED context-stable-module-id-check-disabled
+KILLED delivery-stable-module-id-check-disabled
+KILLED declared-record-casefold-duplicate-check-disabled
+KILLED declared-record-unexpected-content-check-disabled
+KILLED field-specific-closed-semantics-disabled
+KILLED declared-record-parent-symlink-check-disabled
+KILLED declared-record-hardlink-alias-check-disabled
+KILLED review-command-argv-binding-disabled
+KILLED review-output-hash-binding-disabled
+KILLED review-output-structured-transcript-check-disabled
+KILLED review-output-changed-file-alias-check-disabled
+KILLED module-run-current-evidence-path-binding-disabled
+KILLED module-latest-current-evidence-path-binding-disabled
+KILLED review-transcript-unknown-fields-check-disabled
+KILLED review-transcript-bool-integer-check-disabled
+KILLED review-transcript-bool-rerun-check-disabled
+KILLED module-record-extra-evidence-path-check-disabled
+KILLED review-transcript-duplicate-json-key-check-disabled
+KILLED declared-record-hidden-heading-check-disabled
+KILLED review-transcript-changed-files-binding-disabled
+KILLED review-transcript-code-fingerprint-binding-disabled
+KILLED review-transcript-command-manifest-binding-disabled
+KILLED module-run-baseline-binding-disabled
+KILLED module-run-build-binding-disabled
+KILLED module-run-context-binding-disabled
+KILLED module-run-risk-binding-disabled
+KILLED record-heading-identity-binding-disabled
+KILLED automated-review-scope-binding-disabled
+KILLED context-risk-binding-disabled
+KILLED context-module-file-map-check-disabled
+KILLED context-module-map-cache-binding-disabled
+KILLED swimlane-module-ownership-check-disabled
+KILLED swimlane-diagram-inode-uniqueness-disabled
+KILLED agent-artifact-inode-uniqueness-disabled
+KILLED agent-output-workset-isolation-disabled
+KILLED agent-output-provenance-check-disabled
+KILLED swimlane-flow-trigger-policy-check-disabled
+KILLED swimlane-update-negation-check-disabled
+KILLED swimlane-overfrequency-conflict-check-disabled
+KILLED module-file-unique-ownership-check-disabled
+KILLED review-scope-trailing-nonexecution-check-disabled
+KILLED agent-artifact-content-uniqueness-check-disabled
+KILLED agent-provider-focus-type-check-disabled
+KILLED swimlane-trigger-optional-weakening-check-disabled
+KILLED module-dot-path-alias-check-disabled
+KILLED duplicate-module-id-check-disabled
+KILLED agent-run-id-string-type-check-disabled
+KILLED agent-input-semantic-whitespace-check-disabled
+KILLED agent-input-allowed-paths-check-disabled
+KILLED agent-input-required-role-artifacts-check-disabled
+KILLED agent-input-artifact-hash-check-disabled
+KILLED multi-agent-bool-schema-check-disabled
+KILLED swimlane-bool-schema-check-disabled
+KILLED frontend-bool-schema-check-disabled
+KILLED commands-bool-schema-check-disabled
+KILLED multi-agent-top-level-duplicate-key-check-disabled
+KILLED multi-agent-top-level-exact-fields-check-disabled
+KILLED multi-agent-gate-exact-fields-check-disabled
+KILLED agent-input-exclusion-bool-type-check-disabled
+KILLED agent-input-requirement-filter-check-disabled
+KILLED agent-output-input-manifest-binding-disabled
+KILLED frontend-viewport-bool-alias-check-disabled
+KILLED frontend-e2e-count-bool-alias-check-disabled
+KILLED missing-agent-artifact-early-return-disabled
+KILLED strict-json-duplicate-key-check-disabled
+ERROR mutation-anchor commands-exact-entry-fields-check-disabled expected exactly one source anchor
+PASS swimlane-js-syntax 0.021s
+valid=false requested=full effective=full checks=6 full_receipt=run-full

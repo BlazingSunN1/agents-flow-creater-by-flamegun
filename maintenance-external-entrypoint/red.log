@@ -1,0 +1,15 @@
+.........F..............
+======================================================================
+FAIL: test_external_python_entrypoint_requires_exact_hash_bound_declaration (test_validate_project_commands.ProjectCommandValidatorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/test_validate_project_commands.py", line 252, in test_external_python_entrypoint_requires_exact_hash_bound_declaration
+    self.assertEqual(set(), self.codes())
+AssertionError: Items in the second set but not the first:
+'invalid-command-fields'
+'missing-command-entrypoint'
+
+----------------------------------------------------------------------
+Ran 24 tests in 0.061s
+
+FAILED (failures=1)

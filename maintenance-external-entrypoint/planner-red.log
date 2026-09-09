@@ -1,0 +1,26 @@
+.........E..............
+======================================================================
+ERROR: test_external_python_entrypoint_requires_exact_hash_bound_declaration (test_validate_project_commands.ProjectCommandValidatorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/delivery_gate_planner.py", line 163, in _command_files
+    paths.add(path.relative_to(root).as_posix())
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py", line 929, in relative_to
+    raise ValueError("{!r} is not in the subpath of {!r}"
+ValueError: '/private/var/folders/dg/_z0hfkbj305414qdlftlf6cw0000gn/T/tmposiy_b8c/flowctl.py' is not in the subpath of '/private/var/folders/dg/_z0hfkbj305414qdlftlf6cw0000gn/T/tmpk5s5sj3b' OR one path is relative and the other is absolute.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/test_validate_project_commands.py", line 255, in test_external_python_entrypoint_requires_exact_hash_bound_declaration
+    self.assertIn(item["id"], compute_command_fingerprints(contract, self.root))
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/delivery_gate_planner.py", line 144, in compute_command_fingerprints
+    "entry": item, "files": _command_files(item, project_root.resolve()),
+  File "/Users/kinglone/plugins/agents-flow-creater-by-flamegun/skills/generate-agents-md/scripts/delivery_gate_planner.py", line 165, in _command_files
+    raise GatePlanError("command input escapes project root") from error
+delivery_gate_planner.GatePlanError: command input escapes project root
+
+----------------------------------------------------------------------
+Ran 24 tests in 0.060s
+
+FAILED (errors=1)

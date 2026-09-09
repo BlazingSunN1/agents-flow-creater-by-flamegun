@@ -52,7 +52,7 @@ description: 从仓库事实和需求生成、更新、拆分、公共化或审�
 - 仅按已证实风险加载方案、泳道、功能、原型、测试和独立验收；不适用只记理由，不建空产物。
 - 实现/维护 Agent 用 `gpt-6-astra/medium`；方案、审核、裁决和独立验收用 `gpt-6-astra/high`。后者只读且不持租约；修订只由不同 Agent/run 的当前租约写者执行，写者不得自验。默认保存本地结构绑定，严格模式才要求宿主证明运行身份。
 - 小型任务须影响已知、无行为/契约/流程变化且有定向验证，只复用唯一写者，不增 Agent/全链产物。标准任务最多一个写者和一个只读 `BLACK_BOX` Agent，合并审查、用例复核与黑盒验收；完整多 Agent 仅用于已证实高风险、并发大模块或独立/合规要求。未知先调查。
-- 用 delivery contract/gate receipt 模板建立单一决策索引；规划器只读，租约 writer 经 CAS 合并，禁止手改或复用旧门禁。命令由 `assets/project-commands.template.json` 登记；成果可先跑已核实入口，冻结前须登记。见 `references/delivery-orchestration.md`。
+- 用 delivery contract/gate receipt 模板建立单一决策索引；规划器只读，租约 writer 经 CAS 合并，禁止手改或复用旧门禁。命令模板 `assets/project-commands.template.json`；成果先跑核实入口，冻结前登记；外部绑定见 `references/delivery-orchestration.md`。
 - receipt schema v2 要求实现独占租约、gate 只读同候选、outer 唯一来源、replay 失败关闭；strict 再加宿主证明。v1 仅兼容。见 `references/role-specific-local-receipts.md`。
 - 聚合验证器仅在闭环候选或完成阶段实时执行且不互签；漂移、失败门禁或开放分歧阻断。
 - 仅当 `project` 模式显式选择 `authorization-mode=local-controlled-same-user`，或有已映射的高风险/合规要求时，才调用 `$strict-delivery-security`；默认 `delivery-first-local-coordination` 不加载其严格签名、宿主证明和 bootstrap 流程。核心 Skill 不复制这些细节。

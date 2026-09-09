@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shlex
@@ -184,8 +185,10 @@ def _read_json(path: Path) -> tuple[dict[str, object] | None, list[Issue]]:
 
 
 def _validate_command_fields(item: dict[str, object], issues: list[Issue]) -> None:
-    if set(item) - {'result_kind'} != COMMAND_FIELDS:
+    if set(item) - {'result_kind', 'trusted_external_entrypoint'} != COMMAND_FIELDS:
         issues.append(Issue("error", "invalid-command-fields", "命令条目含缺失或未知字段"))
+    if "trusted_external_entrypoint" in item:
+        _validate_external_binding(item["trusted_external_entrypoint"], issues)
     if 'result_kind' in item and (
             item.get('id') != 'full_test_or_build' or item['result_kind'] not in ('tests', 'build')):
         issues.append(Issue("error", "invalid-command-result-kind", "仅 full_test_or_build 可声明 tests/build 类型"))
@@ -219,7 +222,8 @@ def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) 
     elif shutil.which(argv[0]) is None:
         issues.append(Issue("error", "missing-executable", f"{command_id} 的可执行文件不存在：{argv[0]}"))
     working_directory = _resolve_path(str(item.get("working_directory", "")), root, issues, "working-directory", require_directory=True)
-    _validate_command_entrypoint(argv, working_directory, root, command_id, issues)
+    _validate_command_entrypoint(argv, working_directory, root, command_id, issues,
+                                 item.get("trusted_external_entrypoint"))
     source = _resolve_path(str(item.get("source", "")), root, issues, "command-source", require_directory=False)
     selector = str(item.get("source_selector", "")).strip()
     source_command = str(item.get("source_command", "")).strip()
@@ -243,25 +247,65 @@ def _validate_command(item: dict[str, object], root: Path, issues: list[Issue]) 
 
 def _validate_command_entrypoint(
     argv: list[str], working_directory: Path | None, root: Path,
-    command_id: str, issues: list[Issue],
+    command_id: str, issues: list[Issue], external_binding: object = None,
 ) -> None:
-    executable = Path(argv[0]).name.casefold()
-    if not executable.startswith("python") or len(argv) < 2 or argv[1].startswith("-"):
-        return
-    raw = argv[1]
-    if not raw.endswith(".py"):
+    raw = python_script_entrypoint(argv)
+    if raw is None:
+        if external_binding is not None:
+            issues.append(Issue("error", "unused-external-entrypoint", "外部绑定只适用于 Python 脚本入口"))
         return
     base = working_directory if working_directory and working_directory.is_dir() else root
     candidate = (base / raw).resolve()
     try:
         candidate.relative_to(root)
+        if external_binding is not None:
+            issues.append(Issue("error", "unused-external-entrypoint", "项目内入口不应声明外部绑定"))
     except ValueError:
+        if (isinstance(external_binding, dict)
+                and raw == str(candidate) == external_binding.get("path")
+                and candidate.is_file()):
+            return  # Binding shape, canonical path and bytes were checked above.
         candidate = Path()
     if not candidate.is_file():
         issues.append(Issue(
             "error", "missing-command-entrypoint",
             f"{command_id} 的 Python 脚本入口不存在：{raw}",
         ))
+
+
+def python_script_entrypoint(argv: list[str]) -> str | None:
+    if not argv or not Path(argv[0]).name.casefold().startswith("python"):
+        return None
+    index = 1
+    while index < len(argv):
+        token = argv[index]
+        if token in {"-m", "-c", "-"} or token.startswith("-c"):
+            return None
+        if token == "--":
+            return argv[index + 1] if index + 1 < len(argv) else None
+        if not token.startswith("-"):
+            return token
+        index += 2 if token in {"-W", "-X", "--check-hash-based-pycs"} else 1
+    return None
+
+
+def _validate_external_binding(binding: object, issues: list[Issue]) -> None:
+    if (not isinstance(binding, dict) or set(binding) != {"path", "sha256"}
+            or not isinstance(binding.get("path"), str)
+            or not isinstance(binding.get("sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", binding["sha256"]) is None):
+        issues.append(Issue("error", "invalid-external-entrypoint", "外部入口必须精确声明 path 和 SHA-256"))
+        return
+    path = Path(binding["path"])
+    try:
+        if not path.is_absolute() or str(path.resolve(strict=True)) != binding["path"] or not path.is_file():
+            raise ValueError("外部入口必须是规范绝对普通文件路径，不允许别名或符号链接")
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    except (OSError, ValueError, RuntimeError) as error:
+        issues.append(Issue("error", "invalid-external-entrypoint", str(error)))
+        return
+    if actual != binding["sha256"]:
+        issues.append(Issue("error", "external-entrypoint-hash-mismatch", "外部入口 SHA-256 已漂移"))
 
 
 def _command_source_text(source: Path) -> str:

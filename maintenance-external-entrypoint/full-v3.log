@@ -1,0 +1,13 @@
+RUN skill-package
+RUN code-structure
+RUN cli-smoke
+RUN unit-regression
+RUN mutation
+RUN swimlane-js-syntax
+PASS skill-package 0.025s
+PASS code-structure 0.227s
+PASS cli-smoke 3.090s
+PASS unit-regression 97.161s
+PASS mutation 238.449s
+PASS swimlane-js-syntax 0.022s
+valid=true requested=full effective=full checks=6 full_receipt=run-full

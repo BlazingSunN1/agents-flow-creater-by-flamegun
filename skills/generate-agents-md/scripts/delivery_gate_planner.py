@@ -147,7 +147,10 @@ def compute_command_fingerprints(contract: object, project_root: Path) -> dict[s
 
 
 def _command_files(item: dict[str, object], root: Path) -> list[dict[str, str]]:
+    from validate_project_commands import _validate_external_binding, _validate_command_entrypoint, python_script_entrypoint
+
     paths = set()
+    external_files = []
     source = item.get("source")
     if isinstance(source, str) and (root / source).is_file():
         paths.add(source)
@@ -155,15 +158,28 @@ def _command_files(item: dict[str, object], root: Path) -> list[dict[str, str]]:
     argv = item.get("argv", [])
     if not isinstance(argv, list):
         raise GatePlanError("command argv must be an array")
+    binding = item.get("trusted_external_entrypoint")
+    if "trusted_external_entrypoint" in item:
+        issues = []
+        _validate_external_binding(binding, issues)
+        _validate_command_entrypoint(argv, base, root, str(item.get("id")), issues, binding)
+        if issues:
+            raise GatePlanError("invalid or stale external command entrypoint")
     candidates = _command_entrypoints(argv, base)
     for path in candidates:
         if not path.is_file():
             continue
+        resolved = path.resolve()
         try:
+            resolved.relative_to(root)
             paths.add(path.relative_to(root).as_posix())
         except ValueError as error:
-            raise GatePlanError("command input escapes project root") from error
-    return [_live_path(path, root) for path in sorted(paths)]
+            if (isinstance(binding, dict) and str(path) == str(resolved) == binding["path"]
+                    and python_script_entrypoint(argv) == binding["path"]):
+                external_files.append({"path": str(resolved), "sha256": hashlib.sha256(resolved.read_bytes()).hexdigest()})
+            else:
+                raise GatePlanError("command input escapes project root") from error
+    return [_live_path(path, root) for path in sorted(paths)] + external_files
 
 
 def _command_entrypoints(argv: list[object], base: Path) -> list[Path]:

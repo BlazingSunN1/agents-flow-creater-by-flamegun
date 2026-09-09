@@ -1,0 +1,9 @@
+RUN skill-package
+RUN code-structure
+RUN cli-smoke
+RUN swimlane-js-syntax
+PASS skill-package 0.029s
+PASS code-structure 0.233s
+PASS cli-smoke 3.139s
+PASS swimlane-js-syntax 0.026s
+valid=true requested=quick effective=quick checks=4

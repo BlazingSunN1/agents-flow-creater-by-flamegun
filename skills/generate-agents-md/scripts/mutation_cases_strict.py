@@ -10,7 +10,7 @@ STRICT_MUTANT_CASES = (
     ),
     (
         "commands-exact-entry-fields-check-disabled", "scripts/validate_project_commands.py",
-        "    if set(item) - {'result_kind'} != COMMAND_FIELDS:",
+        "    if set(item) - {'result_kind', 'trusted_external_entrypoint'} != COMMAND_FIELDS:",
         "    if False:",
         "scripts.test_validate_project_commands.ProjectCommandValidatorTests.test_duplicate_or_unknown_command_fields_fail_closed",
     ),
