@@ -292,6 +292,7 @@ def _valid_owned_paths(value: object, *, allow_empty: bool) -> bool:
     return bool(
         isinstance(value, list)
         and (allow_empty or value)
+        and all(isinstance(item, str) for item in value)
         and len(value) == len(set(value))
         and all(_canonical_relative_path(item) for item in value)
     )

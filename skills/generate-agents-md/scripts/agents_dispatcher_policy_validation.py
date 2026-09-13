@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from agents_policy_common import normative_markdown_view
 
 from agents_policy_common import (
     DISPATCHER_OWNERSHIP_HEADING_RE,
@@ -320,6 +321,14 @@ def _validate_mapping(section: str, *, mode: str) -> list[Issue]:
 
 
 def module_ownership_mapping(text: str) -> dict[str, tuple[tuple[str, ...], str]]:
+    text = normative_markdown_view(text)
+    ownership_headings = (
+        match.group(1)
+        for match in re.finditer(r"(?m)^#{1,6}\s+(.+?)\s*$", text)
+        if DISPATCHER_OWNERSHIP_HEADING_RE.search(match.group(1))
+    )
+    if sum(1 for _ in ownership_headings) != 1:
+        return {}
     section = extract_heading_section(text, DISPATCHER_OWNERSHIP_HEADING_RE)
     if section is None:
         return {}

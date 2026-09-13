@@ -144,6 +144,7 @@ def _validate_execution_evidence_policy(text: str, *, mode: str) -> list[Issue]:
 
 def _standard_work_adds_independent_role(text: str) -> bool:
     for clause in _policy_clauses(text):
+        clause = _without_prohibited_agent_roles(clause)
         if re.search(r"(?i)\bstandard\s+work\b|标准任务|普通任务", clause) is None:
             continue
         if re.search(
@@ -491,6 +492,30 @@ def _default_context_expands_workset(clause: str) -> bool:
         or re.search(rf"(?i)(?:{default}).{{0,80}}(?:{load}).{{0,100}}(?:{broad})", clause)
         or re.search(rf"(?i)(?:{broad}).{{0,100}}(?:{load}).{{0,80}}(?:{default})", clause)
     )
+
+
+def _without_prohibited_agent_roles(clause: str) -> str:
+    # Strip only explicitly prohibited role mentions, not the entire clause:
+    # a later affirmative requirement must still reach the policy checks.
+    prohibition = (
+        r"\b(?:must|should|shall|may|can)\s+(?:not|never)\b"
+        r"|\b(?:do|does)\s+not\b|\bnever\b"
+        r"|\u4e0d\u5f97|\u4e0d\u5e94(?:\u8be5)?|\u7981\u6b62|\u4e0d\u5141\u8bb8|\u65e0\u9700|\u4e0d\u9700\u8981|\u4e0d\u8981"
+    )
+    boundary = (
+        r"[.;!?\u3002\uff1b\uff01\uff1f]"
+        r"|\b(?:but|however|instead|except)\b"
+        r"|\u4f46|\u4e0d\u8fc7|\u7136\u800c"
+        r"|\b(?:and|or)\s+(?:must|should|shall|may|can|start|launch|create|add|require)\b"
+        r"|\u5e76(?:\u4e14)?(?:\u5fc5\u987b|\u9700\u8981|\u542f\u52a8|\u521b\u5efa|\u589e\u52a0)"
+    )
+    role = (
+        r"\b[A-Z][A-Z0-9_]+(?:\s+Agents?)?\b"
+        r"|(?i:(?:independent\s+)?review\s+Agents?)"
+        r"|(?:\u72ec\u7acb)?\u5ba1\u67e5\s*Agent"
+    )
+    pattern = rf"(?i:{prohibition})(?:(?!(?i:{boundary})).)*?(?:{role})"
+    return re.sub(pattern, "", clause)
 
 
 def _policy_clauses(text: str) -> list[str]:
