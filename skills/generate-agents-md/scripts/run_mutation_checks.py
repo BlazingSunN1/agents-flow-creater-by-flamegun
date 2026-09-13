@@ -53,9 +53,16 @@ CORE_MUTANTS = (
     Mutant(
         "machine-policy-yaml-entry-parser-narrowed",
         "scripts/agents_policy_validation.py",
-        'match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*)\\s*:\\s*([A-Za-z0-9_./#-]+)", stripped)',
-        'match = re.fullmatch(r"([a-z][a-z0-9_]*)\\s*:\\s*([a-z0-9_]+)", stripped)',
-        "scripts.test_validate_agents_md.ValidatorRegressionTests.test_machine_policy_rejects_unknown_override_keys",
+        'match = re.fullmatch(\n'
+        '            r"([A-Za-z][A-Za-z0-9_-]*)\\s*:\\s*([\'\\\"]?)([A-Za-z0-9_./#-]+)\\2",\n'
+        '            stripped,\n'
+        '        )',
+        'match = re.fullmatch(\n'
+        '            r"([A-Za-z][A-Za-z0-9_-]*)\\s*:\\s*([A-Za-z0-9_./#-]+)",\n'
+        '            stripped,\n'
+        '        )',
+        "scripts.test_validate_agents_md.ValidatorRegressionTests."
+        "test_machine_policy_accepts_matching_quoted_closed_set_scalar",
     ),
     Mutant(
         "malformed-row-check-disabled",

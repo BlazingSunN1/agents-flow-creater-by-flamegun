@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate_task_write_scope as write_scope
 
 
@@ -15,6 +16,50 @@ SCRIPT = Path(__file__).resolve().parent / "validate_task_write_scope.py"
 
 
 class TaskWriteScopeTests(unittest.TestCase):
+    def test_entire_ownership_table_must_be_valid_before_authorization(self) -> None:
+        header = (
+            "## Module Agent Ownership and Dispatcher\n\n"
+            "| Module | Stable scope | Owned project-relative paths | Long-term maintenance Agent title |\n"
+            "| --- | --- | --- | --- |\n"
+        )
+        good = (
+            "| m01 | business | `src/` | M01 Maintainer |\n"
+            "| `m06` | governance | `AGENTS.md` | M06 Maintainer |\n"
+        )
+        cases = {
+            "cross_module_overlap": good.replace("`src/`", "`src/`, `AGENTS.md`"),
+            "duplicate_title": good.replace("M06 Maintainer", "M01 Maintainer"),
+            "normalized_overlap": good.replace("`AGENTS.md`", "`src`"),
+            "same_row_duplicate": good.replace("`src/`", "`src/`, `src`"),
+            "same_row_parent_child": good.replace("`src/`", "`src/`, `src/child/`"),
+            "malformed_other_row": good.replace("| m01 | business |", "| m01 | |"),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "project"
+            root.mkdir()
+            for label, rows in cases.items():
+                with self.subTest(case=label):
+                    (root / "AGENTS.md").write_text(header + rows, encoding="utf-8")
+                    result = self.run_validator(
+                        "--role", "project-agent", "--project-root", str(root),
+                        "--module-key", "m01", "--target", "src/new.py",
+                    )
+                    self.assertNotEqual(0, result.returncode, result.stdout)
+                    self.assertIn("module-owner-not-registered", result.stderr)
+                    if label == "cross_module_overlap":
+                        result = self.run_validator(
+                            "--role", "project-agent", "--project-root", str(root),
+                            "--module-key", "m01", "--target", "AGENTS.md",
+                        )
+                        self.assertNotEqual(0, result.returncode, result.stdout)
+
+            (root / "AGENTS.md").write_text(header + good, encoding="utf-8")
+            result = self.run_validator(
+                "--role", "project-agent", "--project-root", str(root),
+                "--module-key", "m06", "--target", "AGENTS.md",
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def run_validator(
         self, *arguments: str, home: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
@@ -76,6 +121,37 @@ class TaskWriteScopeTests(unittest.TestCase):
                 "--target", str(project / "src" / "m01" / "feature.py"),
             )
         self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_module_key_full_code_span_matches_plain_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            self.write_ownership(project)
+            for module_key in ("m01", "`m01`", "`M01`"):
+                with self.subTest(module_key=module_key):
+                    result = self.run_validator(
+                        "--role", "project-agent",
+                        "--project-root", str(project),
+                        "--module-key", module_key,
+                        "--ownership-file", "AGENTS.md",
+                        "--target", "src/m01/feature.py",
+                    )
+                    self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_malformed_module_key_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            self.write_ownership(project)
+            for module_key in ("`m01", "m01`", "`m01` extra", "m 01", "``m01``"):
+                with self.subTest(module_key=module_key):
+                    result = self.run_validator(
+                        "--role", "project-agent",
+                        "--project-root", str(project),
+                        "--module-key", module_key,
+                        "--ownership-file", "AGENTS.md",
+                        "--target", "src/m01/feature.py",
+                    )
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn("module-owner-not-registered", result.stderr)
 
     def test_uppercase_module_key_reports_cross_module_target_precisely(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -1836,6 +1836,34 @@ class ValidatorRegressionTests(unittest.TestCase):
             error_codes(weakened, mode="public-template", scope="root"),
         )
 
+    def test_machine_policy_accepts_matching_quoted_closed_set_scalar(self) -> None:
+        marker = "authority_matrix_path: AGENTS.md#machine-enforced-authority-matrix"
+        for quote in ("'", '"'):
+            with self.subTest(quote=quote):
+                changed = ROOT_TEMPLATE.replace(
+                    marker,
+                    f"authority_matrix_path: {quote}AGENTS.md#machine-enforced-authority-matrix{quote}",
+                )
+                codes = error_codes(changed, mode="public-template", scope="root")
+                self.assertNotIn("invalid-machine-policy-entry", codes)
+                self.assertNotIn("invalid-machine-policy", codes)
+
+    def test_machine_policy_rejects_malformed_or_changed_quoted_scalar(self) -> None:
+        marker = "authority_matrix_path: AGENTS.md#machine-enforced-authority-matrix"
+        values = (
+            '"AGENTS.md#machine-enforced-authority-matrix\'',
+            '"AGENTS.md#different-matrix"',
+            '"AGENTS.md#machine-enforced-authority-matrix" extra',
+            '"AGENTS.md#machine-enforced-authority-matrix""',
+        )
+        for value in values:
+            with self.subTest(value=value):
+                changed = ROOT_TEMPLATE.replace(marker, f"authority_matrix_path: {value}")
+                self.assertTrue(
+                    error_codes(changed, mode="public-template", scope="root")
+                    & {"invalid-machine-policy-entry", "invalid-machine-policy"}
+                )
+
     def test_machine_policy_rejects_unknown_override_keys(self) -> None:
         for entry in (
             "frontend_evidence_validation_override: optional",

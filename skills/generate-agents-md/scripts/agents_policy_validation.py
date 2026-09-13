@@ -224,11 +224,14 @@ def _validate_machine_policy(text: str) -> list[Issue]:
             continue
         if not in_yaml or not stripped or stripped.startswith("#"):
             continue
-        match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*)\s*:\s*([A-Za-z0-9_./#-]+)", stripped)
+        match = re.fullmatch(
+            r"([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(['\"]?)([A-Za-z0-9_./#-]+)\2",
+            stripped,
+        )
         if not match:
             issues.append(Issue("error", "invalid-machine-policy-entry", "机器策略条目格式无效", line_number))
             continue
-        key, value = match.groups()
+        key, _quote, value = match.groups()
         if key in values:
             issues.append(Issue("error", "duplicate-machine-policy-key", f"机器策略键重复：{key}", line_number))
         else:

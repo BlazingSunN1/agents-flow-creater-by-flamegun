@@ -7,6 +7,7 @@ from agents_policy_common import (
     DISPATCHER_OWNERSHIP_HEADING_RE,
     PLACEHOLDER_RE,
     Issue,
+    canonical_module_key,
     extract_heading_section,
     section_has_line,
 )
@@ -279,15 +280,15 @@ def _validate_mapping(section: str, *, mode: str) -> list[Issue]:
     if not rows:
         return [Issue("error", "empty-module-agent-map", "模块所有权映射表至少需要一个模块行")]
     issues: list[Issue] = []
-    seen_modules: set[str] = set()
-    seen_titles: set[str] = set()
-    seen_boundaries: set[str] = set()
-    seen_paths: set[str] = set()
+    seen_modules, seen_titles, seen_boundaries, seen_paths = set(), set(), set(), set()
     for row in rows:
         if len(row) != len(headers) or any(not row[index].strip() for index in indexes.values()):
             issues.append(Issue("error", "invalid-module-agent-row", "模块映射行必须完整填写模块、范围、边界和稳定维护 Agent 标题"))
             continue
-        module = row[indexes["module"]].strip().casefold()
+        module = canonical_module_key(row[indexes["module"]])
+        if not module:
+            issues.append(Issue("error", "invalid-module-agent-key", "模块键必须为纯文本或完整单个代码跨度"))
+            continue
         title = row[indexes["title"]].strip()
         raw_boundary = row[indexes["ownership"]].strip()
         boundary = _boundary_identity(raw_boundary)
@@ -330,7 +331,9 @@ def module_ownership_mapping(text: str) -> dict[str, tuple[tuple[str, ...], str]
     if sum(1 for _ in ownership_headings) != 1:
         return {}
     section = extract_heading_section(text, DISPATCHER_OWNERSHIP_HEADING_RE)
-    if section is None:
+    # This mapping authorizes targets: a valid requested row cannot compensate
+    # for conflicting or malformed owners elsewhere in the same table.
+    if section is None or _validate_mapping(section, mode="project"):
         return {}
     table = _first_markdown_table(section)
     if table is None:
@@ -343,7 +346,7 @@ def module_ownership_mapping(text: str) -> dict[str, tuple[tuple[str, ...], str]
     for row in rows:
         if len(row) != len(headers):
             return {}
-        module = row[indexes["module"]].strip().casefold()
+        module = canonical_module_key(row[indexes["module"]])
         title = row[indexes["title"]].strip()
         paths, valid_paths = _parse_owned_paths(row[indexes["ownership"]])
         if not module or not title or not valid_paths or not paths or module in result:
@@ -389,9 +392,10 @@ def _parse_owned_paths(value: str) -> tuple[tuple[str, ...], bool]:
         canonical = "/".join(parts)
         if candidate not in {canonical, canonical + "/"}:
             return (), False
+        if any(_paths_overlap(canonical, previous) for previous in paths):
+            return (), False
         paths.append(canonical)
-    unique = tuple(dict.fromkeys(paths))
-    return unique, bool(unique)
+    return tuple(paths), bool(paths)
 
 
 def _paths_overlap(left: str, right: str) -> bool:

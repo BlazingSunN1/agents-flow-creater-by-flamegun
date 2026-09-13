@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agents_dispatcher_policy_validation import module_ownership_mapping
+from agents_policy_common import canonical_module_key
 
 DEFAULT_DERIVED_ROOTS = (
     Path.home() / ".codex" / "skills",
@@ -228,7 +229,7 @@ def _project_ownership(
         mapping = module_ownership_mapping(ownership_file.read_text(encoding="utf-8"))
     except (OSError, UnicodeError):
         mapping = {}
-    module = args.module_key.casefold()
+    module = canonical_module_key(args.module_key)
     if module not in mapping:
         findings.append(Finding(
             "module-owner-not-registered",

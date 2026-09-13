@@ -90,6 +90,16 @@ class Issue:
     line: int | None = None
 
 
+def canonical_module_key(value: str) -> str:
+    """Normalize one whole-cell code span; reject malformed markup."""
+    value = value.strip()
+    if value.startswith("`") and value.endswith("`"):
+        value = value[1:-1]
+    if "`" in value or not value or any(char.isspace() for char in value):
+        return ""
+    return value.casefold()
+
+
 def normative_markdown_view(text: str) -> str:
     """Return prose used for policy matching, preserving source line count."""
     uncommented = markdown_without_html_comments(text)
