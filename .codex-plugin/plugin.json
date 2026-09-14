@@ -1,6 +1,6 @@
 {
   "name": "agents-flow-creater-by-flamegun",
-  "version": "0.2.0+codex.20260914153227",
+  "version": "0.3.0+codex.20260914210022",
   "description": "Generate stable AGENTS.md workflows with one native Sol writer and independent GPT-6 Astra review.",
   "author": {
     "name": "FlameGun"

@@ -50,6 +50,10 @@ description: 从仓库事实和需求生成、更新、拆分、公共化或审�
 
 - 冻结验收、路径和正式基线后，在任务独占候选区生成并测试；同一候选全部适用门禁通过且授权/基线/哈希未漂移，当前唯一租约写者才应用相同字节。失败、缺证或无法隔离就不应用；只清理本任务候选。
 - Agent 间只传最小任务包、实质变化、阻断和可用阶段结果；不转发完整聊天、推理、原始日志或可直接读取的全文。合并进度并优先事件通知/有界等待；交接注明状态、指纹、范围、证据、测试、阻断、责任方及失效结论。
+- 主 Agent 不是消息转发器：先整理需求和成功条件，推荐方案并标明边界/假设，按小型、标准或完整层级分解任务和依赖，协调授权、单写者、候选与验收，判断返回问题的类别和原因证据，给出最小修复方案，最后逐项核对原需求。子 Agent 只执行已派发边界，可提出有证据的技术异议，不得自行扩权、改需求或自验。
+- 首次派发必须最小且自包含：目标与需求 ID（无正式 ID 时写清成功条件）、推荐方案、scope/禁止项、输入依赖、验收、实际权限与执行者绑定、候选/基线、返回格式和下一步；条件不适用的字段不造空表。引用使用明确版本且接收方可访问的来源，不写“按之前聊天”。
+- 后续只传实质 delta、阻塞或阶段结果；不用收到确认、心跳或无变化轮询。默认有界等待和同事件幂等重试；超时记未知，不等于失败且不启动第二写者。变更、取消或候选变化使相关旧证据失效，迟到/错版本结果不得推进状态。
+- 子 Agent 返回问题时给事实、预期/实际、复现与证据、原因假设或未知、影响和是否阻塞。主 Agent 先分类为需求、方案、实现、环境或权限，再合并相关问题一次派发最小修复范围、回归条件、失效证据和继续/暂停/取消动作；根因未知先有界调查。用户只裁决真实需求取舍和必要权限。标准/完整任务首次交接、实质变更、阻塞或需要细则时按相关章节读取 `references/agent-interaction-protocol.md`；小型任务不默认加载长参考。
 
 ### 4. 建立稳定交付链
 
@@ -95,5 +99,6 @@ python3 scripts/flowctl.py doctor --full
 ## 资源路由
 
 - 根/子/可选规则用 `assets/AGENTS.template.md`、`assets/AGENTS.scoped.template.md`、`assets/AGENTS.optional-sections.md`；复用输入用 `assets/reuse-source-context.template.md`。
+- Agent 交互默认使用本 Skill 的精简规则；仅标准/完整任务首次交接、实质变更、阻塞或需要版本/证据细则时按需读取 `references/agent-interaction-protocol.md`，不要求所有 Agent 重复加载全文。
 - 事实、交付、界面、治理依次读 `references/extraction-checklist.md`、`references/extraction-delivery.md`、`references/extraction-interfaces.md`、`references/module-agent-governance.md`；严格安全和敏感配置只在触发时加载对应专项。
 - 原生复核、证据复用、浏览器验收按需读 `references/multi-model-review-policy.md`、`references/evidence-reuse-policy.md`、`references/browser-validation-policy.md`；细则见 `references/delivery-orchestration.md`。
