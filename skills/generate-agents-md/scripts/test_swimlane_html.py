@@ -110,7 +110,8 @@ class SwimlaneHtmlContractTests(unittest.TestCase):
         self.assertNotIn("Keep the active parent GPT as sole workspace writer", NATIVE_AGENT_CONFIG)
         self.assertIn("Hierarchy never grants write authority", NATIVE_AGENT_CONFIG)
         self.assertIn("a different independent read-only Agent validates the same code/build identity", AGENTS_TEMPLATE)
-        self.assertIn("Standard work uses distinct Codex-native `gpt-6-astra` Agent/runs", AGENTS_TEMPLATE)
+        self.assertIn("one assigned writer: a Codex-native `gpt-5.6-sol` Agent", AGENTS_TEMPLATE)
+        self.assertIn("`reasoning_effort=medium`", AGENTS_TEMPLATE)
         self.assertIn("Drift, stale/missing proof, failure or identity reuse blocks completion", AGENTS_TEMPLATE)
         self.assertNotIn("The parent GPT independently adjudicates both roles", AGENTS_TEMPLATE)
         template_ref = "../generate-agents-md/assets/native-review-loop-evidence.template.json"

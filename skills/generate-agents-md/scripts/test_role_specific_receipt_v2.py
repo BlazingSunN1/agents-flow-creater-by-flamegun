@@ -14,6 +14,8 @@ from native_gate_agent_validation import validate_native_gate_agent
 from system_actor_validation import validate_system_actors
 from validate_multi_agent_evidence import _validate_structure
 from delivery_authority_binding import AUTHORITY_SHA256
+from test_writer_authorization_support import write_historical_sol_write_proof
+from test_validate_agents_md import project_root_fixture
 
 
 AUTHORITY_SHA = AUTHORITY_SHA256
@@ -25,12 +27,10 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         (self.root / "AGENTS.md").write_text(
-            "authority_matrix_sha256: " + AUTHORITY_SHA + "\n\n"
-            "## Module Agent Ownership and Dispatcher\n\n"
-            "| Module | Stable scope | Owned project-relative paths | Long-term maintenance Agent title |\n"
-            "| --- | --- | --- | --- |\n"
-            "| module | scope | `src/module.py`, `docs/flows/modules/module.html` | Module Maintainer |\n",
-            encoding="utf-8",
+            project_root_fixture().replace(
+                "| module | verified module scope | `src/` | ModuleMaintainer |",
+                "| module | scope | `src/module.py`, `docs/flows/modules/module.html` | Module Maintainer |",
+            ), encoding="utf-8",
         )
 
     def tearDown(self) -> None:
@@ -61,28 +61,29 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
         }
 
     def _implementation_data(self) -> dict[str, object]:
-        lease_path, lease_sha = self._write(
-            "evidence/leases/module-run-1.json",
-            {"lease_id": "lease-module-run-1", "lease_status": "active"},
+        proof = write_historical_sol_write_proof(
+            self.root, module_key="module", maintainer_title="Module Maintainer",
+            owned_paths=OWNED_PATHS, agent_id="implementation-agent",
+            run_id="implementation-run", lease_id="lease-module-run-1",
+            target_path="src/module.py", baseline_sha256=BASELINE_SHA,
+            code_version="code-v2", build_id="build-v2",
+            candidate_sha256=CANDIDATE_SHA,
         )
-        lease = {
-            "lease_id": "lease-module-run-1", "path": lease_path,
-            "sha256": lease_sha,
-        }
         receipt = {
             **self._common(read_only=False, effort="medium"),
+            "requested_model": "gpt-5.6-sol", "recorded_model": "gpt-5.6-sol",
             "receipt_kind": "codex-native-spawn-result",
             "agent_id": "implementation-agent",
             "run_id": "implementation-run",
             "role": "module-maintainer",
             "maintainer_title": "Module Maintainer",
-            "active_write_lease": lease,
+            "historical_write_proof": proof,
         }
         path, digest = self._write("evidence/implementation.json", receipt)
         return {
             "schema_version": 2,
             "implementation_agent_provider": "codex-native-agent",
-            "implementation_agent_model": "gpt-6-astra",
+            "implementation_agent_model": "gpt-5.6-sol",
             "implementation_agent_reasoning_effort": "medium",
             "implementation_agent_id": "implementation-agent",
             "implementation_run_id": "implementation-run",
@@ -91,7 +92,7 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
             "implementation_spawn_receipt_sha256": digest,
             "authority_matrix_sha256": AUTHORITY_SHA,
             "owned_paths": OWNED_PATHS,
-            "active_write_lease": lease,
+            "implementation_write_proof": proof,
             "baseline_sha256": BASELINE_SHA,
             "code_version": "code-v2",
             "build_id": "build-v2",
@@ -105,7 +106,7 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
         ))
         for field in (
             "read_only", "authority_matrix_sha256", "owned_paths",
-            "active_write_lease", "baseline_sha256", "code_version",
+            "historical_write_proof", "baseline_sha256", "code_version",
             "build_id", "candidate_sha256",
         ):
             with self.subTest(field=field):
@@ -122,16 +123,16 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
                 self.assertIn("invalid-implementation-spawn-receipt", codes)
                 data = self._implementation_data()
 
-    def test_implementation_v2_rejects_invalid_outer_lease_and_paths(self) -> None:
+    def test_implementation_v2_rejects_invalid_outer_proof_and_paths(self) -> None:
         data = self._implementation_data()
-        data["active_write_lease"] = {
+        data["implementation_write_proof"] = {
             "lease_id": "lease-module-run-1", "path": "../lease.json",
             "sha256": "D" * 64,
         }
         codes = {item.code for item in validate_implementation_agent(
             data, {"Modules": "module"}, self.root,
         )}
-        self.assertIn("invalid-implementation-runtime-binding", codes)
+        self.assertIn("implementation-write-proof-invalid", codes)
 
     def test_v2_receipt_locator_hash_is_strict_lowercase(self) -> None:
         data = self._implementation_data()
@@ -214,7 +215,7 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
             "aggregation_writer_role": "SYSTEM_AGGREGATION",
             "aggregation_writer_title": "System Aggregation Writer",
             "aggregation_writer_provider": "codex-native-agent",
-            "aggregation_writer_model": "gpt-6-astra",
+            "aggregation_writer_model": "gpt-5.6-sol",
             "aggregation_writer_owned_paths": ["docs/evidence/system-delivery/latest.json"],
         }
         dispatcher = {
@@ -230,6 +231,7 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
         }
         aggregation = {
             **dispatcher, "receipt_kind": "codex-native-output-result",
+            "requested_model": "gpt-5.6-sol", "recorded_model": "gpt-5.6-sol",
             "agent_id": "aggregation-agent", "run_id": "aggregation-run",
             "role": "system-aggregation", "maintainer_title": "System Aggregation Writer",
             "requested_reasoning_effort": "medium",
@@ -250,7 +252,11 @@ class RoleSpecificReceiptV2Tests(unittest.TestCase):
         aggregation["candidate_payload_sha256"] = system_candidate_payload_sha256(value)
         aggregation_path, aggregation_sha = self._write("evidence/aggregation.json", aggregation)
         value["aggregation_spawn_receipt_sha256"] = aggregation_sha
-        self.assertEqual([], validate_system_actors(value, self.root, None))
+        issues = validate_system_actors(value, self.root, None)
+        self.assertEqual(
+            {"system-manifest-target-missing"},
+            {item.code for item in issues},
+        )
 
 
 if __name__ == "__main__":

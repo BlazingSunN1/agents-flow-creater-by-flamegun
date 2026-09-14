@@ -1,5 +1,7 @@
 # Deterministic Delivery Orchestration
 
+The default implementation and repair writer is one native `gpt-5.6-sol/medium` Agent holding the unique active lease. Native `gpt-6-astra/high` roles remain read-only. [Local Qwen code author](local-qwen-code-author.md) is available only when the user explicitly selects that writer policy; no provider or model may be substituted silently.
+
 Load this reference when creating or updating a delivery contract, choosing validation depth, reusing evidence, or running an automated repair loop.
 
 ## One decision index

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_kind", "provider", "raw_model_provider", "requested_model", "recorded_model", "requested_reasoning_effort", "recorded_reasoning_effort", "runtime_kind", "writer_agent_id", "writer_run_id", "invocation_id", "source_agent_path", "source_path", "source_sha256", "source_capture"],
+  "oneOf": [
+    {"properties": {"schema_version": {"const": 1}, "source_agent_path": {"type": "string", "pattern": "^/root/[A-Za-z0-9][A-Za-z0-9_/-]*$"}}, "not": {"required": ["source_parent_thread_id"]}},
+    {"required": ["source_parent_thread_id"], "properties": {"schema_version": {"const": 2}, "source_agent_path": {"type": ["string", "null"]}}}
+  ],
+  "properties": {
+    "schema_version": {"enum": [1, 2]},
+    "evidence_kind": {"const": "codex-native-writer-invocation-evidence"},
+    "provider": {"const": "codex-native-agent"},
+    "raw_model_provider": {"const": "openai"},
+    "requested_model": {"const": "gpt-5.6-sol"},
+    "recorded_model": {"const": "gpt-5.6-sol"},
+    "requested_reasoning_effort": {"const": "medium"},
+    "recorded_reasoning_effort": {"const": "medium"},
+    "runtime_kind": {"const": "codex-rollout-jsonl"},
+    "writer_agent_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
+    "writer_run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
+    "invocation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
+    "source_agent_path": {"type": ["string", "null"]},
+    "source_parent_thread_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
+    "source_path": {"type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_capture": {"const": "immutable-local-snapshot"}
+  }
+}

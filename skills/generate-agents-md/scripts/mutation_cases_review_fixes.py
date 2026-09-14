@@ -484,7 +484,7 @@ REVIEW_FIX_MUTANT_CASES = (
     (
         "module-maintainer-reasoning-effort-check-disabled",
         "scripts/implementation_agent_validation.py",
-        '    if data.get("implementation_agent_reasoning_effort") != "medium":',
+        '    if data.get("implementation_agent_reasoning_effort") != runtime["requested_reasoning_effort"]:',
         "    if False:",
         "scripts.test_validate_multi_agent_evidence.MultiAgentEvidenceValidatorTests.test_module_maintainer_requires_bound_native_sol_receipt",
     ),

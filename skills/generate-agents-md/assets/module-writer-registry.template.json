@@ -9,8 +9,23 @@
       "run_id": "{{IMPLEMENTATION_RUN_ID}}",
       "lease_id": "{{LOCAL_COORDINATION_WRITE_LEASE_ID}}",
       "role": "module-maintainer",
-      "owned_paths": ["{{MODULE_OWNED_PATH}}"],
-      "lease_status": "active"
+      "owned_paths": [
+        "{{MODULE_OWNED_PATH}}"
+      ],
+      "lease_status": "active",
+      "writer_identity": {
+        "policy": "codex-native-sol-writer-v1",
+        "provider": "codex-native-agent",
+        "requested_model": "gpt-5.6-sol",
+        "recorded_model": "gpt-5.6-sol",
+        "requested_reasoning_effort": "medium",
+        "recorded_reasoning_effort": "medium",
+        "runtime_kind": "codex-rollout-jsonl",
+        "writer_agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
+        "writer_run_id": "{{IMPLEMENTATION_RUN_ID}}",
+        "evidence_path": "{{CODEX_INVOCATION_EVIDENCE_PATH}}",
+        "evidence_sha256": "{{CODEX_INVOCATION_EVIDENCE_SHA256}}"
+      }
     }
   ]
 }

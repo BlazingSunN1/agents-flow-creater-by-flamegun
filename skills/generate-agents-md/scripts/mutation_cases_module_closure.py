@@ -31,11 +31,11 @@ MODULE_CLOSURE_MUTANT_CASES = (
         "scripts.test_update_project_record.AuthorizedProjectRecordTests.test_cross_module_m02_writer_cannot_overwrite_m01_record",
     ),
     (
-        "record-update-strict-host-lease-verifier-check-disabled",
+        "record-update-strict-native-writer-rejection-disabled",
         "scripts/project_record_authorization.py",
-        "    if verifier is None or not _machine_verified(verifier, lease_file, value, host_expected):",
+        "    if authorization_mode == STRICT_SECURITY_MODE:",
         "    if False:",
-        "scripts.test_update_project_record.AuthorizedProjectRecordTests.test_strict_security_still_requires_host_attestation",
+        "scripts.test_update_project_record.AuthorizedProjectRecordTests.test_authorization_helper_rejects_strict_native_writer_route",
     ),
     (
         "record-update-current-authority-matrix-check-disabled",
@@ -56,7 +56,7 @@ MODULE_CLOSURE_MUTANT_CASES = (
         "scripts/update_project_record.py",
         "            if not binding_is_current(root, binding):",
         "            if False:",
-        "scripts.test_update_project_record.AuthorizedProjectRecordTests.test_lease_change_after_host_verification_fails_before_write",
+        "scripts.test_update_project_record.AuthorizedProjectRecordTests.test_lease_change_after_authorization_fails_before_write",
     ),
     (
         "record-update-exact-lease-binding-disabled",
@@ -68,16 +68,18 @@ MODULE_CLOSURE_MUTANT_CASES = (
     (
         "record-update-registered-writer-binding-disabled",
         "scripts/project_record_authorization.py",
-        "    if entry != expected:",
-        "    if False:",
+        "    _require_registered_writer(\n        _registered_writer(registry, module), module, title, agent, run, owned_paths, lease,\n"
+        "        writer_identity,\n"
+        "    )",
+        "    _registered_writer(registry, module)",
         "scripts.test_update_project_record.AuthorizedProjectRecordTests.test_delivery_first_rejects_self_selected_dispatcher_identity",
     ),
     (
         "record-update-unique-module-writer-check-disabled",
         "scripts/project_record_authorization.py",
-        "    if len(matches) != 1:",
+        "    if len(entries) != 1:",
         "    if False:",
-        "scripts.test_update_project_record.AuthorizedProjectRecordTests.test_delivery_first_rejects_missing_active_writer_for_module",
+        "scripts.test_update_project_record.AuthorizedProjectRecordTests.test_delivery_first_rejects_distinct_active_writers_across_modules",
     ),
     (
         "record-update-duplicate-registry-identity-check-disabled",

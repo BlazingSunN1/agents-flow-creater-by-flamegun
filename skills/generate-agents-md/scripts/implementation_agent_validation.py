@@ -10,6 +10,8 @@ from typing import Callable
 from strict_json import loads as strict_json_loads
 from agents_dispatcher_policy_validation import module_ownership_mapping
 from delivery_authority_binding import AUTHORITY_SHA256
+from historical_project_record_authorization import validate_historical_project_record_write_proof
+from project_record_authorization import writer_runtime_expectation
 
 
 HostAttestationVerifier = Callable[[Path, dict[str, object], dict[str, object]], bool]
@@ -66,31 +68,39 @@ def _validate_implementation_agent_impl(
     receipt_replay_state: ReceiptReplayState | None,
 ) -> list[Issue]:
     issues: list[Issue] = []
-    if (data.get("implementation_agent_provider") != "codex-native-agent"
-            or data.get("implementation_agent_model") != "gpt-6-astra"):
+    modules = [item.strip().casefold() for item in context.get("Modules", "").split(",") if item.strip()]
+    schema_version = data.get("schema_version")
+    writer_profile, proof_issues = _validate_implementation_write_proof(data, root, modules)
+    runtime = writer_runtime_expectation(writer_profile) if writer_profile is not None else {
+        "provider": "codex-native-agent", "requested_model": "gpt-5.6-sol",
+        "recorded_model": "gpt-5.6-sol", "requested_reasoning_effort": "medium",
+        "recorded_reasoning_effort": "medium",
+    }
+    if (data.get("implementation_agent_provider") != runtime["provider"]
+            or data.get("implementation_agent_model") != runtime["requested_model"]):
         issues.append(Issue(
             "error", "invalid-implementation-agent",
-            "模块长期维护实现 Agent 必须声明并绑定为 Codex 原生 gpt-6-astra",
+            "模块长期维护实现 Agent 必须与已验证 writer policy 精确一致",
         ))
-    if data.get("implementation_agent_reasoning_effort") != "medium":
+    if data.get("implementation_agent_reasoning_effort") != runtime["requested_reasoning_effort"]:
         issues.append(Issue("error", "invalid-implementation-agent-effort",
-                            "模块长期维护实现 Agent 必须使用 reasoning_effort=medium"))
-    modules = [item.strip().casefold() for item in context.get("Modules", "").split(",") if item.strip()]
-    schema_version = data.get("schema_version", 1)
-    expected = _implementation_expected(data, modules, schema_version)
+                            "实现 Agent reasoning_effort 必须与已验证 writer policy 精确一致"))
+    expected = _implementation_expected(data, modules, schema_version, runtime)
     if schema_version == 2:
         issues.extend(validate_v2_binding_source(
-            data, root, require_active_lease=True, allow_empty_owned_paths=False,
+            data, root, require_active_lease=False, allow_empty_owned_paths=False,
             code_prefix="implementation",
         ))
         expected.update(_v2_expected_bindings(
-            data, read_only=False, include_active_lease=True,
+            data, read_only=False, include_active_lease=False,
         ))
+        expected["historical_write_proof"] = data.get("implementation_write_proof")
         issues.extend(_validate_v2_project_binding(data, context, root, modules))
-    elif schema_version != 1:
+        issues.extend(proof_issues)
+    else:
         issues.append(Issue(
             "error", "invalid-implementation-runtime-binding",
-            "实现 Agent receipt schema_version 必须是整数 1 或 2",
+            "可写实现 Agent receipt 必须使用 schema_version=2 并绑定真实来源与历史写入证明",
         ))
     issues.extend(validate_native_spawn_record(
         data=data, root=root, expected=expected,
@@ -105,13 +115,12 @@ def _validate_implementation_agent_impl(
 
 def _implementation_expected(
     data: dict[str, object], modules: list[str], schema_version: object,
+    runtime: dict[str, str],
 ) -> dict[str, object]:
     return {
         "schema_version": schema_version,
         "receipt_kind": "codex-native-spawn-result",
-        "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
-        "recorded_model": "gpt-6-astra",
-        "requested_reasoning_effort": "medium", "recorded_reasoning_effort": "medium",
+        **runtime,
         "agent_id": data.get("implementation_agent_id"),
         "run_id": data.get("implementation_run_id"), "role": "module-maintainer",
         "module": modules[0] if len(modules) == 1 else None,
@@ -269,6 +278,41 @@ def _validate_v2_project_binding(
             "schema-v2 owned_paths/title 必须精确匹配当前模块所有权行及顺序",
         ))
     return issues
+
+
+def _validate_implementation_write_proof(
+    data: dict[str, object], root: Path, modules: list[str],
+) -> tuple[dict[str, object] | None, list[Issue]]:
+    descriptor = data.get("implementation_write_proof")
+    if (not isinstance(descriptor, dict)
+            or set(descriptor) != {"lease_id", "target_path", "path", "sha256"}):
+        return None, [Issue(
+            "error", "implementation-write-proof-invalid",
+            "实现 Agent 的已完成 spawn receipt 必须绑定独立历史写入证明",
+        )]
+    module = modules[0] if len(modules) == 1 else ""
+    owned = data.get("owned_paths")
+    if not isinstance(owned, list) or not all(isinstance(item, str) for item in owned):
+        return None, [Issue("error", "implementation-write-proof-invalid", "实现 Agent owned_paths 无效")]
+    try:
+        profile = validate_historical_project_record_write_proof(
+            root=root, proof_path=Path(str(descriptor["path"])),
+            proof_sha256=str(descriptor["sha256"]),
+            target=Path(str(descriptor["target_path"])),
+            module_key=module,
+            maintainer_title=str(data.get("implementation_agent_title", "")),
+            agent_id=str(data.get("implementation_agent_id", "")),
+            run_id=str(data.get("implementation_run_id", "")),
+            lease_id=str(descriptor["lease_id"]), owned_paths=owned,
+            baseline_sha256=str(data.get("baseline_sha256", "")),
+            code_version=str(data.get("code_version", "")),
+            build_id=str(data.get("build_id", "")),
+            candidate_sha256=str(data.get("candidate_sha256", "")),
+        )
+        writer_runtime_expectation(profile)
+    except (RuntimeError, KeyError, TypeError) as error:
+        return None, [Issue("error", "implementation-write-proof-invalid", str(error))]
+    return profile, []
 
 
 def _lower_sha256(value: object) -> bool:

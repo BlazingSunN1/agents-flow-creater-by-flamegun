@@ -22,7 +22,8 @@ TOP_FIELDS = {
     "adjudicator_spawn_receipt_sha256", "adjudicator_may_modify_code",
     "adjudicator_may_modify_shared_records", "adjudicator_holds_writer_lease",
     "writer_agent_id", "writer_run_id", "writer_role", "writer_spawn_receipt",
-    "writer_spawn_receipt_sha256", "scope_version", "scope_sha256", "baseline_version",
+    "writer_spawn_receipt_sha256", "writer_owned_paths", "writer_write_proof",
+    "scope_version", "scope_sha256", "baseline_version",
     "baseline_sha256", "code_version", "build_id", "max_candidate_versions", "candidates",
     "final_candidate_version", "final_candidate_sha256", "outcome",
     "runtime_multi_agent_evidence", "runtime_multi_agent_evidence_sha256",
@@ -143,6 +144,7 @@ def _validate_top(data: dict[str, object], template: bool, issues: list[Issue]) 
         "schema_version", "max_candidate_versions", "candidates", "checkpoint_chain", "final_candidate_version",
         "adjudicator_may_modify_code", "adjudicator_may_modify_shared_records",
         "adjudicator_holds_writer_lease",
+        "writer_owned_paths", "writer_write_proof",
     }
     if any(type(data.get(field)) is not str or not str(data.get(field)).strip() for field in strings):
         issues.append(Issue("error", "invalid-native-loop-types", "native loop 标识和绑定字段必须是非空字符串"))

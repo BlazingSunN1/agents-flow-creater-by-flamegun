@@ -66,11 +66,9 @@ def _validate_system_delivery_bundle_impl(
         return [_issue("system-stage-invalid", "系统聚合阶段只能是 closure_candidate 或 completion", manifest_path)]
     root = project_root.resolve()
     manifest, issues = _read_object(manifest_path, "system-delivery-bundle")
-    if issues:
-        return issues
+    if issues: return issues
     issues.extend(_validate_system_shape(manifest, str(manifest_path)))
-    if issues:
-        return _deduplicate(issues)
+    if issues: return _deduplicate(issues)
     agents_path, path_issue = _project_file(root, manifest["agents_path"], "agents")
     if path_issue:
         return [path_issue]
@@ -89,7 +87,9 @@ def _validate_system_delivery_bundle_impl(
         ))
     issues.extend(
         _issue(item.code, item.message, str(manifest_path))
-        for item in validate_system_actors(manifest, root, host_attestation_verifier)
+        for item in validate_system_actors(
+            manifest, root, host_attestation_verifier, manifest_path=manifest_path,
+        )
     )
     issues.extend(_validate_aggregation_receipt_authority(manifest, root))
     canonical = module_ownership_mapping(agents_text)
@@ -116,12 +116,11 @@ def _read_object(path: Path, source: str) -> tuple[dict[str, object], list[Issue
     return value, []
 def _validate_system_shape(value: dict[str, object], source: str) -> list[Issue]:
     runtime_receipt_schema = value.get("runtime_receipt_schema_version")
-    expected_fields = SYSTEM_FIELDS if runtime_receipt_schema == 2 else LEGACY_SYSTEM_FIELDS
-    issues = _exact_fields(value, expected_fields, "system-bundle-schema", source)
-    if runtime_receipt_schema is not None and runtime_receipt_schema != 2:
+    issues = _exact_fields(value, SYSTEM_FIELDS, "system-bundle-schema", source)
+    if runtime_receipt_schema != 2:
         issues.append(_issue(
             "system-runtime-receipt-schema",
-            "runtime_receipt_schema_version 省略时使用 legacy receipt schema 1；显式值只能为 2",
+            "包含可写聚合 Agent 的系统清单必须显式使用 runtime_receipt_schema_version=2",
             source,
         ))
     if (type(value.get("schema_version")) is not int or value.get("schema_version") != 2
@@ -152,6 +151,10 @@ def _validate_system_shape(value: dict[str, object], source: str) -> list[Issue]
     ):
         if not isinstance(value.get(field), str) or not value[field].strip():
             issues.append(_issue("system-bundle-invalid-identity", f"{field} 必须是非空字符串", source))
+    if runtime_receipt_schema == 2:
+        for field in ("aggregation_writer_module_key", "aggregation_writer_maintainer_title"):
+            if not isinstance(value.get(field), str) or not value[field].strip():
+                issues.append(_issue("system-bundle-invalid-identity", f"{field} 必须是非空字符串", source))
     return issues
 def _validate_agents_identity(value: dict[str, object], path: Path) -> list[Issue]:
     actual = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -284,10 +287,6 @@ def _run_module_bundle(
     expected_title = canonical[module][1]
     if bundle["maintainer_title"] != expected_title:
         issues.append(_issue("system-module-maintainer-mismatch", "模块维护 Agent 标题与 canonical 所有权不一致", source))
-    if bundle["maintainer_provider"] != "codex-native-agent" or bundle["maintainer_model"] != "gpt-6-astra":
-        issues.append(_issue("system-module-maintainer-model-mismatch", "模块维护 Agent 必须由封闭 receipt 声明并绑定为原生 gpt-6-astra；严格模式追加宿主证明", source))
-    if bundle["maintainer_reasoning_effort"] != "medium":
-        issues.append(_issue("system-module-maintainer-effort-mismatch", "模块维护 Agent 必须使用 reasoning_effort=medium", source))
     if bundle["code_version"] != system["code_version"] or bundle["build_id"] != system["build_id"]:
         issues.append(_issue("system-module-build-mismatch", "模块 code/build 身份与系统候选不一致", source))
     paths = _bound_module_artifacts(bundle, system, root, source, issues)
@@ -468,20 +467,14 @@ def _project_file(root: Path, raw: object, label: str) -> tuple[Path | None, Iss
     if not resolved.is_file():
         return None, _issue("system-bundle-path-missing", f"{label} 文件不存在", raw)
     return resolved, None
-
-
 def _unique_strings(value: object, *, minimum: int) -> bool:
     return isinstance(value, list) and len(value) >= minimum and all(
         isinstance(item, str) and item.strip() for item in value
     ) and len(value) == len(set(value))
-
-
 def _exact_fields(value: dict[str, object], fields: set[str], code: str, source: str) -> list[Issue]:
     if set(value) == fields:
         return []
     return [_issue(code, "字段集合不完整或包含未知字段", source)]
-
-
 def _issue(code: str, message: str, source: object) -> Issue:
     return Issue("error", code, message, str(source))
 

@@ -7,10 +7,25 @@
   "agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
   "run_id": "{{IMPLEMENTATION_RUN_ID}}",
   "target_path": "{{PROJECT_RECORD_PATH}}",
-  "owned_paths": ["{{MODULE_OWNED_PATH}}"],
+  "owned_paths": [
+    "{{MODULE_OWNED_PATH}}"
+  ],
   "agents_path": "AGENTS.md",
   "agents_sha256": "{{EFFECTIVE_ROOT_AGENTS_SHA256}}",
   "authority_matrix_path": "AGENTS.md#machine-enforced-authority-matrix",
   "authority_matrix_sha256": "aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643",
-  "lease_status": "active"
+  "lease_status": "active",
+  "writer_identity": {
+    "policy": "codex-native-sol-writer-v1",
+    "provider": "codex-native-agent",
+    "requested_model": "gpt-5.6-sol",
+    "recorded_model": "gpt-5.6-sol",
+    "requested_reasoning_effort": "medium",
+    "recorded_reasoning_effort": "medium",
+    "runtime_kind": "codex-rollout-jsonl",
+    "writer_agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
+    "writer_run_id": "{{IMPLEMENTATION_RUN_ID}}",
+    "evidence_path": "{{CODEX_INVOCATION_EVIDENCE_PATH}}",
+    "evidence_sha256": "{{CODEX_INVOCATION_EVIDENCE_SHA256}}"
+  }
 }

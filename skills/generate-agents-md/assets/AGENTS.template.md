@@ -1,7 +1,5 @@
 # Agent Instructions
 
-<!-- PUBLIC TEMPLATE: replace placeholders and remove this comment in project mode. -->
-
 ## Project Context
 
 - Purpose: {{PROJECT_PURPOSE}}
@@ -10,7 +8,7 @@
 
 ## Machine-Enforced Policy
 
-Authoritative policy; project instructions may add detail but must not weaken or contradict it.
+Authoritative; project rules must not weaken it.
 
 ```yaml
 schema_version: 1
@@ -90,21 +88,22 @@ Expand to canonical `expanded-authority-matrix-v1`; unlisted actor/action pairs 
 
 ## Module Agent Ownership and Dispatcher
 
-Stable Agent titles are ownership names; thread/session/run IDs are runtime evidence and must not enter this AGENTS.md.
+Stable Agent titles are ownership names; thread/session IDs are runtime evidence and must not enter this AGENTS.md.
 
 | Module | Stable scope | Owned project-relative paths | Long-term maintenance Agent title |
 | --- | --- | --- | --- |
 | {{MODULE_KEY}} | {{MODULE_SCOPE}} | {{MODULE_OWNED_BOUNDARY}} | {{MODULE_AGENT_TITLE}} |
 
-Ownership cells: backticked project-relative paths, comma-separated (`src/module-a/`, `tests/module-a/`); API/protocol details go in `Stable scope`.
+Ownership cells use backticked, comma-separated project paths; API details go in `Stable scope`.
 
 - A major functional module is a stable business capability with an independently testable entry/output contract and non-overlapping ownership boundary; helpers/temporary slices stay inside it and do not create Agents.
 - Every major functional module has one independent long-term maintenance Agent closing requirement → design/flow → implementation → targeted tests → independent black-box acceptance → evidence/log and gate-planned swimlane artifacts before completion. `record_completion_after_verified_gates` only records another read-only Agent's passed gates.
 - Main, parent, and child placement grants no inherent write authority. The writer holds the matching unique active module write lease for module, title, paths and policy hashes.
 - The module maintenance Agent is the sole writer but must not self-certify review/acceptance; if gate-planned, a different independent read-only Agent validates the same code/build identity.
-- Before cross-module/system completion, every affected module binds current requirement IDs, code/build, targeted tests, independent acceptance, run/latest, applicable mapped swimlane evidence and no open findings. A distinct native GPT-6 `SYSTEM_AGGREGATION` writer emits the system manifest/receipt; Dispatcher only invokes its read-only validator.
+- Before cross-module/system completion, every affected module binds current requirement IDs, code/build, targeted tests, independent acceptance, run/latest, applicable mapped swimlane evidence and no open findings. A distinct native `gpt-5.6-sol/medium` `SYSTEM_AGGREGATION` writer emits the system manifest/receipt; the GPT-6 Dispatcher only invokes its read-only validator.
 - Dispatcher is the user's only entry point for decomposition, routing, orchestration, summaries and new module creation; Dispatcher must not edit business code or shared records.
-- Each task has exactly one implementation Agent as sole code writer; all other Agents are read-only. Single-module work uses its leased maintainer; a former Dispatcher uses a different Agent/run and never reuses Dispatcher IDs.
+- Local Qwen is selected only explicitly; its evidence remains provider-specific. The sole default writer is native `gpt-5.6-sol` with `reasoning_effort=medium` and the matching lease. GPT-6 roles are read-only.
+- Each task has exactly one implementation Agent as sole code writer; all other Agents are read-only. Single-module work uses its leased maintainer; a former Dispatcher uses a different Agent/run and must not reuse the Dispatcher Agent ID or run ID.
 - Shared record updates bind writer, lease, target and policy hashes; reject wrong/duplicate identities, drift and cross-module targets. Use the atomic command under Development Plan and Progress.
 - A project task may write only inside the canonical project root or its assigned isolated worktree and only within owned paths. Before writing, validate each declared canonical target with `task_write_scope`; a realpath outside that boundary, including symlink escape, fails before mutation.
 - For project tasks, global Skill/plugin source roots, caches and direct Skill installs are read-only. Editing requires a dedicated Skill-maintainer task, explicit authorization in the current user request and one exact canonical maintenance source root; hierarchy or a project lease grants nothing.
@@ -157,7 +156,7 @@ Ownership cells: backticked project-relative paths, comma-separated (`src/module
 - Before implementation, baseline objective/scope/non-goals/constraints/measurable acceptance; record baseline artifact, immutable version and SHA-256. Bind black-box evidence to code version, build ID, environment and timezone-aware time.
 - `docs/requirements/questions.json`: `question_id`, `impact_scope`, `risk`, `proposed_default`, `safe_fallback`, `answer_status`, `delivery_disposition`, `assumption`, `owner`, `review_due`. `NOT_PROVIDED`: reversible async `P2 pending`, never blocks continued implementation/verification/acceptance/closure; legal/security/destructive/irreversible/permission risk changes safe action, not disposition. On `ANSWERED`, correct requirement/objective baseline and rerun only affected `impact_scope` gates.
 - When applicable, preserve: solution design → system/module swimlanes → feature points → independent UI/UX prototype review → test points/unit cases → independently authored complete acceptance cases → implementation → code checks → independent black-box acceptance. Omit inapplicable stages, not empty placeholders.
-- Kimi/DeepSeek disabled. Standard work uses distinct Codex-native `gpt-6-astra` Agent/runs: one assigned writer `reasoning_effort=medium`; one read-only BLACK_BOX `reasoning_effort=high`, sole independent gate for change/acceptance review and black-box execution on the same candidate hash. Parent GPT/Dispatcher relays only, no standard gate. Only mapped high-risk adds `$native-gpt-review-loop` solution-author/adjudication. Six candidate versions without pass: `incomplete` or `blocked`; no self-report proof, secrets or full chat.
+- Kimi/DeepSeek disabled. Standard work has one assigned writer: a Codex-native `gpt-5.6-sol` Agent at `reasoning_effort=medium`; a distinct read-only `gpt-6-astra` BLACK_BOX Agent at `reasoning_effort=high` is the sole independent gate for review and black-box execution on the same candidate hash. Parent GPT/Dispatcher only relay, with no standard gate. Mapped high-risk uses `$native-gpt-review-loop`. Six candidate versions without pass: `incomplete` or `blocked`; self-report, secrets and full chat are not proof.
 - Classify and justify `small`, `standard`, or `high-risk`. Behavior/UI/API/mobile/touch/responsive are at least standard; public API, auth, security, privacy, migration, persistence, async, cross-module and schema are high-risk; unknown stays high-risk until investigated. Small: known non-observable impact, one registered writer, targeted checks only. Standard work uses at most one writer and one read-only BLACK_BOX Agent. High-risk: separately mapped specialist roles only.
 - Read-only UI/UX Agent: review mapped high-risk UI against approved baseline/solution/swimlanes/feature points/prototype without expanding requirements. Define test points/unit cases before implementation; independent acceptance covers success/rejection/failure/retry/recovery/permission/boundaries.
 - Implement only approved `REQ-*`/`FEAT-*`. New or changed behavior needs a new or updated identifier; before code continues, synchronize only applicable and mapped design/swimlane/UI/test/acceptance artifacts selected by the gate plan.
@@ -224,7 +223,7 @@ Ownership cells: backticked project-relative paths, comma-separated (`src/module
 - Only when approved baseline/environment/change scope explicitly includes mobile Web/touch/responsive behavior, repeat closure in applicable mobile browser viewports with mobile end-to-end cases. Native mobile uses its registered native test command, not browser automation. Otherwise mobile adaptation/verification is not required and must not block completion.
 - Required viewports: no console errors, failed required requests, broken controls, clipped critical content or page-level horizontal overflow. Log viewport sizes, click path, assertions and evidence.
 - Current read-only BLACK_BOX Agent executes or independently replays the completion-stage application-browser transcript; bind its distinct Agent run ID as verifier, not writer self-report.
-- Save browser/entry/DOM/screenshot/action/E2E bindings at `{{FRONTEND_EVIDENCE_PATH}}`; then run `{{FRONTEND_EVIDENCE_VALIDATION_COMMAND}}`. Bind candidate/times, URL/root/path/hashes, ordered selectors, viewport, exact E2E argv/framework/tests and independent verifier. Stale/missing/reused/fabricated evidence, broken action order/state transition, console/network failures or baseline/code/build mismatch blocks completion.
+- Save browser/entry/DOM/screenshot/action/E2E bindings at `{{FRONTEND_EVIDENCE_PATH}}`; then run `{{FRONTEND_EVIDENCE_VALIDATION_COMMAND}}`. Bind candidate/time, URL/root/path/hashes, selectors, viewport, exact E2E argv/framework/tests and independent verifier. Stale or fabricated evidence, console/network failures, or baseline/code/build mismatch blocks completion.
 - With any bug or unexplained error, do not mark frontend work `completed` or passed.
 
 ## Project-Specific Rules

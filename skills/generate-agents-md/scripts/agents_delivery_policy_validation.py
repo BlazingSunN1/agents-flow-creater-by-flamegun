@@ -445,10 +445,10 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
     checks = ((
             _section_has_line(text, (
                 r"Kimi", r"DeepSeek", r"disabled|暂停|禁用", r"native-gpt-review-loop",
-                r"gpt-6-astra", r"reasoning_effort=medium", r"reasoning_effort=high",
+                r"gpt-5\.6-sol", r"gpt-6-astra", r"reasoning_effort=medium", r"reasoning_effort=high",
             )),
             "missing-native-sol-model-policy",
-            "缺少停用外部 provider、改用原生 GPT-6 Astra Skill 及精确模型绑定",
+            "缺少停用外部 provider、Sol medium 唯一写者、GPT-6 high 只读门禁及精确模型绑定",
         ),
         (
             _section_has_line(text, (
@@ -479,9 +479,9 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
             "缺少独立 Agent 只读、获派写者唯一写入、Dispatcher 仅转交及真实执行证据边界",
         ),
     )
-    issues = [Issue("error", code, message) for matched, code, message in checks if not matched]
     contradiction_patterns = (
-        r"gpt-6-astra.{0,80}(?:optional|fallback|substitut|可选|替换|降级)",
+        r"gpt-5\.6-sol.{0,80}(?:optional|fallback|substitut|可选|替换|降级)",
+        r"(?:automatic|silent|自动|静默).{0,30}(?:fallback|回退).{0,40}(?:Qwen|provider|model|模型)",
         r"solution-author.{0,80}(?:write workspace|modify code|写工作区|修改代码)",
         r"black-box-reviewer.{0,80}(?:write workspace|modify code|写工作区|修改代码)",
         r"(?:parent GPT|父 GPT).{0,80}(?:additional|separate|another|额外|另加).{0,50}(?:standard|普通|标准).{0,20}(?:gates?|门禁)",
@@ -490,10 +490,10 @@ def _validate_external_multi_model_policy(text: str) -> list[Issue]:
         r"child self-report.{0,40}(?:proves|is sufficient|counts as).{0,30}(?:model|evidence)",
         r"子 Agent 自报.{0,30}(?:可以|可|足以|能够).{0,20}(?:证明|证据)",
     )
-    return [*issues, *_native_sol_contradiction_issues(text, contradiction_patterns)]
+    return [Issue("error", code, message) for matched, code, message in checks if not matched] + _native_sol_contradiction_issues(text, contradiction_patterns)
 
 def _native_sol_contradiction_issues(text: str, patterns: tuple[str, ...]) -> list[Issue]:
     flattened = " ".join(line.strip() for line in text.splitlines())
     if not any(re.search(pattern, flattened, re.IGNORECASE) for pattern in patterns):
         return []
-    return [Issue("error", "contradictory-native-sol-policy", "原生 GPT-6 Astra 模型、只读角色、父级转交边界和证据门禁不得被否定或降级")]
+    return [Issue("error", "contradictory-native-sol-policy", "原生 Sol medium 写者、GPT-6 high 只读角色、父级转交边界和证据门禁不得被否定或降级")]

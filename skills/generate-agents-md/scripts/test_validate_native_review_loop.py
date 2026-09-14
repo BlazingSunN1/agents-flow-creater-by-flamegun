@@ -12,6 +12,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from agents_authority_matrix_validation import AUTHORITY_MATRIX_SHA256
 from validate_native_review_loop import _test_only_validate_native_review_loop, validate_native_review_loop
+from test_validate_agents_md import project_root_fixture
+from test_writer_authorization_support import (
+    write_historical_qwen_write_proof,
+    write_historical_sol_write_proof,
+)
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 PUBLIC_TEMPLATE = SKILL_ROOT / "assets/native-review-loop-evidence.template.json"
@@ -21,6 +26,13 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         (self.root / "evidence").mkdir()
+        (self.root / "src").mkdir()
+        (self.root / "src/module.py").write_text("candidate\n", encoding="utf-8")
+        agents = project_root_fixture().replace(
+            "| module | verified module scope | `src/` | ModuleMaintainer |",
+            "| m02 | verified module scope | `src/` | M02 Maintainer |",
+        )
+        (self.root / "AGENTS.md").write_text(agents, encoding="utf-8")
         self.path = self.root / "native-review-loop.json"
         self.data = self._valid_data()
         self._write_bundle()
@@ -37,15 +49,30 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
                  candidate_sha256: str | None = None, input_sha256: str | None = None,
                  output_sha256: str | None = None, verdict: str | None = None,
                  maintainer_title: str | None = None) -> dict[str, object]:
+        writer = role in {"module-maintainer", "implementation"}
+        writer_runtime = getattr(self, "writer_runtime", {
+            "provider": "codex-native-agent", "model": "gpt-5.6-sol", "effort": "medium",
+        })
+        model = str(writer_runtime["model"]) if writer else "gpt-6-astra"
+        provider = str(writer_runtime["provider"]) if writer else "codex-native-agent"
+        effort = str(writer_runtime["effort"]) if writer else "high"
         value: dict[str, object] = {
-            "schema_version": 1, "receipt_kind": kind,
-            "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
-            "recorded_model": "gpt-6-astra", "agent_id": agent_id,
-            "requested_reasoning_effort": "medium" if role in {"module-maintainer", "implementation"} else "high",
-            "recorded_reasoning_effort": "medium" if role in {"module-maintainer", "implementation"} else "high",
+            "schema_version": 2 if writer else 1, "receipt_kind": kind,
+            "provider": provider, "requested_model": model,
+            "recorded_model": model, "agent_id": agent_id,
+            "requested_reasoning_effort": effort,
+            "recorded_reasoning_effort": effort,
             "run_id": run_id, "role": role, "module": "M02",
             "maintainer_title": maintainer_title or role,
         }
+        if writer:
+            value.update({
+                "read_only": False, "authority_matrix_sha256": AUTHORITY_MATRIX_SHA256,
+                "owned_paths": ["src"], "baseline_sha256": "b" * 64,
+                "code_version": "code-v1", "build_id": "build-v1",
+                "candidate_sha256": self.writer_candidate_sha,
+                "historical_write_proof": self.writer_write_proof,
+            })
         if kind == "codex-native-output-result":
             value.update({
                 "input_sha256": input_sha256, "output_sha256": output_sha256,
@@ -114,6 +141,14 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
             kind="codex-native-spawn-result", maintainer_title="coordinator-adjudicator",
         ))
         writer_path = "evidence/writer-spawn.json"
+        self.writer_candidate_sha = candidate_sha
+        self.writer_write_proof = write_historical_sol_write_proof(
+            self.root, module_key="m02", maintainer_title="M02 Maintainer",
+            owned_paths=["src"], agent_id="writer-agent", run_id="writer-run",
+            lease_id="lease-native-writer-history", target_path="src/module.py",
+            baseline_sha256="b" * 64, code_version="code-v1", build_id="build-v1",
+            candidate_sha256=candidate_sha, prefix="native-writer",
+        )
         writer_sha = self._write_json(writer_path, self._receipt(
             role="module-maintainer", agent_id="writer-agent", run_id="writer-run",
             kind="codex-native-spawn-result", maintainer_title="M02 Maintainer",
@@ -132,6 +167,7 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
             "writer_agent_id": "writer-agent", "writer_run_id": "writer-run",
             "writer_role": "module-maintainer", "writer_spawn_receipt": writer_path,
             "writer_spawn_receipt_sha256": writer_sha,
+            "writer_owned_paths": ["src"], "writer_write_proof": self.writer_write_proof,
             "scope_version": "scope-v1", "scope_sha256": "a" * 64,
             "baseline_version": "baseline-v1", "baseline_sha256": "b" * 64,
             "code_version": "code-v1", "build_id": "build-v1",
@@ -205,6 +241,23 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
         )
         self._write_bundle()
 
+    def test_writable_loop_writer_schema_v1_cannot_bypass_source_and_proof(self) -> None:
+        receipt = self.root / str(self.data["writer_spawn_receipt"])
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        payload["schema_version"] = 1
+        receipt.write_text(json.dumps(payload), encoding="utf-8")
+        self.data["writer_spawn_receipt_sha256"] = hashlib.sha256(
+            receipt.read_bytes()
+        ).hexdigest()
+        self._write_bundle()
+        codes = {
+            issue.code for issue in _test_only_validate_native_review_loop(
+                self.path, project_root=self.root,
+                _test_only_host_attestation_verifier=lambda *_: True,
+            )
+        }
+        self.assertIn("invalid-native-loop-writer-spawn-receipt", codes)
+
     def codes(self) -> set[str]:
         return {item.code for item in _test_only_validate_native_review_loop(
             self.path, project_root=self.root, _test_only_host_attestation_verifier=lambda *_: True,
@@ -212,6 +265,32 @@ class NativeReviewLoopValidatorTests(unittest.TestCase):
 
     def test_valid_design_review_passes(self) -> None:
         self.assertEqual(set(), self.codes())
+
+    def test_explicit_qwen_q8_xhigh_writer_keeps_reviewers_read_only(self) -> None:
+        self.writer_runtime = {
+            "provider": "ollama_local", "model": "qwen3.8:27b-q8_0", "effort": "xhigh",
+        }
+        self.writer_write_proof = write_historical_qwen_write_proof(
+            self.root, module_key="m02", maintainer_title="M02 Maintainer",
+            owned_paths=["src"], agent_id="writer-agent", run_id="writer-run",
+            lease_id="lease-native-qwen-history", target_path="src/module.py",
+            baseline_sha256="b" * 64, code_version="code-v1", build_id="build-v1",
+            candidate_sha256=self.writer_candidate_sha, prefix="native-qwen-writer",
+        )
+        self.data["writer_write_proof"] = self.writer_write_proof
+        writer_path = self.root / str(self.data["writer_spawn_receipt"])
+        writer_path.write_text(json.dumps(self._receipt(
+            role="module-maintainer", agent_id="writer-agent", run_id="writer-run",
+            kind="codex-native-spawn-result", maintainer_title="M02 Maintainer",
+        ), sort_keys=True), encoding="utf-8")
+        self.data["writer_spawn_receipt_sha256"] = hashlib.sha256(
+            writer_path.read_bytes()
+        ).hexdigest()
+        self._write_bundle()
+        self.assertEqual(set(), self.codes())
+        reviewer = self.data["candidates"][0]["black_box_reviewer"]
+        self.assertEqual("gpt-6-astra", reviewer["agent_model"])
+        self.assertFalse(reviewer["may_modify_code"])
 
     def test_checkpoint_chain_is_mandatory(self) -> None:
         self.data.pop("checkpoint_chain")

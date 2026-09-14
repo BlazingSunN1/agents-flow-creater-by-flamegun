@@ -14,6 +14,9 @@ from unittest.mock import patch
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_ROOT = SCRIPT_DIR.parent
+PLUGIN_ROOT = SKILL_ROOT.parent.parent
+if not (PLUGIN_ROOT / "README.md").is_file() and (SKILL_ROOT.parent / "README.md").is_file():
+    PLUGIN_ROOT = SKILL_ROOT.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -758,8 +761,8 @@ class SkillValidationTests(unittest.TestCase):
             SKILL_ROOT / "assets" / "AGENTS.template.md",
             SKILL_ROOT / "references" / "module-agent-governance.md",
             SKILL_ROOT / "references" / "multi-model-review-policy.md",
-            SKILL_ROOT.parent.parent / "README.md",
-            SKILL_ROOT.parent.parent / ".codex-plugin" / "plugin.json",
+            PLUGIN_ROOT / "README.md",
+            PLUGIN_ROOT / ".codex-plugin" / "plugin.json",
         )
         combined = "\n".join(path.read_text(encoding="utf-8") for path in surfaces)
         self.assertNotIn("active parent GPT remains the sole workspace writer", combined)

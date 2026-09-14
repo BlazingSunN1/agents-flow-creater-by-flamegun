@@ -4,21 +4,130 @@
   "title": "Project Record Write Lease",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "receipt_kind", "lease_id", "module_key", "maintainer_title", "agent_id", "run_id", "target_path", "owned_paths", "agents_path", "agents_sha256", "authority_matrix_path", "authority_matrix_sha256", "lease_status"],
+  "required": [
+    "schema_version",
+    "receipt_kind",
+    "lease_id",
+    "module_key",
+    "maintainer_title",
+    "agent_id",
+    "run_id",
+    "target_path",
+    "owned_paths",
+    "agents_path",
+    "agents_sha256",
+    "authority_matrix_path",
+    "authority_matrix_sha256",
+    "lease_status",
+    "writer_identity"
+  ],
   "properties": {
-    "schema_version": {"const": 1},
-    "receipt_kind": {"enum": ["local-coordination-project-record-write-lease", "host-attested-project-record-write-lease"]},
-    "lease_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
-    "module_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{1,127}$"},
-    "maintainer_title": {"type": "string", "minLength": 1},
-    "agent_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
-    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
-    "target_path": {"type": "string", "minLength": 1},
-    "owned_paths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-    "agents_path": {"const": "AGENTS.md"},
-    "agents_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "authority_matrix_path": {"const": "AGENTS.md#machine-enforced-authority-matrix"},
-    "authority_matrix_sha256": {"const": "aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643"},
-    "lease_status": {"const": "active"}
+    "schema_version": {
+      "const": 1
+    },
+    "receipt_kind": {
+      "const": "local-coordination-project-record-write-lease"
+    },
+    "lease_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"
+    },
+    "module_key": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._:-]{1,127}$"
+    },
+    "maintainer_title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"
+    },
+    "target_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owned_paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "agents_path": {
+      "const": "AGENTS.md"
+    },
+    "agents_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authority_matrix_path": {
+      "const": "AGENTS.md#machine-enforced-authority-matrix"
+    },
+    "authority_matrix_sha256": {
+      "const": "aff241a02c51ebcf2b085602f122d7a677a41ea7cb2fa0d3db778a6886b6e643"
+    },
+    "lease_status": {
+      "enum": ["active", "closed"]
+    },
+    "writer_identity": {"$ref": "#/$defs/writerIdentity"}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
+    "path": {"type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "writerIdentity": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["policy", "provider", "requested_model", "recorded_model", "requested_reasoning_effort", "recorded_reasoning_effort", "runtime_kind", "writer_agent_id", "writer_run_id", "evidence_path", "evidence_sha256"],
+          "properties": {
+            "policy": {"const": "codex-native-sol-writer-v1"},
+            "provider": {"const": "codex-native-agent"},
+            "requested_model": {"const": "gpt-5.6-sol"},
+            "recorded_model": {"const": "gpt-5.6-sol"},
+            "requested_reasoning_effort": {"const": "medium"},
+            "recorded_reasoning_effort": {"const": "medium"},
+            "runtime_kind": {"const": "codex-rollout-jsonl"},
+            "writer_agent_id": {"$ref": "#/$defs/id"}, "writer_run_id": {"$ref": "#/$defs/id"},
+            "evidence_path": {"$ref": "#/$defs/path"}, "evidence_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["policy", "provider", "requested_model", "reported_model", "runtime_kind", "endpoint", "writer_agent_id", "writer_run_id", "evidence_path", "evidence_sha256"],
+          "properties": {
+            "policy": {"const": "local-qwen-writer-v1"}, "provider": {"const": "ollama_local"},
+            "requested_model": {"enum": ["qwen3.8:27b-bf16", "qwen3.8:27b-q8_0"]}, "reported_model": {"enum": ["qwen3.8:27b-bf16", "qwen3.8:27b-q8_0"]},
+            "requested_reasoning_effort": {"enum": ["none", "xhigh"]}, "reported_reasoning_effort": {"enum": ["none", "xhigh"]},
+            "runtime_kind": {"const": "local-qwen-codex-exec"}, "endpoint": {"const": "http://127.0.0.1:11434/v1/"},
+            "writer_agent_id": {"$ref": "#/$defs/id"}, "writer_run_id": {"$ref": "#/$defs/id"},
+            "evidence_path": {"$ref": "#/$defs/path"}, "evidence_sha256": {"$ref": "#/$defs/sha256"}
+          },
+          "allOf": [
+            {
+              "oneOf": [
+                {"properties": {"requested_model": {"const": "qwen3.8:27b-bf16"}, "reported_model": {"const": "qwen3.8:27b-bf16"}}},
+                {"properties": {"requested_model": {"const": "qwen3.8:27b-q8_0"}, "reported_model": {"const": "qwen3.8:27b-q8_0"}}}
+              ]
+            },
+            {
+              "oneOf": [
+                {"not": {"anyOf": [{"required": ["requested_reasoning_effort"]}, {"required": ["reported_reasoning_effort"]}]}},
+                {"required": ["requested_reasoning_effort", "reported_reasoning_effort"], "properties": {"requested_reasoning_effort": {"const": "none"}, "reported_reasoning_effort": {"const": "none"}}},
+                {"required": ["requested_reasoning_effort", "reported_reasoning_effort"], "properties": {"requested_reasoning_effort": {"const": "xhigh"}, "reported_reasoning_effort": {"const": "xhigh"}}}
+              ]
+            }
+          ]
+        }
+      ]
+    }
   }
 }

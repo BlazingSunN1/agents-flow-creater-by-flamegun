@@ -21,6 +21,13 @@ from validate_system_delivery_bundle import (
 from system_actor_validation import system_candidate_payload_sha256
 from system_record_path_validation import cross_module_record_template_error
 from test_validate_agents_md import project_root_fixture
+from test_update_project_record import (
+    qwen_evidence_bytes, qwen_writer_identity, sol_writer_identity,
+    synthetic_rollout_bytes, write_writer_registry,
+)
+from test_writer_authorization_support import (
+    write_historical_qwen_write_proof, write_historical_sol_write_proof,
+)
 
 
 AUTHORITY_LOCATOR = "AGENTS.md#machine-enforced-authority-matrix"
@@ -108,13 +115,24 @@ class SystemDeliveryBundleTests(unittest.TestCase):
         )
         evidence = self.root / f"evidence/{module}-agents.json"
         title = f"Maintainer {suffix.upper()}"
+        baseline_sha = hashlib.sha256(f"{module}-baseline".encode()).hexdigest()
+        candidate_sha256 = hashlib.sha256(f"{module}-candidate".encode()).hexdigest()
+        implementation_write_proof = write_historical_sol_write_proof(
+            self.root, module_key=module, maintainer_title=title,
+            owned_paths=[f"src/{suffix}"], agent_id=f"maintainer-agent-{suffix}",
+            run_id=f"impl-run-{suffix}", lease_id=f"lease-{module}-history",
+            target_path=f"src/{suffix}/{suffix}.py", baseline_sha256=baseline_sha,
+            code_version="code-v1", build_id="build-1",
+            candidate_sha256=candidate_sha256,
+            prefix=f"implementation-{module}",
+        )
         receipt = self.root / f"evidence/{module}-spawn-receipt.json"
         receipt.write_text(json.dumps({
-            "schema_version": 1,
+            "schema_version": 2,
             "receipt_kind": "codex-native-spawn-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-6-astra",
-            "recorded_model": "gpt-6-astra",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
             "requested_reasoning_effort": "medium",
             "recorded_reasoning_effort": "medium",
             "agent_id": f"maintainer-agent-{suffix}",
@@ -122,6 +140,13 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             "role": "module-maintainer",
             "module": module,
             "maintainer_title": title,
+            "read_only": False,
+            "authority_matrix_sha256": AUTHORITY_SHA256,
+            "owned_paths": [f"src/{suffix}"],
+            "baseline_sha256": baseline_sha,
+            "code_version": "code-v1", "build_id": "build-1",
+            "candidate_sha256": candidate_sha256,
+            "historical_write_proof": implementation_write_proof,
         }), encoding="utf-8")
         gate_receipt = self.root / f"evidence/{module}-black-box-spawn-receipt.json"
         gate_receipt.write_text(json.dumps({
@@ -140,7 +165,6 @@ class SystemDeliveryBundleTests(unittest.TestCase):
         }), encoding="utf-8")
         gate_input_sha256 = hashlib.sha256(f"{module}-input".encode()).hexdigest()
         gate_output_sha256 = hashlib.sha256(f"{module}-output".encode()).hexdigest()
-        candidate_sha256 = hashlib.sha256(f"{module}-candidate".encode()).hexdigest()
         gate_output_receipt = self.root / f"evidence/{module}-black-box-output-result.json"
         gate_output_receipt.write_text(json.dumps({
             "schema_version": 1,
@@ -164,16 +188,19 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             "verdict": "pass",
         }), encoding="utf-8")
         evidence.write_text(json.dumps({
-            "schema_version": 1,
+            "schema_version": 2,
             "stage": "completion",
             "implementation_agent_title": title,
             "implementation_agent_provider": "codex-native-agent",
-            "implementation_agent_model": "gpt-6-astra",
+            "implementation_agent_model": "gpt-5.6-sol",
             "implementation_agent_reasoning_effort": "medium",
             "implementation_agent_id": f"maintainer-agent-{suffix}",
             "implementation_run_id": f"impl-run-{suffix}",
             "implementation_spawn_receipt": f"evidence/{module}-spawn-receipt.json",
             "implementation_spawn_receipt_sha256": hashlib.sha256(receipt.read_bytes()).hexdigest(),
+            "authority_matrix_sha256": AUTHORITY_SHA256,
+            "owned_paths": [f"src/{suffix}"],
+            "implementation_write_proof": implementation_write_proof,
             "baseline_version": "req-v1",
             "baseline_sha256": hashlib.sha256(f"{module}-baseline".encode()).hexdigest(),
             "candidate_sha256": candidate_sha256,
@@ -195,7 +222,6 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             }],
             "open_disagreements": [],
         }), encoding="utf-8")
-        baseline_sha = hashlib.sha256(f"{module}-baseline".encode()).hexdigest()
         questions = self.root / f"evidence/{module}-requirement-questions.json"
         questions.write_text(json.dumps({
             "schema_version": 1,
@@ -219,7 +245,7 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             "requirement_baseline_sha256": baseline_sha,
             "authority_binding": authority_binding(MODULE_AUTHORITY_ROWS),
             "code_version": "code-v1", "build_id": "build-1", "maintainer_title": title,
-            "maintainer_provider": "codex-native-agent", "maintainer_model": "gpt-6-astra",
+            "maintainer_provider": "codex-native-agent", "maintainer_model": "gpt-5.6-sol",
             "maintainer_reasoning_effort": "medium",
             "maintainer_agent_id": f"maintainer-agent-{suffix}",
             "maintainer_spawn_receipt": f"evidence/{module}-spawn-receipt.json",
@@ -250,7 +276,7 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             "aggregation_writer_role": "SYSTEM_AGGREGATION",
             "aggregation_writer_title": "System Aggregation Writer",
             "aggregation_writer_provider": "codex-native-agent",
-            "aggregation_writer_model": "gpt-6-astra",
+            "aggregation_writer_model": "gpt-5.6-sol",
             "aggregation_writer_agent_id": "system-aggregation-agent-1",
             "aggregation_writer_run_id": "system-aggregation-run-1",
             "aggregation_spawn_receipt": "evidence/system-aggregation-spawn-receipt.json",
@@ -266,8 +292,8 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             "schema_version": 1,
             "receipt_kind": "codex-native-output-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-6-astra",
-            "recorded_model": "gpt-6-astra",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
             "agent_id": value["aggregation_writer_agent_id"],
             "run_id": value["aggregation_writer_run_id"],
             "role": "system-aggregation",
@@ -277,6 +303,144 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             "authority_binding": value["authority_binding"],
         }
         self.aggregation_receipt.write_text(json.dumps(aggregation_receipt), encoding="utf-8")
+        value["aggregation_spawn_receipt_sha256"] = hashlib.sha256(self.aggregation_receipt.read_bytes()).hexdigest()
+        self.manifest.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+        self._enable_v2_aggregation_authority()
+
+    def _enable_v2_aggregation_authority(self) -> None:
+        text = self.agents.read_text(encoding="utf-8")
+        if "| governance | system records | `evidence/` | Governance Maintainer |" not in text:
+            text = text.replace(
+                "| module-b | capability b | `src/b/` | Maintainer B |",
+                "| module-b | capability b | `src/b/` | Maintainer B |\n"
+                "| governance | system records | `evidence/` | Governance Maintainer |",
+            )
+        self.agents.write_text(text, encoding="utf-8")
+        value = json.loads(self.manifest.read_text(encoding="utf-8"))
+        value.update({
+            "runtime_receipt_schema_version": 2,
+            "baseline_sha256": "b" * 64,
+            "candidate_sha256": "c" * 64,
+            "dispatcher_owned_paths": [],
+            "aggregation_writer_owned_paths": ["evidence"],
+            "aggregation_writer_module_key": "governance",
+            "aggregation_writer_maintainer_title": "Governance Maintainer",
+            "agents_sha256": hashlib.sha256(self.agents.read_bytes()).hexdigest(),
+        })
+        identity = sol_writer_identity(
+            self.root, str(value["aggregation_writer_agent_id"]),
+            str(value["aggregation_writer_run_id"]),
+        )
+        history_dir = self.root / "evidence/history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        (history_dir / "AGENTS.md").write_bytes(self.agents.read_bytes())
+        lease_common = {
+            "schema_version": 1,
+            "receipt_kind": "local-coordination-project-record-write-lease",
+            "module_key": "governance", "maintainer_title": "Governance Maintainer",
+            "agent_id": value["aggregation_writer_agent_id"],
+            "run_id": value["aggregation_writer_run_id"],
+            "owned_paths": ["evidence"], "agents_path": "AGENTS.md",
+            "agents_sha256": value["agents_sha256"],
+            "authority_matrix_path": "AGENTS.md#machine-enforced-authority-matrix",
+            "authority_matrix_sha256": AUTHORITY_SHA256,
+            "writer_identity": identity,
+        }
+        history_lease = dict(
+            lease_common, lease_id="aggregation-receipt-lease",
+            target_path="evidence/system-aggregation-spawn-receipt.json",
+            lease_status="closed",
+        )
+        history_lease_path = self.root / "evidence/history/receipt-lease.json"
+        history_lease_path.write_text(json.dumps(history_lease, sort_keys=True), encoding="utf-8")
+        history_registry = {
+            "schema_version": 1,
+            "registry_kind": "local-coordination-module-writer-registry",
+            "active_leases": [{
+                "module_key": "governance", "maintainer_title": "Governance Maintainer",
+                "agent_id": value["aggregation_writer_agent_id"],
+                "run_id": value["aggregation_writer_run_id"],
+                "lease_id": "aggregation-receipt-lease", "role": "module-maintainer",
+                "owned_paths": ["evidence"], "lease_status": "active",
+                "writer_identity": identity,
+            }],
+        }
+        history_registry_path = self.root / "evidence/history/registry.json"
+        history_registry_path.write_text(json.dumps(history_registry, sort_keys=True), encoding="utf-8")
+        evidence_path = self.root / str(identity["evidence_path"])
+        identity_evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        proof = {
+            "schema_version": 1,
+            "proof_kind": "local-coordination-historical-project-record-write-proof",
+            "module_key": "governance", "maintainer_title": "Governance Maintainer",
+            "agent_id": value["aggregation_writer_agent_id"],
+            "run_id": value["aggregation_writer_run_id"],
+            "lease_id": "aggregation-receipt-lease",
+            "target_path": "evidence/system-aggregation-spawn-receipt.json",
+            "owned_paths": ["evidence"],
+            "lease_path": "evidence/history/receipt-lease.json",
+            "lease_sha256": hashlib.sha256(history_lease_path.read_bytes()).hexdigest(),
+            "registry_snapshot_path": "evidence/history/registry.json",
+            "registry_snapshot_sha256": hashlib.sha256(history_registry_path.read_bytes()).hexdigest(),
+            "agents_snapshot_path": "evidence/history/AGENTS.md",
+            "agents_snapshot_sha256": value["agents_sha256"],
+            "writer_evidence_path": identity["evidence_path"],
+            "writer_evidence_sha256": identity["evidence_sha256"],
+            "writer_source_path": identity_evidence["source_path"],
+            "writer_source_sha256": identity_evidence["source_sha256"],
+            "baseline_sha256": value["baseline_sha256"],
+            "code_version": value["code_version"], "build_id": value["build_id"],
+            "candidate_sha256": value["candidate_sha256"],
+        }
+        proof_path = self.root / "evidence/history/receipt-proof.json"
+        proof_path.write_text(json.dumps(proof, sort_keys=True), encoding="utf-8")
+        live_lease = dict(
+            lease_common, lease_id="aggregation-manifest-lease",
+            target_path="evidence/system-bundle.json", lease_status="active",
+        )
+        live_lease_path = self.root / "evidence/history/manifest-lease.json"
+        live_lease_path.write_text(json.dumps(live_lease, sort_keys=True), encoding="utf-8")
+        write_writer_registry(self.root, [{
+            "module_key": "governance", "maintainer_title": "Governance Maintainer",
+            "agent_id": value["aggregation_writer_agent_id"],
+            "run_id": value["aggregation_writer_run_id"],
+            "lease_id": "aggregation-manifest-lease", "role": "module-maintainer",
+            "owned_paths": ["evidence"], "lease_status": "active", "writer_identity": identity,
+        }])
+        value["aggregation_receipt_write_proof"] = {
+            "lease_id": "aggregation-receipt-lease",
+            "path": "evidence/history/receipt-proof.json",
+            "sha256": hashlib.sha256(proof_path.read_bytes()).hexdigest(),
+        }
+        value["aggregation_manifest_write_lease"] = {
+            "lease_id": "aggregation-manifest-lease",
+            "path": "evidence/history/manifest-lease.json",
+            "sha256": hashlib.sha256(live_lease_path.read_bytes()).hexdigest(),
+        }
+        dispatcher = {
+            "schema_version": 2, "receipt_kind": "codex-native-spawn-result",
+            "provider": "codex-native-agent", "requested_model": "gpt-6-astra",
+            "recorded_model": "gpt-6-astra", "requested_reasoning_effort": "high",
+            "recorded_reasoning_effort": "high", "agent_id": value["dispatcher_agent_id"],
+            "run_id": value["dispatcher_run_id"], "role": "dispatcher", "module": "system",
+            "maintainer_title": "System Dispatcher", "read_only": True,
+            "authority_matrix_sha256": AUTHORITY_SHA256, "owned_paths": [],
+            "baseline_sha256": value["baseline_sha256"], "code_version": value["code_version"],
+            "build_id": value["build_id"], "candidate_sha256": value["candidate_sha256"],
+        }
+        self.dispatcher_receipt.write_text(json.dumps(dispatcher), encoding="utf-8")
+        value["dispatcher_spawn_receipt_sha256"] = hashlib.sha256(self.dispatcher_receipt.read_bytes()).hexdigest()
+        aggregation = {
+            **dispatcher, "receipt_kind": "codex-native-output-result",
+            "requested_model": "gpt-5.6-sol", "recorded_model": "gpt-5.6-sol",
+            "requested_reasoning_effort": "medium", "recorded_reasoning_effort": "medium",
+            "agent_id": value["aggregation_writer_agent_id"],
+            "run_id": value["aggregation_writer_run_id"], "role": "system-aggregation",
+            "maintainer_title": "System Aggregation Writer", "read_only": False,
+            "owned_paths": ["evidence"], "authority_binding": value["authority_binding"],
+            "candidate_payload_sha256": system_candidate_payload_sha256(value),
+        }
+        self.aggregation_receipt.write_text(json.dumps(aggregation), encoding="utf-8")
         value["aggregation_spawn_receipt_sha256"] = hashlib.sha256(self.aggregation_receipt.read_bytes()).hexdigest()
         self.manifest.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
 
@@ -299,6 +463,169 @@ class SystemDeliveryBundleTests(unittest.TestCase):
             )
         }
         self.assertIn("system-dispatcher-receipt-not-validated", strict_codes)
+
+    def test_v2_aggregation_binds_historical_receipt_proof_and_current_manifest_lease(self) -> None:
+        self._enable_v2_aggregation_authority()
+        self.assertEqual(set(), self.codes())
+        value = json.loads(self.manifest.read_text(encoding="utf-8"))
+        value["aggregation_manifest_write_lease"]["lease_id"] = "wrong-manifest-lease"
+        self.manifest.write_text(json.dumps(value), encoding="utf-8")
+        self.assertIn("system-aggregation-manifest-write-lease-invalid", self.codes())
+
+    def test_aggregation_rejects_qwen_history_masquerading_as_sol(self) -> None:
+        value = json.loads(self.manifest.read_text(encoding="utf-8"))
+        descriptor = value["aggregation_receipt_write_proof"]
+        proof_path = self.root / descriptor["path"]
+        proof = json.loads(proof_path.read_text(encoding="utf-8"))
+        source = synthetic_rollout_bytes(session_id=value["aggregation_writer_run_id"])
+        source_path = self.root / "docs/governance/qwen-synthetic-rollout.jsonl"
+        source_path.write_bytes(source)
+        evidence = qwen_evidence_bytes(
+            value["aggregation_writer_agent_id"], value["aggregation_writer_run_id"],
+            source=source,
+        )
+        evidence_path = self.root / "docs/governance/qwen-invocation-evidence.json"
+        evidence_path.write_bytes(evidence)
+        identity = qwen_writer_identity(
+            value["aggregation_writer_agent_id"], value["aggregation_writer_run_id"],
+            evidence=evidence, source=source,
+        )
+        lease_path = self.root / proof["lease_path"]
+        lease = json.loads(lease_path.read_text(encoding="utf-8"))
+        lease["writer_identity"] = identity
+        lease_path.write_text(json.dumps(lease, sort_keys=True), encoding="utf-8")
+        registry_path = self.root / proof["registry_snapshot_path"]
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        registry["active_leases"][0]["writer_identity"] = identity
+        registry_path.write_text(json.dumps(registry, sort_keys=True), encoding="utf-8")
+        proof.update({
+            "lease_sha256": hashlib.sha256(lease_path.read_bytes()).hexdigest(),
+            "registry_snapshot_sha256": hashlib.sha256(registry_path.read_bytes()).hexdigest(),
+            "writer_evidence_path": identity["evidence_path"],
+            "writer_evidence_sha256": identity["evidence_sha256"],
+            "writer_source_path": "docs/governance/qwen-synthetic-rollout.jsonl",
+            "writer_source_sha256": hashlib.sha256(source).hexdigest(),
+        })
+        proof_path.write_text(json.dumps(proof, sort_keys=True), encoding="utf-8")
+        descriptor["sha256"] = hashlib.sha256(proof_path.read_bytes()).hexdigest()
+        receipt = json.loads(self.aggregation_receipt.read_text(encoding="utf-8"))
+        receipt["candidate_payload_sha256"] = system_candidate_payload_sha256(value)
+        self.aggregation_receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        value["aggregation_spawn_receipt_sha256"] = hashlib.sha256(
+            self.aggregation_receipt.read_bytes()
+        ).hexdigest()
+        self.manifest.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+        self.assertIn(
+            "system-aggregation-manifest-write-lease-invalid", self.codes(),
+        )
+
+    def test_explicit_qwen_q8_xhigh_policy_closes_system_aggregation(self) -> None:
+        value = json.loads(self.manifest.read_text(encoding="utf-8"))
+        write_proof = write_historical_qwen_write_proof(
+            self.root, module_key=str(value["aggregation_writer_module_key"]),
+            maintainer_title=str(value["aggregation_writer_maintainer_title"]),
+            owned_paths=list(value["aggregation_writer_owned_paths"]),
+            agent_id=str(value["aggregation_writer_agent_id"]),
+            run_id=str(value["aggregation_writer_run_id"]),
+            lease_id="aggregation-qwen-history",
+            target_path=str(value["aggregation_spawn_receipt"]),
+            baseline_sha256=str(value["baseline_sha256"]),
+            code_version=str(value["code_version"]), build_id=str(value["build_id"]),
+            candidate_sha256=str(value["candidate_sha256"]), prefix="aggregation-qwen",
+        )
+        history = {key: write_proof[key] for key in ("lease_id", "path", "sha256")}
+        proof = json.loads((self.root / history["path"]).read_text(encoding="utf-8"))
+        identity = json.loads((self.root / proof["lease_path"]).read_text(encoding="utf-8"))["writer_identity"]
+        live = value["aggregation_manifest_write_lease"]
+        live_path = self.root / live["path"]
+        lease = json.loads(live_path.read_text(encoding="utf-8"))
+        lease["writer_identity"] = identity
+        live_path.write_text(json.dumps(lease, sort_keys=True), encoding="utf-8")
+        live["sha256"] = hashlib.sha256(live_path.read_bytes()).hexdigest()
+        write_writer_registry(self.root, [{
+            "module_key": value["aggregation_writer_module_key"],
+            "maintainer_title": value["aggregation_writer_maintainer_title"],
+            "agent_id": value["aggregation_writer_agent_id"],
+            "run_id": value["aggregation_writer_run_id"],
+            "lease_id": live["lease_id"], "role": "module-maintainer",
+            "owned_paths": value["aggregation_writer_owned_paths"],
+            "lease_status": "active", "writer_identity": identity,
+        }])
+        value.update({
+            "aggregation_writer_provider": "ollama_local",
+            "aggregation_writer_model": "qwen3.8:27b-q8_0",
+            "aggregation_receipt_write_proof": history,
+        })
+        receipt = json.loads(self.aggregation_receipt.read_text(encoding="utf-8"))
+        receipt.update({
+            "provider": "ollama_local", "requested_model": "qwen3.8:27b-q8_0",
+            "recorded_model": "qwen3.8:27b-q8_0",
+            "requested_reasoning_effort": "xhigh", "recorded_reasoning_effort": "xhigh",
+            "candidate_payload_sha256": system_candidate_payload_sha256(value),
+        })
+        self.aggregation_receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        value["aggregation_spawn_receipt_sha256"] = hashlib.sha256(
+            self.aggregation_receipt.read_bytes()
+        ).hexdigest()
+        self.manifest.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+        self.assertEqual(set(), self.codes())
+
+    def test_aggregation_profile_mismatch_precedes_lease_id_mismatch(self) -> None:
+        value = json.loads(self.manifest.read_text(encoding="utf-8"))
+        descriptor = value["aggregation_manifest_write_lease"]
+        lease_path = self.root / descriptor["path"]
+        source = synthetic_rollout_bytes(session_id=value["aggregation_writer_run_id"])
+        source_path = self.root / "docs/governance/qwen-synthetic-rollout.jsonl"
+        source_path.write_bytes(source)
+        evidence = qwen_evidence_bytes(
+            value["aggregation_writer_agent_id"], value["aggregation_writer_run_id"],
+            source=source,
+        )
+        evidence_path = self.root / "docs/governance/qwen-invocation-evidence.json"
+        evidence_path.write_bytes(evidence)
+        identity = qwen_writer_identity(
+            value["aggregation_writer_agent_id"], value["aggregation_writer_run_id"],
+            evidence=evidence, source=source,
+        )
+        lease = json.loads(lease_path.read_text(encoding="utf-8"))
+        lease["writer_identity"] = identity
+        lease_path.write_text(json.dumps(lease, sort_keys=True), encoding="utf-8")
+        descriptor["sha256"] = hashlib.sha256(lease_path.read_bytes()).hexdigest()
+        descriptor["lease_id"] = "wrong-manifest-lease"
+        write_writer_registry(self.root, [{
+            "module_key": "governance", "maintainer_title": "Governance Maintainer",
+            "agent_id": value["aggregation_writer_agent_id"],
+            "run_id": value["aggregation_writer_run_id"],
+            "lease_id": "aggregation-manifest-lease", "role": "module-maintainer",
+            "owned_paths": ["evidence"], "lease_status": "active",
+            "writer_identity": identity,
+        }])
+        receipt = json.loads(self.aggregation_receipt.read_text(encoding="utf-8"))
+        receipt["candidate_payload_sha256"] = system_candidate_payload_sha256(value)
+        self.aggregation_receipt.write_text(json.dumps(receipt), encoding="utf-8")
+        value["aggregation_spawn_receipt_sha256"] = hashlib.sha256(
+            self.aggregation_receipt.read_bytes()
+        ).hexdigest()
+        self.manifest.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+        issues = validate_system_delivery_bundle(
+            manifest_path=self.manifest, project_root=self.root,
+        )
+        self.assertTrue(
+            any(
+                item.code == "system-aggregation-manifest-write-lease-invalid"
+                and item.message == "writer-profile-mismatch"
+                for item in issues
+            ),
+        )
+
+    def test_aggregation_runtime_receipt_schema_cannot_be_omitted(self) -> None:
+        value = json.loads(self.manifest.read_text(encoding="utf-8"))
+        value.pop("runtime_receipt_schema_version")
+        self.manifest.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+        self.assertTrue({
+            "system-runtime-receipt-schema",
+            "system-aggregation-runtime-binding-invalid",
+        } & self.codes())
 
     def test_cross_module_aggregation_rejects_shared_progress_path(self) -> None:
         text = self.agents.read_text(encoding="utf-8").replace(
@@ -589,7 +916,9 @@ class SystemDeliveryBundleTests(unittest.TestCase):
 
     def test_aggregation_receipt_binds_system_candidate_payload(self) -> None:
         value = json.loads(self.manifest.read_text(encoding="utf-8"))
+        original_payload_sha256 = system_candidate_payload_sha256(value)
         value["code_version"] = "tampered-after-aggregation"
+        self.assertNotEqual(original_payload_sha256, system_candidate_payload_sha256(value))
         self.manifest.write_text(json.dumps(value), encoding="utf-8")
         self.assertIn("invalid-system-aggregation-spawn-receipt", self.codes())
 

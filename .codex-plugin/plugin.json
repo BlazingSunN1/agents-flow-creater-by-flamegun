@@ -1,18 +1,21 @@
 {
   "name": "agents-flow-creater-by-flamegun",
-  "version": "0.2.0+codex.20260913144754",
-  "description": "Generate stable AGENTS.md workflows with native gpt-6-astra sub-Agent review; external Kimi and DeepSeek remain paused.",
+  "version": "0.2.0+codex.20260914153227",
+  "description": "Generate stable AGENTS.md workflows with one native Sol writer and independent GPT-6 Astra review.",
   "author": {
     "name": "FlameGun"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Agents Flow Creater by FlameGun",
-    "shortDescription": "Build stable workflows with native GPT-6 Astra review.",
-    "longDescription": "Generate and review scoped AGENTS.md rules with traceability, role-neutral module writer coordination, optional strict host attestation, independent acceptance, frontend browser verification, swimlane synchronization, and two read-only native gpt-6-astra review roles. External Kimi and DeepSeek remain paused.",
+    "shortDescription": "Build stable workflows with native Sol writing and GPT-6 review.",
+    "longDescription": "Generate and review scoped AGENTS.md rules with traceability, a single native gpt-5.6-sol writer, optional strict host attestation, independent acceptance, frontend browser verification, swimlane synchronization, and read-only gpt-6-astra review roles. External Kimi and DeepSeek remain paused.",
     "developerName": "FlameGun",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": "Use $generate-agents-md to build or review this project's stable workflow. Main, parent, and child placement grants no inherent write authority; authorize exactly one registered maintenance/implementation Agent/run per module only through a matching unique active module write lease. The Dispatcher role is always read-only, and an implementation identity must not reuse the Dispatcher Agent ID or run ID. Close each affected module independently before read-only system aggregation. For a multi-Agent quality loop use $native-gpt-review-loop with two read-only gpt-6-astra children. Never call Kimi or DeepSeek while the external integration is paused."
+    "composerIcon": "./assets/icon.svg",
+    "defaultPrompt": [
+      "Use $generate-agents-md with one gpt-5.6-sol/medium writer and independent read-only gpt-6-astra/high gates."
+    ]
   }
 }

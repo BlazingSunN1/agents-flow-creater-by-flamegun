@@ -34,6 +34,7 @@ from test_execution_run_support import reusable_execution_run
 from test_image_support import png_bytes
 from authority_binding_validation import AUTHORITY_MATRIX_LOCATOR
 from agents_authority_matrix_validation import AUTHORITY_MATRIX_SHA256
+from test_writer_authorization_support import write_historical_sol_write_proof
 
 
 class DeliveryBundleValidatorTests(unittest.TestCase):
@@ -571,12 +572,21 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
         (self.root / relative).write_text(json.dumps(payload), encoding="utf-8")
 
     def _write_implementation_receipt(self) -> None:
+        baseline_sha = hashlib.sha256((self.root / "requirements/baseline.md").read_bytes()).hexdigest()
+        candidate_sha = hashlib.sha256(b"module-candidate").hexdigest()
+        self.implementation_write_proof = write_historical_sol_write_proof(
+            self.root, module_key="module", maintainer_title="ModuleMaintainer",
+            owned_paths=["src"], agent_id="module-maintainer-agent-1",
+            run_id="impl-run-1", lease_id="lease-impl-history",
+            target_path="src/module.py", baseline_sha256=baseline_sha,
+            code_version="code-v1", build_id="build-1", candidate_sha256=candidate_sha,
+        )
         payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "receipt_kind": "codex-native-spawn-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-6-astra",
-            "recorded_model": "gpt-6-astra",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
             "requested_reasoning_effort": "medium",
             "recorded_reasoning_effort": "medium",
             "agent_id": "module-maintainer-agent-1",
@@ -584,6 +594,12 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
             "role": "module-maintainer",
             "module": "module",
             "maintainer_title": "ModuleMaintainer",
+            "read_only": False,
+            "authority_matrix_sha256": AUTHORITY_MATRIX_SHA256,
+            "owned_paths": ["src"],
+            "baseline_sha256": baseline_sha, "code_version": "code-v1",
+            "build_id": "build-1", "candidate_sha256": candidate_sha,
+            "historical_write_proof": self.implementation_write_proof,
         }
         (self.root / "evidence/implementation-spawn-receipt.json").write_text(
             json.dumps(payload), encoding="utf-8",
@@ -592,16 +608,19 @@ class DeliveryBundleValidatorTests(unittest.TestCase):
     def _multi_agent_evidence(self) -> dict[str, object]:
         baseline_sha = hashlib.sha256((self.root / "requirements/baseline.md").read_bytes()).hexdigest()
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "stage": "completion",
             "baseline_version": "req-v1",
             "baseline_sha256": baseline_sha,
             "code_version": "code-v1",
             "build_id": "build-1",
             "candidate_sha256": hashlib.sha256(b"module-candidate").hexdigest(),
+            "authority_matrix_sha256": AUTHORITY_MATRIX_SHA256,
+            "owned_paths": ["src"],
+            "implementation_write_proof": self.implementation_write_proof,
             "implementation_agent_title": "ModuleMaintainer",
             "implementation_agent_provider": "codex-native-agent",
-            "implementation_agent_model": "gpt-6-astra",
+            "implementation_agent_model": "gpt-5.6-sol",
             "implementation_agent_reasoning_effort": "medium",
             "implementation_agent_id": "module-maintainer-agent-1",
             "implementation_run_id": "impl-run-1",

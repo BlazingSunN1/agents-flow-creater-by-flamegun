@@ -115,6 +115,9 @@ def multi_agent_issues(
         issues.append(("open-agent-disagreement", "模板 open_disagreements 必须为空"))
     if data.get("implementation_agent_reasoning_effort") != "medium":
         issues.append(("invalid-implementation-agent-effort", "模板实现 Agent 必须固定 reasoning_effort=medium"))
+    if (data.get("implementation_agent_provider") != "codex-native-agent"
+            or data.get("implementation_agent_model") != "gpt-5.6-sol"):
+        issues.append(("invalid-implementation-agent", "模板实现 Agent 必须固定为 Codex 原生 gpt-5.6-sol"))
     gates = data.get("gates")
     if not isinstance(gates, list):
         return [("invalid-gates", "模板 gates 必须是数组")]

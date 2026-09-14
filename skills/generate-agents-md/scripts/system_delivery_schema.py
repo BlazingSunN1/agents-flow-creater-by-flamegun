@@ -13,6 +13,8 @@ LEGACY_SYSTEM_FIELDS = {
 RUNTIME_RECEIPT_V2_FIELDS = {
     "runtime_receipt_schema_version", "baseline_sha256", "candidate_sha256",
     "dispatcher_owned_paths", "aggregation_writer_owned_paths",
+    "aggregation_receipt_write_proof", "aggregation_manifest_write_lease",
+    "aggregation_writer_module_key", "aggregation_writer_maintainer_title",
 }
 SYSTEM_FIELDS = LEGACY_SYSTEM_FIELDS | RUNTIME_RECEIPT_V2_FIELDS
 ENTRY_FIELDS = {"module", "bundle_manifest_path", "bundle_manifest_sha256"}

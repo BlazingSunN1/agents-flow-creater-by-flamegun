@@ -9,6 +9,10 @@ from pathlib import Path
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
+if not (PLUGIN_ROOT / ".codex-plugin" / "plugin.json").is_file():
+    candidate_root = Path(__file__).resolve().parents[2]
+    if (candidate_root / ".codex-plugin" / "plugin.json").is_file():
+        PLUGIN_ROOT = candidate_root
 IGNORED_PARTS = {".git", "__pycache__"}
 IGNORED_NAMES = {".DS_Store"}
 

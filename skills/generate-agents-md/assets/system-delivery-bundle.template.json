@@ -21,12 +21,24 @@
   "aggregation_writer_role": "SYSTEM_AGGREGATION",
   "aggregation_writer_title": "System Aggregation Writer",
   "aggregation_writer_provider": "codex-native-agent",
-  "aggregation_writer_model": "gpt-6-astra",
+  "aggregation_writer_model": "gpt-5.6-sol",
   "aggregation_writer_agent_id": "{{AGGREGATION_AGENT_ID}}",
   "aggregation_writer_run_id": "{{AGGREGATION_RUN_ID}}",
   "aggregation_spawn_receipt": "{{AGGREGATION_SPAWN_RECORD_PATH}}",
   "aggregation_spawn_receipt_sha256": "{{AGGREGATION_SPAWN_RECORD_SHA256}}",
   "aggregation_writer_owned_paths": ["{{SYSTEM_MANIFEST_PROJECT_RELATIVE_PATH}}"],
+  "aggregation_writer_module_key": "{{GOVERNANCE_MODULE_KEY}}",
+  "aggregation_writer_maintainer_title": "{{GOVERNANCE_MAINTAINER_TITLE}}",
+  "aggregation_receipt_write_proof": {
+    "lease_id": "{{AGGREGATION_RECEIPT_LEASE_ID}}",
+    "path": "{{AGGREGATION_RECEIPT_HISTORY_PROOF_PATH}}",
+    "sha256": "{{AGGREGATION_RECEIPT_HISTORY_PROOF_SHA256}}"
+  },
+  "aggregation_manifest_write_lease": {
+    "lease_id": "{{AGGREGATION_MANIFEST_LEASE_ID}}",
+    "path": "{{AGGREGATION_MANIFEST_LEASE_PATH}}",
+    "sha256": "{{AGGREGATION_MANIFEST_LEASE_SHA256}}"
+  },
   "requirement_ids": ["{{SYSTEM_REQUIREMENT_ID}}"],
   "code_version": "{{CODE_VERSION}}",
   "build_id": "{{BUILD_ID}}",

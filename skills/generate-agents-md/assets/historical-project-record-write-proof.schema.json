@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "proof_kind", "module_key", "maintainer_title", "agent_id", "run_id", "lease_id", "target_path", "owned_paths", "lease_path", "lease_sha256", "registry_snapshot_path", "registry_snapshot_sha256", "agents_snapshot_path", "agents_snapshot_sha256", "writer_evidence_path", "writer_evidence_sha256", "writer_source_path", "writer_source_sha256", "baseline_sha256", "code_version", "build_id", "candidate_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "proof_kind": {"const": "local-coordination-historical-project-record-write-proof"},
+    "module_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{1,127}$"},
+    "maintainer_title": {"type": "string", "minLength": 1},
+    "agent_id": {"$ref": "#/$defs/id"}, "run_id": {"$ref": "#/$defs/id"},
+    "lease_id": {"$ref": "#/$defs/id"}, "target_path": {"$ref": "#/$defs/path"},
+    "owned_paths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/path"}},
+    "lease_path": {"$ref": "#/$defs/path"}, "lease_sha256": {"$ref": "#/$defs/sha256"},
+    "registry_snapshot_path": {"$ref": "#/$defs/path"}, "registry_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "agents_snapshot_path": {"$ref": "#/$defs/path"}, "agents_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "writer_evidence_path": {"$ref": "#/$defs/path"}, "writer_evidence_sha256": {"$ref": "#/$defs/sha256"},
+    "writer_source_path": {"$ref": "#/$defs/path"}, "writer_source_sha256": {"$ref": "#/$defs/sha256"},
+    "baseline_sha256": {"$ref": "#/$defs/sha256"}, "code_version": {"type": "string", "minLength": 1},
+    "build_id": {"type": "string", "minLength": 1}, "candidate_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"},
+    "path": {"type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

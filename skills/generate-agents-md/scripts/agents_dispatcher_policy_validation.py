@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from agents_policy_common import normative_markdown_view
-
 from agents_policy_common import (
     DISPATCHER_OWNERSHIP_HEADING_RE,
     PLACEHOLDER_RE,
@@ -15,8 +14,6 @@ from agents_self_signoff_policy_validation import (
     allows_implementation_self_signoff as _allows_implementation_self_signoff,
 )
 from write_authority_policy_validation import hierarchy_write_override
-
-
 TABLE_SEPARATOR_RE = re.compile(r"^:?-{3,}:?$")
 RUNTIME_ID_RE = re.compile(
     r"(?:\b(?:thread|session|run)(?:[ _-]?id)?\s*[:=_-]\s*[A-Za-z0-9][A-Za-z0-9_-]{7,}\b)"
@@ -26,8 +23,6 @@ RUNTIME_ID_RE = re.compile(
 MARKDOWN_CODE_SPAN_RE = re.compile(r"`([^`\r\n]+)`")
 OWNED_PATH_RE = re.compile(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*/?")
 OWNED_PATH_CELL_RE = re.compile(r"\s*`[^`\r\n]+`\s*(?:,\s*`[^`\r\n]+`\s*)*")
-
-
 def validate_dispatcher_ownership_policy(text: str, *, mode: str) -> list[Issue]:
     section = extract_heading_section(text, DISPATCHER_OWNERSHIP_HEADING_RE)
     if section is None:
@@ -45,8 +40,6 @@ def validate_dispatcher_ownership_policy(text: str, *, mode: str) -> list[Issue]
     )
     issues.extend(_dispatcher_contradictions(text))
     return issues
-
-
 def _policy_checks(section: str) -> tuple[tuple[bool, str, str], ...]:
     return (
         _module_closure_checks(section)

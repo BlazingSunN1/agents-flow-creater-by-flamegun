@@ -17,6 +17,11 @@ from validate_multi_agent_evidence import (
     validate_multi_agent_evidence,
 )
 from validate_traceability import _parse_metadata
+from agents_authority_matrix_validation import AUTHORITY_MATRIX_SHA256
+from test_validate_agents_md import project_root_fixture
+from test_writer_authorization_support import (
+    write_historical_qwen_write_proof, write_historical_sol_write_proof,
+)
 
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
@@ -28,6 +33,7 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
         self.fixture = trace_support.TraceabilityValidatorTests()
         self.fixture.setUp()
         self.root = self.fixture.root
+        (self.root / "AGENTS.md").write_text(project_root_fixture(), encoding="utf-8")
         self.path = self.root / "multi-agent.json"
         self.context = self.root / "context.md"
         self.context.write_text(
@@ -95,16 +101,19 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             self.artifact("BLACK_BOX", "bb-run-1", "evidence/bb-input.md", "evidence/bb-output.md"),
         ]
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "stage": "completion",
             "baseline_version": metadata["Baseline version"],
             "baseline_sha256": metadata["Baseline SHA-256"],
             "code_version": metadata["Code version"],
             "build_id": metadata["Build ID"],
             "candidate_sha256": "c" * 64,
+            "authority_matrix_sha256": AUTHORITY_MATRIX_SHA256,
+            "owned_paths": ["src"],
+            "implementation_write_proof": self.implementation_write_proof,
             "implementation_agent_title": "ModuleMaintainer",
             "implementation_agent_provider": "codex-native-agent",
-            "implementation_agent_model": "gpt-6-astra",
+            "implementation_agent_model": "gpt-5.6-sol",
             "implementation_agent_reasoning_effort": "medium",
             "implementation_agent_id": "module-maintainer-agent-1",
             "implementation_run_id": metadata["Implementation run ID"],
@@ -425,7 +434,7 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
                     {"invalid-agent-evidence-fields", "invalid-gate-fields"} & self.codes()
                 )
         raw = json.dumps(self.valid_data()).replace(
-            '"schema_version": 1', '"schema_version": 999, "schema_version": 1', 1,
+            '"schema_version": 2', '"schema_version": 999, "schema_version": 2', 1,
         )
         self.path.write_text(raw, encoding="utf-8")
         self.assertIn("invalid-agent-evidence", self.codes())
@@ -672,12 +681,21 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             (self.root / relative).write_text(json.dumps(payload), encoding="utf-8")
 
     def _write_implementation_receipt(self) -> None:
+        metadata = _parse_metadata(self.fixture.matrix.read_text(encoding="utf-8"))
+        self.implementation_write_proof = write_historical_sol_write_proof(
+            self.root, module_key="module", maintainer_title="ModuleMaintainer",
+            owned_paths=["src"], agent_id="module-maintainer-agent-1",
+            run_id=str(metadata["Implementation run ID"]), lease_id="lease-impl-history",
+            target_path="src/module.py", baseline_sha256=str(metadata["Baseline SHA-256"]),
+            code_version=str(metadata["Code version"]), build_id=str(metadata["Build ID"]),
+            candidate_sha256="c" * 64,
+        )
         payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "receipt_kind": "codex-native-spawn-result",
             "provider": "codex-native-agent",
-            "requested_model": "gpt-6-astra",
-            "recorded_model": "gpt-6-astra",
+            "requested_model": "gpt-5.6-sol",
+            "recorded_model": "gpt-5.6-sol",
             "requested_reasoning_effort": "medium",
             "recorded_reasoning_effort": "medium",
             "agent_id": "module-maintainer-agent-1",
@@ -685,10 +703,44 @@ class MultiAgentEvidenceValidatorTests(unittest.TestCase):
             "role": "module-maintainer",
             "module": "module",
             "maintainer_title": "ModuleMaintainer",
+            "read_only": False, "authority_matrix_sha256": AUTHORITY_MATRIX_SHA256,
+            "owned_paths": ["src"], "baseline_sha256": metadata["Baseline SHA-256"],
+            "code_version": metadata["Code version"], "build_id": metadata["Build ID"],
+            "candidate_sha256": "c" * 64,
+            "historical_write_proof": self.implementation_write_proof,
         }
         (self.root / "evidence/implementation-spawn-receipt.json").write_text(
             json.dumps(payload), encoding="utf-8",
         )
+
+    def test_explicit_qwen_writer_policy_passes_multi_agent_implementation_gate(self) -> None:
+        data = self.valid_data()
+        proof = write_historical_qwen_write_proof(
+            self.root, module_key="module", maintainer_title="ModuleMaintainer",
+            owned_paths=["src"], agent_id="module-maintainer-agent-1",
+            run_id="impl-run-1", lease_id="lease-multi-qwen-history",
+            target_path="src/module.py", baseline_sha256=str(data["baseline_sha256"]),
+            code_version=str(data["code_version"]), build_id=str(data["build_id"]),
+            candidate_sha256=str(data["candidate_sha256"]), prefix="multi-qwen",
+        )
+        data.update({
+            "implementation_agent_provider": "ollama_local",
+            "implementation_agent_model": "qwen3.8:27b-q8_0",
+            "implementation_agent_reasoning_effort": "xhigh",
+            "implementation_write_proof": proof,
+        })
+        receipt_path = self.root / str(data["implementation_spawn_receipt"])
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt.update({
+            "provider": "ollama_local", "requested_model": "qwen3.8:27b-q8_0",
+            "recorded_model": "qwen3.8:27b-q8_0",
+            "requested_reasoning_effort": "xhigh", "recorded_reasoning_effort": "xhigh",
+            "historical_write_proof": proof,
+        })
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        data["implementation_spawn_receipt_sha256"] = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertNotIn("invalid-implementation-agent", self.codes())
 
     def _write_gate_receipt(
         self, role: str, agent_id: str, run_id: str, relative: str,

@@ -31,6 +31,20 @@ class MutationExecutionTests(unittest.TestCase):
         self.assertIn(f'KILLED {mutant.name}', output.getvalue())
         self.assertIn('mutation_survivors=0 mutants=1 valid=true', output.getvalue())
 
+    def test_module_maintainer_reasoning_effort_mutant_has_unique_live_anchor_and_is_killed(self):
+        mutant = next(
+            item for item in mutations.MUTANTS
+            if item.name == 'module-maintainer-reasoning-effort-check-disabled'
+        )
+        source = mutations.SKILL_ROOT / mutant.relative_path
+        text = source.read_text(encoding='utf-8')
+        self.assertEqual(1, text.count(mutant.original))
+        output = io.StringIO()
+        with patch.object(mutations, 'MUTANTS', (mutant,)), contextlib.redirect_stdout(output):
+            result = mutations.main()
+        self.assertEqual(0, result, output.getvalue())
+        self.assertIn(f'KILLED {mutant.name}', output.getvalue())
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

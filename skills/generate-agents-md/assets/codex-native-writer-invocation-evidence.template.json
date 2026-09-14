@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "evidence_kind": "codex-native-writer-invocation-evidence",
+  "provider": "codex-native-agent",
+  "raw_model_provider": "openai",
+  "requested_model": "gpt-5.6-sol",
+  "recorded_model": "gpt-5.6-sol",
+  "requested_reasoning_effort": "medium",
+  "recorded_reasoning_effort": "medium",
+  "runtime_kind": "codex-rollout-jsonl",
+  "writer_agent_id": "{{WRITER_AGENT_ID}}",
+  "writer_run_id": "{{WRITER_RUN_ID}}",
+  "invocation_id": "{{IMPLEMENTATION_TURN_ID}}",
+  "source_agent_path": null,
+  "source_parent_thread_id": "{{PARENT_THREAD_ID}}",
+  "source_path": "{{IMMUTABLE_LOCAL_ROLLOUT_SNAPSHOT_PATH}}",
+  "source_sha256": "{{IMMUTABLE_LOCAL_ROLLOUT_SNAPSHOT_SHA256}}",
+  "source_capture": "immutable-local-snapshot"
+}

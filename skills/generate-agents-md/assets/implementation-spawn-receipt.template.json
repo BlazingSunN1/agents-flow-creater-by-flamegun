@@ -2,8 +2,8 @@
   "schema_version": 2,
   "receipt_kind": "codex-native-spawn-result",
   "provider": "codex-native-agent",
-  "requested_model": "gpt-6-astra",
-  "recorded_model": "gpt-6-astra",
+  "requested_model": "gpt-5.6-sol",
+  "recorded_model": "gpt-5.6-sol",
   "requested_reasoning_effort": "medium",
   "recorded_reasoning_effort": "medium",
   "agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
@@ -14,10 +14,11 @@
   "read_only": false,
   "authority_matrix_sha256": "{{AUTHORITY_MATRIX_SHA256}}",
   "owned_paths": ["{{OWNED_PROJECT_RELATIVE_PATH}}"],
-  "active_write_lease": {
-    "lease_id": "{{ACTIVE_WRITE_LEASE_ID}}",
-    "path": "{{ACTIVE_WRITE_LEASE_PROJECT_RELATIVE_PATH}}",
-    "sha256": "{{ACTIVE_WRITE_LEASE_SHA256}}"
+  "historical_write_proof": {
+    "lease_id": "{{IMPLEMENTATION_CLOSED_LEASE_ID}}",
+    "target_path": "{{IMPLEMENTATION_OWNED_WRITE_TARGET_PROJECT_RELATIVE_PATH}}",
+    "path": "{{IMPLEMENTATION_HISTORICAL_WRITE_PROOF_PROJECT_RELATIVE_PATH}}",
+    "sha256": "{{IMPLEMENTATION_HISTORICAL_WRITE_PROOF_SHA256}}"
   },
   "baseline_sha256": "{{BASELINE_SHA256}}",
   "code_version": "{{CODE_VERSION}}",

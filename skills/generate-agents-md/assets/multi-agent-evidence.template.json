@@ -8,14 +8,15 @@
   "candidate_sha256": "{{CANDIDATE_SHA256}}",
   "authority_matrix_sha256": "{{AUTHORITY_MATRIX_SHA256}}",
   "owned_paths": ["{{OWNED_PROJECT_RELATIVE_PATH}}"],
-  "active_write_lease": {
-    "lease_id": "{{ACTIVE_WRITE_LEASE_ID}}",
-    "path": "{{ACTIVE_WRITE_LEASE_PROJECT_RELATIVE_PATH}}",
-    "sha256": "{{ACTIVE_WRITE_LEASE_SHA256}}"
+  "implementation_write_proof": {
+    "lease_id": "{{IMPLEMENTATION_CLOSED_LEASE_ID}}",
+    "target_path": "{{IMPLEMENTATION_OWNED_WRITE_TARGET_PROJECT_RELATIVE_PATH}}",
+    "path": "{{IMPLEMENTATION_HISTORICAL_WRITE_PROOF_PROJECT_RELATIVE_PATH}}",
+    "sha256": "{{IMPLEMENTATION_HISTORICAL_WRITE_PROOF_SHA256}}"
   },
   "implementation_agent_title": "{{MODULE_AGENT_TITLE}}",
   "implementation_agent_provider": "codex-native-agent",
-  "implementation_agent_model": "gpt-6-astra",
+  "implementation_agent_model": "gpt-5.6-sol",
   "implementation_agent_reasoning_effort": "medium",
   "implementation_agent_id": "{{IMPLEMENTATION_AGENT_ID}}",
   "implementation_run_id": "{{IMPLEMENTATION_RUN_ID}}",

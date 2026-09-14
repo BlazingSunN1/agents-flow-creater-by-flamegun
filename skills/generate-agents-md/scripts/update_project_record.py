@@ -11,7 +11,6 @@ try:
 except ImportError:  # pragma: no cover - exercised through the explicit platform guard
     fcntl = None
 
-from implementation_agent_validation import HostAttestationVerifier
 from project_record_authorization import (
     AUTHORIZATION_MODES,
     DELIVERY_FIRST_MODE,
@@ -42,7 +41,7 @@ def update_record(
         target, project_root=project_root, content=content,
         expected_sha256=expected_sha256, module_key=module_key,
         agent_id=agent_id, run_id=run_id, agents_path=agents_path,
-        lease_path=lease_path, lease_sha256=lease_sha256, verifier=None,
+        lease_path=lease_path, lease_sha256=lease_sha256,
         authorization_mode=authorization_mode,
     )
 
@@ -51,15 +50,13 @@ def _test_only_update_record(
     target: Path, *, project_root: Path, content: bytes, expected_sha256: str,
     module_key: str, agent_id: str, run_id: str, agents_path: Path,
     lease_path: Path, lease_sha256: str,
-    _test_only_host_attestation_verifier: HostAttestationVerifier,
-    authorization_mode: str = STRICT_SECURITY_MODE,
+    authorization_mode: str = DELIVERY_FIRST_MODE,
 ) -> str:
-    return _update_record_impl(
+    return update_record(
         target, project_root=project_root, content=content,
         expected_sha256=expected_sha256, module_key=module_key,
         agent_id=agent_id, run_id=run_id, agents_path=agents_path,
         lease_path=lease_path, lease_sha256=lease_sha256,
-        verifier=_test_only_host_attestation_verifier,
         authorization_mode=authorization_mode,
     )
 
@@ -67,9 +64,11 @@ def _test_only_update_record(
 def _update_record_impl(
     target: Path, *, project_root: Path, content: bytes, expected_sha256: str,
     module_key: str, agent_id: str, run_id: str, agents_path: Path,
-    lease_path: Path, lease_sha256: str, verifier: HostAttestationVerifier | None,
+    lease_path: Path, lease_sha256: str,
     authorization_mode: str,
 ) -> str:
+    if authorization_mode == STRICT_SECURITY_MODE:
+        raise RuntimeError("strict-native-writer-unsupported")
     if fcntl is None:
         raise RuntimeError("native-windows-unsupported-use-wsl")
     root = project_root.resolve()
@@ -87,7 +86,7 @@ def _update_record_impl(
                 root=root, target=target, module_key=module_key,
                 agent_id=agent_id, run_id=run_id, agents_path=agents_path,
                 lease_path=lease_path, lease_sha256=lease_sha256,
-                verifier=verifier, authorization_mode=authorization_mode,
+                authorization_mode=authorization_mode,
             )
             return _write_bound_record(
                 root, root_fd, target, content, expected_sha256, binding,
@@ -200,6 +199,9 @@ def main() -> int:
         help="默认本地协调优先；高风险或合规场景显式选择 strict-security",
     )
     arguments = parser.parse_args()
+    if arguments.authorization_mode == STRICT_SECURITY_MODE:
+        print("ERROR atomic-record-update strict-native-writer-unsupported")
+        return 1
     try:
         new_sha = update_record(
             arguments.target,
@@ -217,11 +219,7 @@ def main() -> int:
     except (OSError, ValueError, RuntimeError) as error:
         print(f"ERROR atomic-record-update {error}")
         return 1
-    assurance = (
-        "host-attested"
-        if arguments.authorization_mode == STRICT_SECURITY_MODE
-        else "local-coordination-not-security-attested"
-    )
+    assurance = "local-coordination-not-security-attested"
     print(f"updated={arguments.target} sha256={new_sha} assurance={assurance}")
     return 0
 

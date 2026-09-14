@@ -83,7 +83,7 @@ class LocalControlledTrustTests(unittest.TestCase):
             "key_id": "local-test-key-01",
             "key_fingerprint_sha256": self.fingerprint,
             "agent_handle": "/root/test-implementation",
-            "assigned_model": "gpt-6-astra",
+            "assigned_model": "gpt-5.6-sol",
             "assigned_reasoning_effort": "medium",
             "role": "implementation",
             "module_key": "UPSTREAM-GOVERNANCE-BOOTSTRAP",

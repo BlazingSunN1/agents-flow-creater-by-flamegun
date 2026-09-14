@@ -29,7 +29,7 @@ V1_TOP_LEVEL_FIELDS = {"schema_version", "stage", "baseline_version", "baseline_
                     "implementation_spawn_receipt_sha256",
                     "single_writer_run_id", "gates", "open_disagreements"}
 V2_RUNTIME_BINDING_FIELDS = {
-    "authority_matrix_sha256", "owned_paths", "active_write_lease",
+    "authority_matrix_sha256", "owned_paths", "implementation_write_proof",
 }
 TOP_LEVEL_FIELDS = V1_TOP_LEVEL_FIELDS | V2_RUNTIME_BINDING_FIELDS
 GATE_FIELDS = {

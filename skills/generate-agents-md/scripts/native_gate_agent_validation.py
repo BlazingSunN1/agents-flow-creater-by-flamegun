@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from strict_json import loads as strict_json_loads
+
 from implementation_agent_validation import (
     HostAttestationVerifier,
     Issue,
@@ -37,7 +39,7 @@ def validate_native_gate_agent(
     if gate.get("agent_reasoning_effort") != "high":
         issues.append(Issue("error", "invalid-gate-agent-effort",
                             f"{role} 必须使用 reasoning_effort=high"))
-    schema_version = evidence.get("schema_version", 1)
+    schema_version = _gate_receipt_schema_version(gate, root, issues)
     expected = _gate_expected(role, module, agent_id, run_id, schema_version)
     if schema_version == 2:
         gate_bindings = dict(evidence)
@@ -59,6 +61,32 @@ def validate_native_gate_agent(
         receipt_replay_state,
     ))
     return issues
+
+
+def _gate_receipt_schema_version(
+    gate: dict[str, object], root: Path, issues: list[Issue],
+) -> object:
+    """Read the gate's own receipt version; the enclosing evidence version is unrelated."""
+    versions: list[object] = []
+    for field in ("spawn_receipt", "output_receipt"):
+        relative = gate.get(field)
+        if not isinstance(relative, str) or not relative.strip():
+            continue
+        try:
+            path = (root / relative).resolve(strict=True)
+            path.relative_to(root.resolve())
+            value = strict_json_loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        if isinstance(value, dict):
+            versions.append(value.get("schema_version"))
+    if len(versions) == 2 and versions[0] == versions[1] and versions[0] in (1, 2):
+        return versions[0]
+    issues.append(Issue(
+        "error", "invalid-gate-runtime-binding",
+        "独立 gate 的 spawn/output receipt 必须声明相同的整数 schema_version 1 或 2",
+    ))
+    return None
 
 
 def _gate_expected(
